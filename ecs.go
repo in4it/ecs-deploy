@@ -59,11 +59,14 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
     containerDefinition := &ecs.ContainerDefinition{
       Name: aws.String(container.ContainerName),
       Image: aws.String(imageUri),
-      PortMappings: []*ecs.PortMapping{
+    }
+    // set containerPort if not empty
+    if container.ContainerPort > 0 {
+      containerDefinition.SetPortMappings([]*ecs.PortMapping{
         {
           ContainerPort: aws.Int64(container.ContainerPort),
         },
-      },
+      })
     }
     if getEnv("CLOUDWATCH_LOGS_ENABLED", "no") == "yes" {
       var logPrefix string
