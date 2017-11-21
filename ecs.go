@@ -43,7 +43,14 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
     // prepare image Uri
     var imageUri string
     if container.ContainerURI == "" {
-      imageUri = iam.accountId + ".dkr.ecr." + getEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerName + ":" + container.ContainerTag
+      if container.ContainerImage == "" {
+        imageUri = iam.accountId + ".dkr.ecr." + getEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerName
+      } else {
+        imageUri = iam.accountId + ".dkr.ecr." + getEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerImage
+      }
+      if container.ContainerTag != "" {
+        imageUri += ":" + container.ContainerTag
+      }
     } else {
       imageUri = container.ContainerURI
     }
