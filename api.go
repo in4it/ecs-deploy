@@ -28,7 +28,7 @@ type DeployContainer struct {
   ContainerName         string `json:"containerName" binding:"required"`
   ContainerTag          string `json:"containerTag" binding:"required"`
   ContainerPort         int64  `json:"containerPort"`
-  ContainerCommand      string `json:"command"`
+  ContainerCommand      string `json:"containerCommand"`
   ContainerImage        string `json:"containerImage`
   ContainerURI          string `json:"containerURI"`
   Essential             bool   `json:"essential"`
