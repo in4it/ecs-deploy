@@ -41,11 +41,11 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
 
   // create role if role doesn't exists
   iam := IAM{}
-  iamRoleARN, err := iam.roleExists("ecs-" + serviceName)
-  if err == nil && iamRoleARN == nil {
+  iamRoleArn, err := iam.roleExists("ecs-" + serviceName)
+  if err == nil && iamRoleArn == nil {
     // role does not exist, create it
     controllerLogger.Debugf("Role does not exist, creating: ecs-%v", serviceName)
-    iamRoleARN, err = iam.createRole("ecs-" + serviceName, iam.getEcsTaskIAMTrust())
+    iamRoleArn, err = iam.createRole("ecs-" + serviceName, iam.getEcsTaskIAMTrust())
     if err != nil {
       return nil, err
     }
@@ -63,7 +63,7 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
   }
 
   // create task definition
-  ecs := ECS{serviceName: serviceName, iamRoleARN: *iamRoleARN, clusterName: d.Cluster}
+  ecs := ECS{serviceName: serviceName, iamRoleArn: *iamRoleArn, clusterName: d.Cluster}
   taskDefArn, err := ecs.createTaskDefinition(d)
   if err != nil {
     controllerLogger.Errorf("Could not create task def %v", serviceName)
@@ -77,57 +77,9 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
   serviceExists, err := ecs.serviceExists(serviceName)
   if err == nil && !serviceExists {
     controllerLogger.Debugf("service (%v) not found, creating...", serviceName)
-
-    // service not found, create ALB target group + rule 
-    alb := ALB{}
-    alb.init(d.Cluster)
-
-    // create target group
-    controllerLogger.Debugf("Creating target group for service: %v", serviceName)
-    targetGroupArn, err := alb.createTargetGroup(serviceName, d)
+    err = c.createService(serviceName, d, taskDefArn)
     if err != nil {
-      return nil, err
-    }
-
-    // get last priority number
-    priority, err := alb.getHighestRule()
-    if err != nil {
-      return nil, err
-    }
-
-    // create rules
-    controllerLogger.Debugf("Creating alb rule(s) service: %v", serviceName)
-    err = alb.createRuleForAllListeners(*targetGroupArn, "/" + serviceName, (priority + 10))
-    if err != nil {
-      return nil, err
-    }
-    err = alb.createRuleForAllListeners(*targetGroupArn, "/" + serviceName + "/*", (priority + 11))
-    if err != nil {
-      return nil, err
-    }
-
-    // check whether ecs-service-role exists
-    controllerLogger.Debugf("Checking whether role exists: %v", getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
-    iamServiceRoleArn, err := iam.roleExists(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
-    if err == nil && iamServiceRoleArn == nil {
-      controllerLogger.Debugf("Creating ecs service role")
-      _, err = iam.createRole(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.getEcsServiceIAMTrust())
-      if err != nil {
-        return nil, err
-      }
-      controllerLogger.Debugf("Attaching ecs service role")
-      err = iam.attachRolePolicy(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.getEcsServicePolicy())
-      if err != nil {
-        return nil, err
-      }
-    } else if err != nil {
-      return nil, errors.New("Error during checking whether ecs service role exists")
-    }
-
-    // create ecs service
-    controllerLogger.Debugf("Creating ecs service: %v", serviceName)
-    err = ecs.createService(serviceName, taskDefArn, d, targetGroupArn)
-    if err != nil {
+      controllerLogger.Errorf("Could not create service %v", serviceName)
       return nil, err
     }
   } else if err != nil {
@@ -147,4 +99,103 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
 
   ret := fmt.Sprintf("Successfully deployed service %v with taskdefinition %v", serviceName, *taskDefArn)
   return &ret, nil
+}
+
+// service not found, create ALB target group + rule 
+func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *string) (error) {
+    iam := IAM{}
+    alb := ALB{}
+    alb.init(d.Cluster)
+
+    // create target group
+    controllerLogger.Debugf("Creating target group for service: %v", serviceName)
+    targetGroupArn, err := alb.createTargetGroup(serviceName, d)
+    if err != nil {
+      return err
+    }
+
+    // deploy rules for target group
+    err = c.deployRulesForTarget(serviceName, d, targetGroupArn, &alb)
+    if err != nil {
+      return err
+    }
+
+    // check whether ecs-service-role exists
+    controllerLogger.Debugf("Checking whether role exists: %v", getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
+    iamServiceRoleArn, err := iam.roleExists(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
+    if err == nil && iamServiceRoleArn == nil {
+      controllerLogger.Debugf("Creating ecs service role")
+      _, err = iam.createRole(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.getEcsServiceIAMTrust())
+      if err != nil {
+        return err
+      }
+      controllerLogger.Debugf("Attaching ecs service role")
+      err = iam.attachRolePolicy(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.getEcsServicePolicy())
+      if err != nil {
+        return err
+      }
+    } else if err != nil {
+      return errors.New("Error during checking whether ecs service role exists")
+    }
+
+    // create ecs service
+    controllerLogger.Debugf("Creating ecs service: %v", serviceName)
+    ecs := ECS{serviceName: serviceName, taskDefArn: taskDefArn, targetGroupArn: targetGroupArn}
+    err = ecs.createService(d)
+    if err != nil {
+      return err
+    }
+    return nil
+}
+
+// Deploy rules for a specific targetGroup
+func (c *Controller) deployRulesForTarget(serviceName string, d Deploy, targetGroupArn *string, alb *ALB) (error) {
+  // get last priority number
+  priority, err := alb.getHighestRule()
+  if err != nil {
+    return err
+  }
+
+  if len(d.RuleConditions) > 0 {
+    // create rules based on conditions
+    var newRules int
+    for _, r := range d.RuleConditions {
+      if r.PathPattern != "" && r.Hostname != "" {
+        rules := []string{ r.PathPattern, r.Hostname }
+        err = alb.createRuleForListeners("combined", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+        if err != nil {
+          return err
+        }
+        newRules += len(r.Listeners)
+      } else if r.PathPattern != "" {
+        rules := []string{ r.PathPattern }
+        err = alb.createRuleForListeners("pathPattern", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+        if err != nil {
+          return err
+        }
+        newRules += len(r.Listeners)
+      } else if r.Hostname != "" {
+        rules := []string{ r.Hostname }
+        err = alb.createRuleForListeners("hostname", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+        if err != nil {
+          return err
+        }
+        newRules += len(r.Listeners)
+      }
+    }
+  } else {
+    // create default rules ( /servicename path on all listeners )
+    controllerLogger.Debugf("Creating alb rule(s) service: %v", serviceName)
+    rules := []string{ "/" + serviceName }
+    err = alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 10))
+    if err != nil {
+      return err
+    }
+    rules = []string{ "/" + serviceName + "/*" }
+    err = alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 11))
+    if err != nil {
+      return err
+    }
+  }
+  return nil
 }
