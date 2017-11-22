@@ -1,31 +1,31 @@
 package main
 
 import (
-  "github.com/juju/loggo"
+	"github.com/juju/loggo"
 )
 
 // logging
 var paramstoreLogger = loggo.GetLogger("iam")
 
 // Paramstore struct
-type Paramstore struct { }
+type Paramstore struct{}
 
 func (p *Paramstore) isEnabled() bool {
-  if getEnv("PARAMSTORE_ENABLED", "no") == "yes" {
-    return true
-  } else {
-    return false
-  }
+	if getEnv("PARAMSTORE_ENABLED", "no") == "yes" {
+		return true
+	} else {
+		return false
+	}
 }
 
-func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) (string) {
-  iam := IAM{}
-  err := iam.getAccountId()
-  accountId := iam.accountId
-  if err != nil {
-    accountId = ""
-  }
-  policy := `{
+func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) string {
+	iam := IAM{}
+	err := iam.getAccountId()
+	accountId := iam.accountId
+	if err != nil {
+		accountId = ""
+	}
+	policy := `{
     "Version": "2012-10-17",
     "Statement": [
       {
@@ -51,5 +51,5 @@ func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) (string) {
       }
     ]
   }`
-  return policy
+	return policy
 }
