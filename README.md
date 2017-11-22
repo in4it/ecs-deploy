@@ -33,6 +33,7 @@ Service specific variables (those will be used when deploying services):
 * PARAMSTORE\_KMS\_ARN=
 * CLOUDWATCH\_LOGS\_ENABLED=yes
 * CLOUDWATCH\_LOGS\_PREFIX=mycompany
+* LOADBALANCER\_DOMAIN=mycompany.com
 
 ## License
 Copyright 2017 in4it BVBA

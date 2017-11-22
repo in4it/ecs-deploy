@@ -23,6 +23,7 @@ type Deploy struct {
   MaximumPercent        int64                      `json:"maximumPercent"`
   Containers            []*DeployContainer         `json:"containers" binding:"required,dive"`
   HealthCheck           DeployHealthCheck          `json:"healthCheck"`
+  RuleConditions        []*DeployRuleConditions    `json:"ruleConditions`
 }
 type DeployContainer struct {
   ContainerName         string   `json:"containerName" binding:"required"`
@@ -46,6 +47,11 @@ type DeployHealthCheck struct {
   Protocol              string `json:"protocol"`
   Interval              int64  `json:"interval"`
   Matcher               string `json:"matcher"`
+}
+type DeployRuleConditions struct {
+  Listeners      []string `json:"listeners"`
+  PathPattern    string    `json:"pathPattern"`
+  Hostname       string    `json:"hostname"`
 }
 
 func (a *API) launch() {

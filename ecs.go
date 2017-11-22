@@ -17,9 +17,10 @@ var ecsLogger = loggo.GetLogger("ecs")
 type ECS struct {
   clusterName string
   serviceName string
-  iamRoleARN string
+  iamRoleArn string
   taskDefinition *ecs.RegisterTaskDefinitionInput
-  //taskDefinitionTemplate ecs.RegisterTaskDefinitionInput
+  taskDefArn *string
+  targetGroupArn *string
 }
 
 // Creates ECS repository
@@ -27,7 +28,7 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
   svc := ecs.New(session.New())
   e.taskDefinition = &ecs.RegisterTaskDefinitionInput {
       Family:      aws.String(e.serviceName),
-      TaskRoleArn: aws.String(e.iamRoleARN),
+      TaskRoleArn: aws.String(e.iamRoleArn),
   }
 
   // loop over containers
@@ -166,6 +167,8 @@ func (e *ECS) serviceExists(serviceName string) (bool, error) {
   }
   if len(result.Services) == 0 {
     return false, nil
+  } else if len(result.Services) == 1 && *result.Services[0].Status == "INACTIVE" {
+    return false, nil
   } else {
     return true, nil
   }
@@ -211,7 +214,7 @@ func (e *ECS) updateService(serviceName string, taskDefArn *string) (*string, er
 }
 
 // create service
-func (e *ECS) createService(serviceName string, taskDefArn *string, d Deploy, targetGroupArn *string) (error) {
+func (e *ECS) createService(d Deploy) (error) {
   svc := ecs.New(session.New())
 
   // sanity checks
@@ -224,14 +227,14 @@ func (e *ECS) createService(serviceName string, taskDefArn *string, d Deploy, ta
       DesiredCount: aws.Int64(d.DesiredCount),
       LoadBalancers: []*ecs.LoadBalancer{
           {
-              ContainerName:    aws.String(serviceName),
+              ContainerName:    aws.String(e.serviceName),
               ContainerPort:    aws.Int64(d.ServicePort),
-              TargetGroupArn: aws.String(*targetGroupArn),
+              TargetGroupArn: aws.String(*e.targetGroupArn),
           },
       },
       Role:           aws.String(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role")),
-      ServiceName:    aws.String(serviceName),
-      TaskDefinition: aws.String(*taskDefArn),
+      ServiceName:    aws.String(e.serviceName),
+      TaskDefinition: aws.String(*e.taskDefArn),
   }
 
   // check whether min/max is set
