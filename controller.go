@@ -66,7 +66,7 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
   ecs := ECS{serviceName: serviceName, iamRoleARN: *iamRoleARN, clusterName: d.Cluster}
   taskDefArn, err := ecs.createTaskDefinition(d)
   if err != nil {
-    controllerLogger.Errorf("Could not create task def %v: %v", serviceName, err)
+    controllerLogger.Errorf("Could not create task def %v", serviceName)
     return nil, err
   }
   controllerLogger.Debugf("Created task definition: %v", *taskDefArn)

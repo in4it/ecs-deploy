@@ -68,6 +68,11 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
         },
       })
     }
+    // set containerCommand if not empty
+    if len(container.ContainerCommand) > 0 {
+      containerDefinition.SetCommand(container.ContainerCommand)
+    }
+    // set cloudwacht logs if enabled
     if getEnv("CLOUDWATCH_LOGS_ENABLED", "no") == "yes" {
       var logPrefix string
       if getEnv("CLOUDWATCH_LOGS_PREFIX", "") != "" {

@@ -25,17 +25,17 @@ type Deploy struct {
   HealthCheck           DeployHealthCheck          `json:"healthCheck"`
 }
 type DeployContainer struct {
-  ContainerName         string `json:"containerName" binding:"required"`
-  ContainerTag          string `json:"containerTag" binding:"required"`
-  ContainerPort         int64  `json:"containerPort"`
-  ContainerCommand      string `json:"containerCommand"`
-  ContainerImage        string `json:"containerImage`
-  ContainerURI          string `json:"containerURI"`
-  Essential             bool   `json:"essential"`
-  Memory                int64  `json:"memory"`
-  MemoryReservation     int64  `json:"memoryReservation"`
-  CPU                   int64  `json:"cpu"`
-  CPUReservation        int64  `json:"cpuReservation"`
+  ContainerName         string   `json:"containerName" binding:"required"`
+  ContainerTag          string   `json:"containerTag" binding:"required"`
+  ContainerPort         int64    `json:"containerPort"`
+  ContainerCommand      []*string `json:"containerCommand"`
+  ContainerImage        string   `json:"containerImage`
+  ContainerURI          string   `json:"containerURI"`
+  Essential             bool     `json:"essential"`
+  Memory                int64    `json:"memory"`
+  MemoryReservation     int64    `json:"memoryReservation"`
+  CPU                   int64    `json:"cpu"`
+  CPUReservation        int64    `json:"cpuReservation"`
 }
 
 type DeployHealthCheck struct {
