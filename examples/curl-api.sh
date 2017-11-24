@@ -15,7 +15,9 @@ TOKEN=`curl -X POST localhost:8080/login -H 'Content-type: application/json' -s 
 
 if [ "$1" == "createrepo" ] ; then
   curl -X POST localhost:8080/api/v1/ecr/create/myservice -H "Authorization:Bearer ${TOKEN}"
-else
+elif [ "$1" == "export" ] ; then
+  curl -X GET localhost:8080/api/v1/export/terraform -H "Authorization:Bearer ${TOKEN}"
+elif [ "$1" == "deploy" ] ; then
   curl -X POST localhost:8080/api/v1/deploy/myservice -H 'Content-type: application/json' -H "Authorization:Bearer ${TOKEN}" -d \
 '{
   "cluster": "ward",
@@ -39,4 +41,6 @@ else
     "matcher": "200,301"
   }
 }'
+else
+  echo 'Usage: curl-api.sh <createrepo|export|deploy>'
 fi

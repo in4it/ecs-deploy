@@ -47,6 +47,7 @@ type DeployHealthCheck struct {
 	Protocol           string `json:"protocol"`
 	Interval           int64  `json:"interval"`
 	Matcher            string `json:"matcher"`
+	Timeout            int64  `json:"timeout"`
 }
 type DeployRuleConditions struct {
 	Listeners   []string `json:"listeners"`
@@ -86,6 +87,9 @@ func (a *API) createRoutes() {
 
 		// Deploy
 		auth.POST("/deploy/:service", a.deployServiceHandler)
+
+		// Export
+		auth.GET("/export/:terraform", a.exportTerraformHandler)
 	}
 
 	// run API
@@ -180,11 +184,22 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 }
-
-//func helloHandler(c *gin.Context) {
-//  claims := jwt.ExtractClaims(c)
-//  c.JSON(200, gin.H{
-//    "userID": claims["id"],
-//    "text":   "Hello World.",
-//  })
-//}
+func (a *API) exportTerraformHandler(c *gin.Context) {
+	e := Export{}
+	exp, err := e.terraform()
+	if err == nil {
+		if exp == nil {
+			c.JSON(200, gin.H{
+				"export": "",
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"export": *exp,
+			})
+		}
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}

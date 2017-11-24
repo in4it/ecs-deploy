@@ -21,8 +21,9 @@ type ALB struct {
 	loadBalancerName string
 	loadBalancerArn  string
 	vpcId            string
-	listenerArns     []*elbv2.Listener
+	listeners        []*elbv2.Listener
 	domain           string
+	rules            map[string][]*elbv2.Rule
 }
 
 func (a *ALB) init(loadBalancerName string) error {
@@ -95,7 +96,7 @@ func (a *ALB) getListeners() error {
 		return errors.New("Could not get Listeners for loadbalancer")
 	}
 	for _, l := range result.Listeners {
-		a.listenerArns = append(a.listenerArns, l)
+		a.listeners = append(a.listeners, l)
 	}
 	return nil
 }
@@ -103,7 +104,7 @@ func (a *ALB) getListeners() error {
 // get the domain using certificates
 func (a *ALB) getDomainUsingCertificate() error {
 	svc := acm.New(session.New())
-	for _, l := range a.listenerArns {
+	for _, l := range a.listeners {
 		for _, c := range l.Certificates {
 			albLogger.Debugf("ALB Certificate found with arn: %v", *c.CertificateArn)
 			input := &acm.DescribeCertificateInput{
@@ -166,6 +167,9 @@ func (a *ALB) createTargetGroup(serviceName string, d Deploy) (*string, error) {
 	if d.HealthCheck.Matcher != "" {
 		input.SetMatcher(&elbv2.Matcher{HttpCode: aws.String(d.HealthCheck.Matcher)})
 	}
+	if d.HealthCheck.Timeout > 0 {
+		input.SetHealthCheckTimeoutSeconds(*aws.Int64(d.HealthCheck.Timeout))
+	}
 
 	result, err := svc.CreateTargetGroup(input)
 	if err != nil {
@@ -196,7 +200,7 @@ func (a *ALB) getHighestRule() (int64, error) {
 	var highest int64
 	svc := elbv2.New(session.New())
 
-	input := &elbv2.DescribeRulesInput{ListenerArn: a.listenerArns[0].ListenerArn}
+	input := &elbv2.DescribeRulesInput{ListenerArn: a.listeners[0].ListenerArn}
 
 	c := true // parse more pages if c is true
 	result, err := svc.DescribeRules(input)
@@ -239,28 +243,32 @@ func (a *ALB) getHighestRule() (int64, error) {
 	return highest, nil
 }
 
-func (a *ALB) createRuleForAllListeners(ruleType string, targetGroupArn string, rules []string, priority int64) error {
-	for _, l := range a.listenerArns {
+func (a *ALB) createRuleForAllListeners(ruleType string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
+	var listeners []string
+	for _, l := range a.listeners {
 		err := a.createRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		listeners = append(listeners, *l.ListenerArn)
 	}
-	return nil
+	return listeners, nil
 }
 
-func (a *ALB) createRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64) error {
-	for _, l := range a.listenerArns {
+func (a *ALB) createRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
+	var retListeners []string
+	for _, l := range a.listeners {
 		for _, l2 := range listeners {
 			if l.Protocol != nil && strings.ToLower(*l.Protocol) == strings.ToLower(l2) {
 				err := a.createRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
 				if err != nil {
-					return err
+					return nil, err
 				}
+				retListeners = append(retListeners, *l.ListenerArn)
 			}
 		}
 	}
-	return nil
+	return retListeners, nil
 }
 
 func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn string, rules []string, priority int64) error {
@@ -350,4 +358,110 @@ func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn str
 		return errors.New("Could not create alb rule")
 	}
 	return nil
+}
+
+// get rules by listener
+func (a *ALB) getRulesForAllListeners() error {
+	a.rules = make(map[string][]*elbv2.Rule)
+	svc := elbv2.New(session.New())
+
+	for _, l := range a.listeners {
+		input := &elbv2.DescribeRulesInput{ListenerArn: aws.String(*l.ListenerArn)}
+
+		result, err := svc.DescribeRules(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				switch aerr.Code() {
+				case elbv2.ErrCodeListenerNotFoundException:
+					albLogger.Errorf(elbv2.ErrCodeListenerNotFoundException+": %v", aerr.Error())
+				case elbv2.ErrCodeRuleNotFoundException:
+					albLogger.Errorf(elbv2.ErrCodeRuleNotFoundException+": %v", aerr.Error())
+				default:
+					albLogger.Errorf(aerr.Error())
+				}
+			} else {
+				albLogger.Errorf(err.Error())
+			}
+			return errors.New("Could not get Listeners for loadbalancer")
+		}
+		for _, r := range result.Rules {
+			a.rules[*l.ListenerArn] = append(a.rules[*l.ListenerArn], r)
+			if len(r.Conditions) != 0 && len(r.Conditions[0].Values) != 0 {
+				albLogger.Debugf("Importing rule: %+v", *r.Conditions[0].Values[0])
+			}
+		}
+	}
+	return nil
+}
+func (a *ALB) getTargetGroupArn(serviceName string) (*string, error) {
+	svc := elbv2.New(session.New())
+	input := &elbv2.DescribeTargetGroupsInput{
+		Names: []*string{aws.String(serviceName)},
+	}
+
+	result, err := svc.DescribeTargetGroups(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case elbv2.ErrCodeLoadBalancerNotFoundException:
+				albLogger.Errorf(elbv2.ErrCodeLoadBalancerNotFoundException+": %v", aerr.Error())
+			case elbv2.ErrCodeTargetGroupNotFoundException:
+				albLogger.Errorf(elbv2.ErrCodeTargetGroupNotFoundException+": %v", aerr.Error())
+			default:
+				albLogger.Errorf(aerr.Error())
+			}
+		} else {
+			albLogger.Errorf(err.Error())
+		}
+		return nil, err
+	}
+	if len(result.TargetGroups) == 1 {
+		return result.TargetGroups[0].TargetGroupArn, nil
+	} else {
+		if len(result.TargetGroups) == 0 {
+			return nil, errors.New("No ALB target group found for service: " + serviceName)
+		} else {
+			return nil, errors.New("Multiple target groups found for service: " + serviceName + " (" + string(len(result.TargetGroups)) + ")")
+		}
+	}
+}
+func (a *ALB) getDomain() string {
+	return getEnv("LOADBALANCER_DOMAIN", a.domain)
+}
+func (a *ALB) findRulePriority(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, error) {
+	if len(conditionField) != len(conditionValue) {
+		return nil, errors.New("conditionField length not equal to conditionValue length")
+	}
+	// examine rules
+	if rules, ok := a.rules[listener]; ok {
+		for _, r := range rules {
+			for _, a := range r.Actions {
+				if *a.Type == "forward" && *a.TargetGroupArn == targetGroupArn {
+					// target group found, loop over conditions
+					priorityFound := false
+					skip := false
+					for _, c := range r.Conditions {
+						match := false
+						for i, _ := range conditionField {
+							if *c.Field == conditionField[i] && len(c.Values) > 0 && *c.Values[0] == conditionValue[i] {
+								match = true
+							}
+						}
+						if !skip && match { // if any condition was false, skip this rule
+							priorityFound = true
+						} else {
+							priorityFound = false
+							skip = true
+						}
+					}
+					if priorityFound {
+						return r.Priority, nil
+					}
+				}
+			}
+		}
+	} else {
+		return nil, errors.New("Listener not found in rule list")
+	}
+	return nil, errors.New("Priority not found for rule: listener " + listener + ", targetGroupArn: " + targetGroupArn + ", Field: " + strings.Join(conditionField, ",") + ", Value: " + strings.Join(conditionValue, ","))
 }

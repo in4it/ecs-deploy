@@ -17,6 +17,7 @@ var serviceLogger = loggo.GetLogger("service")
 type Service struct {
 	serviceName string
 	clusterName string
+	listeners   []string
 }
 
 type DynamoDeployment struct {
@@ -37,6 +38,7 @@ type DynamoServices struct {
 type DynamoServicesElement struct {
 	C string
 	S string
+	L []string
 }
 
 func (s *Service) initService(dsElement *DynamoServicesElement) error {
@@ -55,7 +57,7 @@ func (s *Service) initService(dsElement *DynamoServicesElement) error {
 	return nil
 }
 
-func (s *Service) getServices(ds *DynamoServices, dsElement *DynamoServicesElement) error {
+func (s *Service) getServices(ds *DynamoServices) error {
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
 	err := table.Get("ServiceName", "__SERVICES").Range("Time", dynamo.Equal, "0").One(ds)
@@ -86,9 +88,9 @@ func (s *Service) createService() error {
 	table := db.Table("Services")
 
 	var ds DynamoServices
-	dsElement := &DynamoServicesElement{S: s.serviceName, C: s.clusterName}
+	dsElement := &DynamoServicesElement{S: s.serviceName, C: s.clusterName, L: s.listeners}
 
-	err := s.getServices(&ds, dsElement)
+	err := s.getServices(&ds)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
 			// service needs to be initialized
@@ -129,7 +131,7 @@ func (s *Service) createService() error {
 				switch aerr.Code() {
 				case dynamodb.ErrCodeConditionalCheckFailedException:
 					serviceLogger.Debugf("Conditional check failed - retrying (%v)", aerr.Error())
-					err = s.getServices(&ds, dsElement)
+					err = s.getServices(&ds)
 					if err != nil {
 						return err
 					}
@@ -148,7 +150,7 @@ func (s *Service) createService() error {
 	}
 	return nil
 }
-func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (error) {
+func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) error {
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
 	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), TaskDefinitionArn: taskDefinitionArn, DeployData: d}
@@ -158,5 +160,33 @@ func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (error) {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
 		return err
 	}
-  return nil
+	return nil
+}
+func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
+	var dd DynamoDeployment
+	db := dynamo.New(session.New(), &aws.Config{})
+	table := db.Table("Services")
+	err := table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeProvisionedThroughputExceededException:
+				serviceLogger.Errorf(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
+			case dynamodb.ErrCodeResourceNotFoundException:
+				serviceLogger.Errorf(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
+			case dynamodb.ErrCodeInternalServerError:
+				serviceLogger.Errorf(dynamodb.ErrCodeInternalServerError, aerr.Error())
+			case "ValidationException":
+				serviceLogger.Errorf("%v", aerr.Error())
+			default:
+				serviceLogger.Errorf(aerr.Error())
+			}
+		} else {
+			return nil, err
+		}
+		serviceLogger.Errorf("Error during get: %v", err.Error())
+		return nil, err
+	}
+	serviceLogger.Debugf("Retrieved last deployment %v at %v", dd.ServiceName, dd.Time)
+	return &dd, nil
 }

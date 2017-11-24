@@ -125,7 +125,7 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	}
 
 	// deploy rules for target group
-	err = c.deployRulesForTarget(serviceName, d, targetGroupArn, &alb)
+	listeners, err := c.createRulesForTarget(serviceName, d, targetGroupArn, &alb)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	}
 
 	// create service in dynamodb
-	service := Service{serviceName: serviceName, clusterName: d.Cluster}
+	service := Service{serviceName: serviceName, clusterName: d.Cluster, listeners: listeners}
 	err = service.createService()
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
@@ -167,11 +167,12 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 }
 
 // Deploy rules for a specific targetGroup
-func (c *Controller) deployRulesForTarget(serviceName string, d Deploy, targetGroupArn *string, alb *ALB) error {
+func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGroupArn *string, alb *ALB) ([]string, error) {
+	var listeners []string
 	// get last priority number
 	priority, err := alb.getHighestRule()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(d.RuleConditions) > 0 {
@@ -180,40 +181,44 @@ func (c *Controller) deployRulesForTarget(serviceName string, d Deploy, targetGr
 		for _, r := range d.RuleConditions {
 			if r.PathPattern != "" && r.Hostname != "" {
 				rules := []string{r.PathPattern, r.Hostname}
-				err = alb.createRuleForListeners("combined", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+				l, err := alb.createRuleForListeners("combined", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				newRules += len(r.Listeners)
+				listeners = append(listeners, l...)
 			} else if r.PathPattern != "" {
 				rules := []string{r.PathPattern}
-				err = alb.createRuleForListeners("pathPattern", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+				l, err := alb.createRuleForListeners("pathPattern", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				newRules += len(r.Listeners)
+				listeners = append(listeners, l...)
 			} else if r.Hostname != "" {
 				rules := []string{r.Hostname}
-				err = alb.createRuleForListeners("hostname", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+				l, err := alb.createRuleForListeners("hostname", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
 				if err != nil {
-					return err
+					return nil, err
 				}
 				newRules += len(r.Listeners)
+				listeners = append(listeners, l...)
 			}
 		}
 	} else {
 		// create default rules ( /servicename path on all listeners )
 		controllerLogger.Debugf("Creating alb rule(s) service: %v", serviceName)
 		rules := []string{"/" + serviceName}
-		err = alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 10))
+		l, err := alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 10))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		rules = []string{"/" + serviceName + "/*"}
-		err = alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 11))
+		_, err = alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 11))
 		if err != nil {
-			return err
+			return nil, err
 		}
+		listeners = append(listeners, l...)
 	}
-	return nil
+	return listeners, nil
 }
