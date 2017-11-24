@@ -145,8 +145,7 @@ func (a *API) ecrCreateHandler(c *gin.Context) {
 		})
 	} else {
 		c.JSON(200, gin.H{
-			"error":       err,
-			"Description": res,
+			"error": err.Error(),
 		})
 	}
 }

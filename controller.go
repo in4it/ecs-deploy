@@ -14,19 +14,24 @@ type Controller struct {
 // logging
 var controllerLogger = loggo.GetLogger("controller")
 
-func (c *Controller) createRepository(repository string) (string, error) {
+func (c *Controller) createRepository(repository string) (*string, error) {
 	// create service in ECR if not exists
 	ecr := ECR{repositoryName: repository}
 	err := ecr.createRepository()
 	if err != nil {
 		controllerLogger.Errorf("Could not create repository %v: %v", repository, err)
-		return fmt.Sprintf("error - Could not create repo: %v\n", repository), errors.New("CouldNotCreateRepository")
+		return nil, errors.New("CouldNotCreateRepository")
 	} else {
 		// create service in dynamodb
-		service := Service{ServiceName: repository, ECRRepositoryURI: ecr.repositoryURI}
-		service.createService()
+		service := Service{serviceName: repository}
+		err = service.createService()
 		// return message
-		return fmt.Sprintf("Service: %v - ECR: %v", service.ServiceName, service.ECRRepositoryURI), nil
+		if err != nil {
+			controllerLogger.Errorf("Could not create service (%v) in db: %v", repository, err)
+			return nil, err
+		}
+		msg := fmt.Sprintf("Service: %v - ECR: %v", repository, ecr.repositoryURI)
+		return &msg, nil
 	}
 }
 
@@ -95,7 +100,12 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
 	}
 
 	// write changes in db
-	// todo
+	service := Service{serviceName: serviceName, clusterName: d.Cluster}
+	err = service.newDeployment(taskDefArn, &d)
+	if err != nil {
+		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
+		return nil, err
+	}
 
 	ret := fmt.Sprintf("Successfully deployed service %v with taskdefinition %v", serviceName, *taskDefArn)
 	return &ret, nil
@@ -143,6 +153,14 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	ecs := ECS{serviceName: serviceName, taskDefArn: taskDefArn, targetGroupArn: targetGroupArn}
 	err = ecs.createService(d)
 	if err != nil {
+		return err
+	}
+
+	// create service in dynamodb
+	service := Service{serviceName: serviceName, clusterName: d.Cluster}
+	err = service.createService()
+	if err != nil {
+		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
 		return err
 	}
 	return nil
