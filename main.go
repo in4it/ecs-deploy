@@ -34,6 +34,13 @@ func startup_checks() {
 	}
 }
 
+// @title ecs-deploy
+// @version 0.0.1
+// @description ecs-deploy is the glue between your CI and ECS. It automates deploys based a simple JSON file Edit
+// @contact.name Edward Viaene
+// @contact.url	https://github.com/in4it/ecs-deploy
+// @contact.email	ward@in4it.io
+// license.name	Apache 2.0
 func main() {
 	// set logging to debug
 	if getEnv("DEBUG", "") == "true" {
