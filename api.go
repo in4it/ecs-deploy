@@ -3,6 +3,10 @@ package main
 import (
 	"github.com/appleboy/gin-jwt"
 	"github.com/gin-gonic/gin"
+	_ "github.com/in4it/ecs-deploy/docs"
+	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
+	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
+
 	"net/http"
 
 	"time"
@@ -74,6 +78,9 @@ func (a *API) createRoutes() {
 		// health check
 		r.GET(prefix+"/health", a.healthHandler)
 
+		// swagger
+		r.GET(prefix+"/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 		// login handlers
 		r.POST(prefix+"/login", a.authMiddleware.LoginHandler)
 		// health with auth
@@ -95,6 +102,13 @@ func (a *API) createRoutes() {
 	// run API
 	r.Run()
 }
+
+// @summary login to receive jwt token
+// @description login with user and password to receive jwt token
+// @id login
+// @accept  json
+// @produce  json
+// @router /login [post]
 func (a *API) createAuthMiddleware() {
 	a.authMiddleware = &jwt.GinJWTMiddleware{
 		Realm:      "ecs-deploy",
@@ -140,6 +154,13 @@ func (a *API) createAuthMiddleware() {
 	}
 }
 
+// @summary Create ECR repository
+// @description Creates AWS ECR (Docker) repository using repository name as parameter
+// @id ecr-create-repository
+// @accept  json
+// @produce  json
+// @param   repository     path    string     true        "repository"
+// @router /api/v1/ecr/create/{repository} [post]
 func (a *API) ecrCreateHandler(c *gin.Context) {
 	controller := Controller{}
 	res, err := controller.createRepository(c.Param("repository"))
@@ -154,11 +175,25 @@ func (a *API) ecrCreateHandler(c *gin.Context) {
 	}
 }
 
+// @summary Healthcheck
+// @description Healthcheck for loadbalancer
+// @id healthcheck
+// @accept  json
+// @produce  json
+// @router /api/v1/healthcheck [get]
 func (a *API) healthHandler(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "OK",
 	})
 }
+
+// @summary Deploy service to ECS
+// @description Deploy a service to ECS
+// @id ecs-deploy-service
+// @accept  json
+// @produce  json
+// @param   service         path    string     true        "service name"
+// @router /api/v1/deploy/{service} [post]
 func (a *API) deployServiceHandler(c *gin.Context) {
 	var json Deploy
 	controller := Controller{}
@@ -184,6 +219,12 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 }
+
+// @summary Export current services to terraform
+// @description Export service data stored in dynamodb into terraform tf files
+// @id export-terraform
+// @produce  json
+// @router /api/v1/export/terraform [get]
 func (a *API) exportTerraformHandler(c *gin.Context) {
 	e := Export{}
 	exp, err := e.terraform()
