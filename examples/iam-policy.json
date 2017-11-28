@@ -29,11 +29,11 @@
         "ecr:CompleteLayerUpload",
         "ecr:PutImage",
         "ecr:CreateRepository",
-        "elasticloadbalancing:DescribeListeners",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeRules",
+        "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateRule",
-        "elasticloadbalancing:createTargetGroup"
+        "elasticloadbalancing:createTargetGroup",
+        "acm:DescribeCertificate"
+
       ],
       "Resource": "*"
     },
@@ -47,6 +47,13 @@
           "iam:PassRole"
       ],
       "Resource": "arn:aws:iam::*:role/ecs-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "dynamodb:*"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-1:<accountid>:table/Services"
     }
   ]
 }
