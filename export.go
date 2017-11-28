@@ -201,12 +201,13 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 			a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", l, -1)
 			for _, v := range []string{"/" + serviceName, "/" + serviceName + "/*"} {
 				// get priority
-				priority, err := e.alb.findRulePriority(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
+				ruleArn, priority, err := e.alb.findRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
 				if err != nil {
 					return nil, err
 				}
 				// replace listeners and return template
 				a = strings.Replace(a, "${LISTENER_PRIORITY}", *priority, -1)
+				a = strings.Replace(a, "${LISTENER_RULE_ARN}", *ruleArn, -1)
 				c := strings.Replace(*condition, "${LISTENER_CONDITION_FIELD}", "path-pattern", -1)
 				c = strings.Replace(c, "${LISTENER_CONDITION_VALUE}", v, -1)
 				ret += strings.Replace(a, "${LISTENER_CONDITION_RULE}", c, -1)
@@ -235,11 +236,12 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb.getDomain(), -1)
 						}
 						// get priority
-						priority, err := e.alb.findRulePriority(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
+						ruleArn, priority, err := e.alb.findRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
 						if err != nil {
 							return nil, err
 						}
 						a = strings.Replace(a, "${LISTENER_PRIORITY}", *priority, -1)
+						a = strings.Replace(a, "${LISTENER_RULE_ARN}", *ruleArn, -1)
 						// get everything together and return template
 						ret += strings.Replace(a, "${LISTENER_CONDITION_RULE}", c+cc, -1)
 					}
