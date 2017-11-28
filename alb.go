@@ -428,9 +428,9 @@ func (a *ALB) getTargetGroupArn(serviceName string) (*string, error) {
 func (a *ALB) getDomain() string {
 	return getEnv("LOADBALANCER_DOMAIN", a.domain)
 }
-func (a *ALB) findRulePriority(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, error) {
+func (a *ALB) findRule(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, *string, error) {
 	if len(conditionField) != len(conditionValue) {
-		return nil, errors.New("conditionField length not equal to conditionValue length")
+		return nil, nil, errors.New("conditionField length not equal to conditionValue length")
 	}
 	// examine rules
 	if rules, ok := a.rules[listener]; ok {
@@ -455,13 +455,13 @@ func (a *ALB) findRulePriority(listener string, targetGroupArn string, condition
 						}
 					}
 					if priorityFound {
-						return r.Priority, nil
+						return r.RuleArn, r.Priority, nil
 					}
 				}
 			}
 		}
 	} else {
-		return nil, errors.New("Listener not found in rule list")
+		return nil, nil, errors.New("Listener not found in rule list")
 	}
-	return nil, errors.New("Priority not found for rule: listener " + listener + ", targetGroupArn: " + targetGroupArn + ", Field: " + strings.Join(conditionField, ",") + ", Value: " + strings.Join(conditionValue, ","))
+	return nil, nil, errors.New("Priority not found for rule: listener " + listener + ", targetGroupArn: " + targetGroupArn + ", Field: " + strings.Join(conditionField, ",") + ", Value: " + strings.Join(conditionValue, ","))
 }
