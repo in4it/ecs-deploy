@@ -97,6 +97,13 @@ func (a *API) createRoutes() {
 
 		// Export
 		auth.GET("/export/:terraform", a.exportTerraformHandler)
+
+		// frontend endpoints
+		// deploy
+		auth.GET("/deploy/list", a.listDeploysHandler)
+		auth.GET("/deploy/list/:service", a.listDeploysForServiceHandler)
+		// service
+		auth.GET("/service/list", a.listServicesHandler)
 	}
 
 	// run API
@@ -238,6 +245,45 @@ func (a *API) exportTerraformHandler(c *gin.Context) {
 				"export": *exp,
 			})
 		}
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) listDeploysHandler(c *gin.Context) {
+	controller := Controller{}
+	deploys, err := controller.getDeploys()
+	if err == nil {
+		c.JSON(200, gin.H{
+			"deployments": deploys,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) listDeploysForServiceHandler(c *gin.Context) {
+	controller := Controller{}
+	deploys, err := controller.getDeploysForService(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"deployments": deploys,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) listServicesHandler(c *gin.Context) {
+	controller := Controller{}
+	services, err := controller.getServices()
+	if err == nil {
+		c.JSON(200, gin.H{
+			"services": services,
+		})
 	} else {
 		c.JSON(200, gin.H{
 			"error": err.Error(),

@@ -222,3 +222,18 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 	}
 	return listeners, nil
 }
+
+func (c *Controller) getDeploys() ([]DynamoDeployment, error) {
+	s := Service{}
+	return s.getDeploys()
+}
+func (c *Controller) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
+	s := Service{}
+	return s.getDeploysForService(serviceName)
+}
+func (c *Controller) getServices() ([]*DynamoServicesElement, error) {
+	s := Service{}
+	var ds DynamoServices
+	err := s.getServices(&ds)
+	return ds.Services, err
+}

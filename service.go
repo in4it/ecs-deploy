@@ -23,6 +23,8 @@ type Service struct {
 type DynamoDeployment struct {
 	ServiceName       string
 	Time              time.Time
+	Day               string
+	Month             string
 	Tag               string
 	TaskDefinitionArn *string
 	DeployData        *Deploy
@@ -153,7 +155,9 @@ func (s *Service) createService() error {
 func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) error {
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
-	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), TaskDefinitionArn: taskDefinitionArn, DeployData: d}
+	day := time.Now().Format("2006-01-01")
+	month := time.Now().Format("2006-01")
+	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d}
 	err := table.Put(w).Run()
 
 	if err != nil {
@@ -189,4 +193,28 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	}
 	serviceLogger.Debugf("Retrieved last deployment %v at %v", dd.ServiceName, dd.Time)
 	return &dd, nil
+}
+func (s *Service) getDeploys() ([]DynamoDeployment, error) {
+	var dds []DynamoDeployment
+	db := dynamo.New(session.New(), &aws.Config{})
+	table := db.Table("Services")
+	// add date to table
+	for i := 0; i < 3; i++ {
+		var dd []DynamoDeployment
+		serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02"))
+		err := table.Get("Day", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02")).Index("TimeIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
+		dds = append(dds, dd...)
+		if err != nil {
+			return dds, err
+		}
+	}
+	return dds, nil
+}
+func (s *Service) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
+	var dds []DynamoDeployment
+	db := dynamo.New(session.New(), &aws.Config{})
+	table := db.Table("Services")
+	serviceLogger.Debugf("Retrieving records for: %v", serviceName)
+	err := table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dds)
+	return dds, err
 }
