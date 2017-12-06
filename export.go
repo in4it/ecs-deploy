@@ -18,6 +18,7 @@ type Export struct {
 	templateMap map[string]string
 	deployData  *Deploy
 	alb         ALB
+	p           Paramstore
 }
 
 func (e *Export) getTemplateMap(serviceName, clusterName string) error {
@@ -128,13 +129,25 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	return nil
 }
 
+// check first whether the template is in the parameter store
+// if not, use the default template from the template path
 func (e *Export) getTemplate(template string) (*string, error) {
-	b, err := ioutil.ReadFile("templates/export/" + template)
-	if err != nil {
-		exportLogger.Errorf("Can't read template templates/export/" + template)
-		return nil, err
+	var str string
+	if _, ok := e.p.parameters["templates/export/"+template]; ok {
+		s, err := e.p.getParameterValue("templates/export/" + template)
+		if err != nil {
+			exportLogger.Errorf("Can't read template templates/export/" + template + " from parameter store")
+			return nil, err
+		}
+		str = *s
+	} else {
+		b, err := ioutil.ReadFile("templates/export/" + template)
+		if err != nil {
+			exportLogger.Errorf("Can't read template templates/export/" + template)
+			return nil, err
+		}
+		str = string(b)
 	}
-	str := string(b)
 	// replace
 	for k, v := range e.templateMap {
 		str = strings.Replace(str, k, v, -1)
@@ -148,7 +161,10 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	export["apps"] = make(ExportedApps)
 
 	var ds DynamoServices
-	p := Paramstore{}
+	// get possible parameters
+	e.p = Paramstore{}
+	e.p.getParameters()
+	// get services
 	s := Service{}
 	err := s.getServices(&ds)
 	if err != nil {
@@ -163,7 +179,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 		exportLogger.Debugf("Retrieved template map: %+v", e.templateMap)
 
 		toProcess := []string{"ecr", "ecs", "iam", "alb_targetgroup"}
-		if p.isEnabled() {
+		if e.p.isEnabled() {
 			toProcess = append(toProcess, "iam_paramstore")
 		}
 		for _, v := range toProcess {
@@ -250,4 +266,9 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 		}
 	}
 	return &ret, nil
+}
+
+func (e *Export) getTargetGroupArn(serviceName string) (*string, error) {
+	a := ALB{}
+	return a.getTargetGroupArn(serviceName)
 }

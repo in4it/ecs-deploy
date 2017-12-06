@@ -96,14 +96,16 @@ func (a *API) createRoutes() {
 		auth.POST("/deploy/:service", a.deployServiceHandler)
 
 		// Export
-		auth.GET("/export/:terraform", a.exportTerraformHandler)
+		auth.GET("/export/terraform", a.exportTerraformHandler)
+		auth.GET("/export/terraform/:service/targetgrouparn", a.exportTerraformTargetGroupArnHandler)
 
-		// frontend endpoints
-		// deploy
+		// deploy list
 		auth.GET("/deploy/list", a.listDeploysHandler)
 		auth.GET("/deploy/list/:service", a.listDeploysForServiceHandler)
-		// service
+		// service list
 		auth.GET("/service/list", a.listServicesHandler)
+		// get service information
+		//auth.GET("/service/:service", a.getServiceHandler)
 	}
 
 	// run API
@@ -245,6 +247,25 @@ func (a *API) exportTerraformHandler(c *gin.Context) {
 				"export": *exp,
 			})
 		}
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+
+// @summary Export targetgroup arn
+// @description Export target group arn stored in dynamodb into terraform tf files
+// @id export-terraform-targetgroup-arn
+// @produce  json
+// @router /api/v1/export/terraform/:service/targetgrouparn [get]
+func (a *API) exportTerraformTargetGroupArnHandler(c *gin.Context) {
+	e := Export{}
+	targetGroupArn, err := e.getTargetGroupArn(c.Param("service"))
+	if err == nil && targetGroupArn != nil {
+		c.JSON(200, gin.H{
+			"targetGroupArn": targetGroupArn,
+		})
 	} else {
 		c.JSON(200, gin.H{
 			"error": err.Error(),
