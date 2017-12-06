@@ -8,6 +8,7 @@ import (
 	"github.com/guregu/dynamo"
 	"github.com/juju/loggo"
 
+	"errors"
 	"time"
 )
 
@@ -88,6 +89,12 @@ func (s *Service) getServices(ds *DynamoServices) error {
 func (s *Service) createService() error {
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
+
+	// check input
+	if (s.serviceName == "") || (s.clusterName == "") || (len(s.listeners) == 0) {
+		serviceLogger.Errorf("Couldn't add %v (cluster = %v, listener # = %d)", s.serviceName, s.clusterName, len(s.listeners))
+		return errors.New("Couldn't add " + s.serviceName + ": cluster / listeners is empty")
+	}
 
 	var ds DynamoServices
 	dsElement := &DynamoServicesElement{S: s.serviceName, C: s.clusterName, L: s.listeners}
@@ -201,11 +208,14 @@ func (s *Service) getDeploys() ([]DynamoDeployment, error) {
 	// add date to table
 	for i := 0; i < 3; i++ {
 		var dd []DynamoDeployment
-		serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02"))
-		err := table.Get("Day", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02")).Index("TimeIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
+		serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, i*-1, 0).Format("2006-01"))
+		err := table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
 		dds = append(dds, dd...)
 		if err != nil {
 			return dds, err
+		}
+		if len(dds) == 20 {
+			return dds, nil
 		}
 	}
 	return dds, nil
