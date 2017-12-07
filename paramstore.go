@@ -40,24 +40,19 @@ func (p *Paramstore) getParameters() error {
 		return nil
 	}
 	svc := ssm.New(session.New())
-	input := &ssm.DescribeParametersInput{
-		ParameterFilters: []*ssm.ParameterStringFilter{
-			{
-				Key:    aws.String("Name"),
-				Option: aws.String("BeginsWith"),
-				Values: []*string{aws.String(p.getPrefix())},
-			},
-		},
+	input := &ssm.GetParametersByPathInput{
+		Path:           aws.String(p.getPrefix()),
+		WithDecryption: aws.Bool(true),
 	}
 
 	pageNum := 0
-	err := svc.DescribeParametersPages(input,
-		func(page *ssm.DescribeParametersOutput, lastPage bool) bool {
+	err := svc.GetParametersByPathPages(input,
+		func(page *ssm.GetParametersByPathOutput, lastPage bool) bool {
 			pageNum++
 			for _, param := range page.Parameters {
 				paramName := strings.Replace(*param.Name, p.getPrefix(), "", -1)
 				paramstoreLogger.Debugf("Imported parameter: %v", paramName)
-				p.parameters[paramName] = ""
+				p.parameters[paramName] = *param.Value
 			}
 			return pageNum <= 50 // 50 iterations max
 		})

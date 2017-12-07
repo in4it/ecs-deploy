@@ -21,18 +21,9 @@ func (c *Controller) createRepository(repository string) (*string, error) {
 	if err != nil {
 		controllerLogger.Errorf("Could not create repository %v: %v", repository, err)
 		return nil, errors.New("CouldNotCreateRepository")
-	} else {
-		// create service in dynamodb
-		service := Service{serviceName: repository}
-		err = service.createService()
-		// return message
-		if err != nil {
-			controllerLogger.Errorf("Could not create service (%v) in db: %v", repository, err)
-			return nil, err
-		}
-		msg := fmt.Sprintf("Service: %v - ECR: %v", repository, ecr.repositoryURI)
-		return &msg, nil
 	}
+	msg := fmt.Sprintf("Service: %v - ECR: %v", repository, ecr.repositoryURI)
+	return &msg, nil
 }
 
 func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
