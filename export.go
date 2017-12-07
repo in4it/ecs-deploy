@@ -133,15 +133,8 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 // check first whether the template is in the parameter store
 // if not, use the default template from the template path
 func (e *Export) getTemplate(template string) (*string, error) {
-	var str string
-	if _, ok := e.p.parameters["templates/export/"+template]; ok {
-		s, err := e.p.getParameterValue("templates/export/" + template)
-		if err != nil {
-			exportLogger.Errorf("Can't read template templates/export/" + template + " from parameter store")
-			return nil, err
-		}
-		str = *s
-	} else {
+	str, ok := e.p.parameters["TEMPLATES_EXPORT_"+strings.Replace(strings.ToUpper(template), ".", "_", -1)]
+	if !ok {
 		b, err := ioutil.ReadFile("templates/export/" + template)
 		if err != nil {
 			exportLogger.Errorf("Can't read template templates/export/" + template)
