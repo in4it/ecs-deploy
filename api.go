@@ -7,8 +7,8 @@ import (
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
+	"errors"
 	"net/http"
-
 	"time"
 )
 
@@ -207,26 +207,38 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 	var json Deploy
 	controller := Controller{}
 	if err := c.ShouldBindJSON(&json); err == nil {
-		// validate service name
-		if len(c.Param("service")) > 2 {
+		if err = a.deployServiceValidator(c.Param("service"), json); err == nil {
 			res, err := controller.deploy(c.Param("service"), json)
 			if err == nil {
 				c.JSON(200, gin.H{
 					"message": res,
 				})
 			} else {
-				c.JSON(200, gin.H{
-					"error": err.Error(),
-				})
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			}
 		} else {
-			c.JSON(200, gin.H{
-				"error": "service name needs to be at least 3 characters",
-			})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		}
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
+}
+
+func (a *API) deployServiceValidator(serviceName string, d Deploy) error {
+	if len(serviceName) > 2 {
+		return errors.New("service name needs to be at least 3 characters")
+	}
+	t := false
+	for _, container := range d.Containers {
+		if container.ContainerName == serviceName {
+			t = true
+		}
+	}
+	if !t {
+		return errors.New("At least one container needs to have the same name as the service (" + serviceName + ")")
+	}
+
+	return nil
 }
 
 // @summary Export current services to terraform
