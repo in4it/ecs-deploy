@@ -282,6 +282,10 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 	if err != nil {
 		return nil, err
 	}
+	targetGroupArn, err := a.getTargetGroupArn(serviceName)
+	if err != nil {
+		return nil, err
+	}
 	a.getRulesForAllListeners()
 	for _, rules := range a.rules {
 		for _, rule := range rules {
@@ -289,7 +293,9 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 				if listenerRuleArn != "" {
 					return nil, errors.New("Duplicate listener rule found, can't determine listener (rule = " + rulePriority + ", Conflict between " + listenerRuleArn + " and " + *rule.RuleArn + ")")
 				} else {
-					listenerRuleArn = *rule.RuleArn
+					if len(rule.Actions) > 0 && *rule.Actions[0].TargetGroupArn == *targetGroupArn {
+						listenerRuleArn = *rule.RuleArn
+					}
 				}
 			}
 		}
