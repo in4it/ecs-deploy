@@ -17,7 +17,7 @@ type ExportedApps map[string]string
 type Export struct {
 	templateMap map[string]string
 	deployData  *Deploy
-	alb         ALB
+	alb         map[string]*ALB
 	p           Paramstore
 }
 
@@ -29,18 +29,19 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 		return err
 	}
 	// retrieve data
-	e.alb = ALB{}
-	err = e.alb.init(clusterName)
-	if err != nil {
-		return err
-	}
-	// get rules for all listener
-	err = e.alb.getRulesForAllListeners()
-	if err != nil {
-		return err
+	if _, ok := e.alb[clusterName]; !ok {
+		e.alb[clusterName], err = newALB(clusterName)
+		if err != nil {
+			return err
+		}
+		// get rules for all listener
+		err = e.alb[clusterName].getRulesForAllListeners()
+		if err != nil {
+			return err
+		}
 	}
 	// get target group
-	targetGroup, err := e.alb.getTargetGroupArn(serviceName)
+	targetGroup, err := e.alb[clusterName].getTargetGroupArn(serviceName)
 	if err != nil {
 		return err
 	}
@@ -81,7 +82,7 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.templateMap["${PARAMSTORE_PREFIX}"] = getEnv("PARAMSTORE_PREFIX", "")
 	e.templateMap["${AWS_ACCOUNT_ENV}"] = getEnv("AWS_ACCOUNT_ENV", "")
 	e.templateMap["${PARAMSTORE_KMS_ARN}"] = getEnv("PARAMSTORE_KMS_ARN", "")
-	e.templateMap["${VPC_ID}"] = e.alb.vpcId
+	e.templateMap["${VPC_ID}"] = e.alb[clusterName].vpcId
 	if e.deployData.HealthCheck.HealthyThreshold != 0 {
 		b, err := ioutil.ReadFile("templates/export/alb_targetgroup_healthcheck.tf")
 		if err != nil {
@@ -159,6 +160,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	// get all services
 	export := make(map[string]ExportedApps)
 	export["apps"] = make(ExportedApps)
+	e.alb = make(map[string]*ALB)
 
 	var ds DynamoServices
 	// get possible parameters
@@ -217,7 +219,7 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 			a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", l, -1)
 			for _, v := range []string{"/" + serviceName, "/" + serviceName + "/*"} {
 				// get priority
-				ruleArn, priority, err := e.alb.findRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
+				ruleArn, priority, err := e.alb[clusterName].findRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
 				if err != nil {
 					return nil, err
 				}
@@ -232,7 +234,7 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 	} else {
 		exportLogger.Debugf("Found rule conditions in deploy, examining conditions")
 		for _, y := range e.deployData.RuleConditions {
-			for _, l := range e.alb.listeners {
+			for _, l := range e.alb[clusterName].listeners {
 				for _, l2 := range y.Listeners {
 					if l.Protocol != nil && strings.ToLower(*l.Protocol) == strings.ToLower(l2) {
 						a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", *l.ListenerArn, -1)
@@ -247,12 +249,12 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 						}
 						if y.Hostname != "" {
 							f = append(f, "host-header")
-							v = append(v, y.Hostname+"."+e.alb.getDomain())
+							v = append(v, y.Hostname+"."+e.alb[clusterName].getDomain())
 							cc = strings.Replace(*condition, "${LISTENER_CONDITION_FIELD}", "host-header", -1)
-							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb.getDomain(), -1)
+							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb[clusterName].getDomain(), -1)
 						}
 						// get priority
-						ruleArn, priority, err := e.alb.findRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
+						ruleArn, priority, err := e.alb[clusterName].findRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
 						if err != nil {
 							return nil, err
 						}
@@ -271,4 +273,36 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 func (e *Export) getTargetGroupArn(serviceName string) (*string, error) {
 	a := ALB{}
 	return a.getTargetGroupArn(serviceName)
+}
+func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*string, error) {
+	var clusterName string
+	var listenerRuleArn string
+	var ds DynamoServices
+	s := Service{}
+	s.getServices(&ds)
+	for _, service := range ds.Services {
+		if service.S == serviceName {
+			clusterName = service.C
+		}
+	}
+	a, err := newALB(clusterName)
+	if err != nil {
+		return nil, err
+	}
+	a.getRulesForAllListeners()
+	for _, rules := range a.rules {
+		for _, rule := range rules {
+			if *rule.Priority == rulePriority {
+				if listenerRuleArn != "" {
+					return nil, errors.New("Duplicate listener rule found, can't determine listener (rule = " + rulePriority + ", Conflict between " + listenerRuleArn + " and " + *rule.RuleArn + ")")
+				} else {
+					listenerRuleArn = *rule.RuleArn
+				}
+			}
+		}
+	}
+	if listenerRuleArn == "" {
+		return nil, errors.New("Not rule with priority " + rulePriority + " found")
+	}
+	return &listenerRuleArn, nil
 }

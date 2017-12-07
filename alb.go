@@ -26,7 +26,8 @@ type ALB struct {
 	rules            map[string][]*elbv2.Rule
 }
 
-func (a *ALB) init(loadBalancerName string) error {
+func newALB(loadBalancerName string) (*ALB, error) {
+	a := ALB{}
 	a.loadBalancerName = loadBalancerName
 	// retrieve vpcId and loadBalancerArn
 	svc := elbv2.New(session.New())
@@ -50,9 +51,9 @@ func (a *ALB) init(loadBalancerName string) error {
 			// Message from an error.
 			albLogger.Errorf(err.Error())
 		}
-		return errors.New("Could not describe loadbalancer")
+		return nil, errors.New("Could not describe loadbalancer")
 	} else if len(result.LoadBalancers) == 0 {
-		return errors.New("Could not describe loadbalancer (no elements returned)")
+		return nil, errors.New("Could not describe loadbalancer (no elements returned)")
 	}
 	a.loadBalancerArn = *result.LoadBalancers[0].LoadBalancerArn
 	a.loadBalancerName = *result.LoadBalancers[0].LoadBalancerName
@@ -61,17 +62,17 @@ func (a *ALB) init(loadBalancerName string) error {
 	// get listeners
 	err = a.getListeners()
 	if err != nil {
-		return err
+		return nil, err
 	} else if len(result.LoadBalancers) == 0 {
-		return errors.New("Could not get listeners for loadbalancer (no elements returned)")
+		return nil, errors.New("Could not get listeners for loadbalancer (no elements returned)")
 	}
 	// get domain (if SSL cert is attached)
 	err = a.getDomainUsingCertificate()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &a, nil
 }
 
 // get the listeners for the loadbalancer
@@ -387,7 +388,7 @@ func (a *ALB) getRulesForAllListeners() error {
 		for _, r := range result.Rules {
 			a.rules[*l.ListenerArn] = append(a.rules[*l.ListenerArn], r)
 			if len(r.Conditions) != 0 && len(r.Conditions[0].Values) != 0 {
-				albLogger.Debugf("Importing rule: %+v", *r.Conditions[0].Values[0])
+				albLogger.Debugf("Importing rule: %+v (prio: %v)", *r.Conditions[0].Values[0], *r.Priority)
 			}
 		}
 	}

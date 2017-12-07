@@ -114,8 +114,10 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
 // service not found, create ALB target group + rule
 func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *string) error {
 	iam := IAM{}
-	alb := ALB{}
-	alb.init(d.Cluster)
+	alb, err := newALB(d.Cluster)
+	if err != nil {
+		return err
+	}
 
 	// create target group
 	controllerLogger.Debugf("Creating target group for service: %v", serviceName)
@@ -125,7 +127,7 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	}
 
 	// deploy rules for target group
-	listeners, err := c.createRulesForTarget(serviceName, d, targetGroupArn, &alb)
+	listeners, err := c.createRulesForTarget(serviceName, d, targetGroupArn, alb)
 	if err != nil {
 		return err
 	}
