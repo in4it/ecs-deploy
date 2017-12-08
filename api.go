@@ -226,7 +226,7 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 }
 
 func (a *API) deployServiceValidator(serviceName string, d Deploy) error {
-	if len(serviceName) > 2 {
+	if len(serviceName) < 3 {
 		return errors.New("service name needs to be at least 3 characters")
 	}
 	t := false
