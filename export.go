@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/juju/loggo"
 	"io/ioutil"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -19,6 +20,27 @@ type Export struct {
 	deployData  *Deploy
 	alb         map[string]*ALB
 	p           Paramstore
+}
+
+type RulePriority []int64
+
+func (a RulePriority) Len() int           { return len(a) }
+func (a RulePriority) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a RulePriority) Less(i, j int) bool { return a[i] < a[j] }
+
+type ListenerRuleExport struct {
+	RuleKeys RulePriority           `json:"ruleKeys" binding:"dive"`
+	Rules    map[int64]ListenerRule `json:"rules" binding:"dive"`
+}
+
+type ListenerRule struct {
+	ListenerRuleArn string                  `json:"listenerRuleArn"`
+	TargetGroupArn  string                  `json:"targetGroupArn" binding:"dive"`
+	Conditions      []ListenerRuleCondition `json:"conditions" binding:"dive"`
+}
+type ListenerRuleCondition struct {
+	Field  string `json:"field" binding:"dive"`
+	Values string `json:"values" binding:"dive"`
 }
 
 func (e *Export) getTemplateMap(serviceName, clusterName string) error {
@@ -278,6 +300,9 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 			clusterName = service.C
 		}
 	}
+	if clusterName == "" {
+		return nil, errors.New("Service not found: " + serviceName)
+	}
 	a, err := newALB(clusterName)
 	if err != nil {
 		return nil, err
@@ -301,7 +326,61 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 		}
 	}
 	if listenerRuleArn == "" {
-		return nil, errors.New("Not rule with priority " + rulePriority + " found")
+		return nil, errors.New("No rule with priority " + rulePriority + " found")
 	}
 	return &listenerRuleArn, nil
+}
+func (e *Export) getListenerRuleArns(serviceName string) (*ListenerRuleExport, error) {
+	var clusterName string
+	var ds DynamoServices
+	var result *ListenerRuleExport
+	var exportRuleKeys RulePriority
+	exportRules := make(map[int64]ListenerRule)
+	s := Service{}
+	s.getServices(&ds)
+	for _, service := range ds.Services {
+		if service.S == serviceName {
+			clusterName = service.C
+		}
+	}
+	if clusterName == "" {
+		return nil, errors.New("Service not found: " + serviceName)
+	}
+	a, err := newALB(clusterName)
+	if err != nil {
+		return nil, err
+	}
+	targetGroupArn, err := a.getTargetGroupArn(serviceName)
+	if err != nil {
+		return nil, err
+	}
+	a.getRulesForAllListeners()
+	for _, rules := range a.rules {
+		for _, rule := range rules {
+			if len(rule.Actions) > 0 && *rule.Actions[0].TargetGroupArn == *targetGroupArn {
+				priority, err := strconv.ParseInt(*rule.Priority, 10, 64)
+				if err != nil {
+					return nil, err
+				}
+				var conditions []ListenerRuleCondition
+				for _, condition := range rule.Conditions {
+					if len(condition.Values) > 0 {
+						conditions = append(conditions, ListenerRuleCondition{Field: *condition.Field, Values: *condition.Values[0]})
+					}
+				}
+				exportRuleKeys = append(exportRuleKeys, priority)
+				exportRules[priority] = ListenerRule{
+					ListenerRuleArn: *rule.RuleArn,
+					TargetGroupArn:  *rule.Actions[0].TargetGroupArn,
+					Conditions:      conditions,
+				}
+			}
+		}
+	}
+	if len(exportRuleKeys) == 0 {
+		return nil, errors.New("No rules found for service: " + serviceName)
+	}
+	sort.Sort(exportRuleKeys)
+	result = &ListenerRuleExport{RuleKeys: exportRuleKeys, Rules: exportRules}
+	return result, nil
 }
