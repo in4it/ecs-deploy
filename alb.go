@@ -201,41 +201,43 @@ func (a *ALB) getHighestRule() (int64, error) {
 	var highest int64
 	svc := elbv2.New(session.New())
 
-	input := &elbv2.DescribeRulesInput{ListenerArn: a.listeners[0].ListenerArn}
+	for _, listener := range a.listeners {
+		input := &elbv2.DescribeRulesInput{ListenerArn: listener.ListenerArn}
 
-	c := true // parse more pages if c is true
-	result, err := svc.DescribeRules(input)
-	for c {
-		if err != nil {
-			if aerr, ok := err.(awserr.Error); ok {
-				switch aerr.Code() {
-				case elbv2.ErrCodeListenerNotFoundException:
-					albLogger.Errorf(elbv2.ErrCodeListenerNotFoundException+": %v", aerr.Error())
-				case elbv2.ErrCodeRuleNotFoundException:
-					albLogger.Errorf(elbv2.ErrCodeRuleNotFoundException+": %v", aerr.Error())
-				default:
-					albLogger.Errorf(aerr.Error())
+		c := true // parse more pages if c is true
+		result, err := svc.DescribeRules(input)
+		for c {
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok {
+					switch aerr.Code() {
+					case elbv2.ErrCodeListenerNotFoundException:
+						albLogger.Errorf(elbv2.ErrCodeListenerNotFoundException+": %v", aerr.Error())
+					case elbv2.ErrCodeRuleNotFoundException:
+						albLogger.Errorf(elbv2.ErrCodeRuleNotFoundException+": %v", aerr.Error())
+					default:
+						albLogger.Errorf(aerr.Error())
+					}
+				} else {
+					// Print the error, cast err to awserr.Error to get the Code and
+					// Message from an error.
+					albLogger.Errorf(err.Error())
 				}
-			} else {
-				// Print the error, cast err to awserr.Error to get the Code and
-				// Message from an error.
-				albLogger.Errorf(err.Error())
+				return 0, errors.New("Could not describe alb listener rules")
 			}
-			return 0, errors.New("Could not describe alb listener rules")
-		}
 
-		albLogger.Debugf("Looping rules: %+v", result.Rules)
-		for _, rule := range result.Rules {
-			if i, _ := strconv.ParseInt(*rule.Priority, 10, 64); i > highest {
-				albLogger.Debugf("Found rule with priority: %d", i)
-				highest = i
+			albLogger.Debugf("Looping rules: %+v", result.Rules)
+			for _, rule := range result.Rules {
+				if i, _ := strconv.ParseInt(*rule.Priority, 10, 64); i > highest {
+					albLogger.Debugf("Found rule with priority: %d", i)
+					highest = i
+				}
 			}
-		}
-		if result.NextMarker == nil || len(*result.NextMarker) == 0 {
-			c = false
-		} else {
-			input.SetMarker(*result.NextMarker)
-			result, err = svc.DescribeRules(input)
+			if result.NextMarker == nil || len(*result.NextMarker) == 0 {
+				c = false
+			} else {
+				input.SetMarker(*result.NextMarker)
+				result, err = svc.DescribeRules(input)
+			}
 		}
 	}
 
