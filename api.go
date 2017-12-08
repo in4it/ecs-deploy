@@ -98,6 +98,7 @@ func (a *API) createRoutes() {
 		// Export
 		auth.GET("/export/terraform", a.exportTerraformHandler)
 		auth.GET("/export/terraform/:service/targetgrouparn", a.exportTerraformTargetGroupArnHandler)
+		auth.GET("/export/terraform/:service/listenerrulearn", a.exportTerraformListenerRuleArnsHandler)
 		auth.GET("/export/terraform/:service/listenerrulearn/:rule", a.exportTerraformListenerRuleArnHandler)
 
 		// deploy list
@@ -297,6 +298,26 @@ func (a *API) exportTerraformListenerRuleArnHandler(c *gin.Context) {
 	if err == nil && listenerRuleArn != nil {
 		c.JSON(200, gin.H{
 			"listenerRuleArn": listenerRuleArn,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+
+// @summary Export listener rule arns
+// @description Export listener rule arns
+// @id export-terraform-listener-rule-arns
+// @produce  json
+// @router /api/v1/export/terraform/:service/listenerrulearn [get]
+func (a *API) exportTerraformListenerRuleArnsHandler(c *gin.Context) {
+	e := Export{}
+	listenerRuleArns, err := e.getListenerRuleArns(c.Param("service"))
+	if err == nil && listenerRuleArns != nil {
+		c.JSON(200, gin.H{
+			"listenerRuleKeys": listenerRuleArns.RuleKeys,
+			"listenerRules":    listenerRuleArns.Rules,
 		})
 	} else {
 		c.JSON(200, gin.H{
