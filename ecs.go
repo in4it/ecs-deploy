@@ -273,3 +273,37 @@ func (e *ECS) createService(d Deploy) error {
 	}
 	return nil
 }
+
+// wait until service is stable
+func (e *ECS) waitUntilServicesStable(serviceName string) error {
+	svc := ecs.New(session.New())
+	input := &ecs.DescribeServicesInput{
+		Cluster:  aws.String(e.clusterName),
+		Services: []*string{aws.String(serviceName)},
+	}
+
+	ecsLogger.Debugf("Waiting for service %v on %v to become stable", serviceName, e.clusterName)
+
+	err := svc.WaitUntilServicesStable(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
+	service := Service{}
+	err := e.waitUntilServicesStable(dd.ServiceName)
+	ecsLogger.Debugf("Waiting for service %v to become stable finished", dd.ServiceName)
+	if err != nil {
+		ecsLogger.Debugf("waitUntilServiceStable didn't succeed: %v", err)
+		service.setDeploymentStatus(dd, "failed")
+	}
+	ecsLogger.Debugf("Service %v stable", dd.ServiceName)
+	service.setDeploymentStatus(dd, "success")
+	return nil
+}

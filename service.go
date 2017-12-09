@@ -26,6 +26,7 @@ type DynamoDeployment struct {
 	Time              time.Time
 	Day               string
 	Month             string
+	Status            string
 	Tag               string
 	TaskDefinitionArn *string
 	DeployData        *Deploy
@@ -159,19 +160,19 @@ func (s *Service) createService() error {
 	}
 	return nil
 }
-func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) error {
+func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDeployment, error) {
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
 	day := time.Now().Format("2006-01-01")
 	month := time.Now().Format("2006-01")
-	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d}
+	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running"}
 	err := table.Put(w).Run()
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
-		return err
+		return nil, err
 	}
-	return nil
+	return &w, nil
 }
 func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	var dd DynamoDeployment
@@ -227,4 +228,47 @@ func (s *Service) getDeploysForService(serviceName string) ([]DynamoDeployment, 
 	serviceLogger.Debugf("Retrieving records for: %v", serviceName)
 	err := table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dds)
 	return dds, err
+}
+
+func (s *Service) setDeploymentStatus(d *DynamoDeployment, status string) error {
+	db := dynamo.New(session.New(), &aws.Config{})
+	table := db.Table("Services")
+
+	serviceLogger.Debugf("Setting status of service %v_%v to %v", d.ServiceName, d.Time.Format("2006-01-02T15:04:05-0700"), status)
+	d.Status = status
+	err := table.Put(d).Run()
+
+	if err != nil {
+		serviceLogger.Errorf("Error during put: %v", err.Error())
+		return err
+	}
+	return nil
+}
+func (s *Service) getDeploymentStatus(serviceName string, strTime string) (*DynamoDeployment, error) {
+	var dd DynamoDeployment
+	db := dynamo.New(session.New(), &aws.Config{})
+	table := db.Table("Services")
+
+	layout := "2006-01-02T15:04:05.000000000Z"
+	t, err := time.Parse(layout, strTime)
+
+	if err != nil {
+		serviceLogger.Errorf("Could not parse %v from string to time", strTime)
+		return nil, err
+	}
+
+	serviceLogger.Debugf("Retrieving status of service %v_%v", serviceName, strTime)
+	err = table.Get("ServiceName", serviceName).Range("Time", dynamo.Equal, t).Limit(1).One(&dd)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			serviceLogger.Errorf(aerr.Error())
+		} else {
+			return nil, err
+		}
+		serviceLogger.Errorf("Error during get: %v", err.Error())
+		return nil, err
+	}
+	serviceLogger.Debugf("Retrieved deployment %v_%v with status %v", dd.ServiceName, dd.Time, dd.Status)
+
+	return &dd, nil
 }

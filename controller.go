@@ -26,7 +26,7 @@ func (c *Controller) createRepository(repository string) (*string, error) {
 	return &msg, nil
 }
 
-func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
+func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error) {
 	// validate
 	for _, container := range d.Containers {
 		if container.Memory == 0 && container.MemoryReservation == 0 {
@@ -92,14 +92,22 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*string, error) {
 
 	// write changes in db
 	service := Service{serviceName: serviceName, clusterName: d.Cluster}
-	err = service.newDeployment(taskDefArn, &d)
+	dd, err := service.newDeployment(taskDefArn, &d)
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
 		return nil, err
 	}
 
-	ret := fmt.Sprintf("Successfully deployed service %v with taskdefinition %v", serviceName, *taskDefArn)
-	return &ret, nil
+	// run goroutine to update status of service
+	go ecs.launchWaitUntilServicesStable(dd)
+
+	ret := &DeployResult{
+		ServiceName:       serviceName,
+		ClusterName:       d.Cluster,
+		TaskDefinitionArn: *taskDefArn,
+		DeploymentTime:    dd.Time,
+	}
+	return ret, nil
 }
 
 // service not found, create ALB target group + rule
@@ -229,4 +237,19 @@ func (c *Controller) getServices() ([]*DynamoServicesElement, error) {
 	var ds DynamoServices
 	err := s.getServices(&ds)
 	return ds.Services, err
+}
+func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResult, error) {
+	s := Service{}
+	dd, err := s.getDeploymentStatus(serviceName, time)
+	if err != nil {
+		return nil, err
+	}
+	ret := &DeployResult{
+		ClusterName:       dd.DeployData.Cluster,
+		ServiceName:       serviceName,
+		DeploymentTime:    dd.Time,
+		Status:            dd.Status,
+		TaskDefinitionArn: *dd.TaskDefinitionArn,
+	}
+	return ret, nil
 }

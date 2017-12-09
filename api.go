@@ -59,6 +59,14 @@ type DeployRuleConditions struct {
 	Hostname    string   `json:"hostname"`
 }
 
+type DeployResult struct {
+	ServiceName       string    `json:"serviceName"`
+	ClusterName       string    `json:"clusterName"`
+	TaskDefinitionArn string    `json:"taskDefinitionArn"`
+	Status            string    `json:"status"`
+	DeploymentTime    time.Time `json:"deploymentTime"`
+}
+
 func (a *API) launch() {
 	a.createAuthMiddleware()
 	a.createRoutes()
@@ -104,6 +112,7 @@ func (a *API) createRoutes() {
 		// deploy list
 		auth.GET("/deploy/list", a.listDeploysHandler)
 		auth.GET("/deploy/list/:service", a.listDeploysForServiceHandler)
+		auth.GET("/deploy/status/:service/:time", a.getServiceStatusHandler)
 		// service list
 		auth.GET("/service/list", a.listServicesHandler)
 		// get service information
@@ -357,6 +366,19 @@ func (a *API) listServicesHandler(c *gin.Context) {
 	if err == nil {
 		c.JSON(200, gin.H{
 			"services": services,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) getServiceStatusHandler(c *gin.Context) {
+	controller := Controller{}
+	service, err := controller.getDeploymentStatus(c.Param("service"), c.Param("time"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"service": service,
 		})
 	} else {
 		c.JSON(200, gin.H{
