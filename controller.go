@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Controller struct
@@ -90,8 +91,24 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 		}
 	}
 
-	// write changes in db
+	// Mark previous deployment as aborted if still running
 	service := Service{serviceName: serviceName, clusterName: d.Cluster}
+	ddLast, err := service.getLastDeploy()
+	if err != nil {
+		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
+			controllerLogger.Errorf("Error while getting last deployment for %v: %v", serviceName, err)
+			return nil, err
+		}
+	}
+	if ddLast != nil && ddLast.Status == "running" {
+		err = service.setDeploymentStatus(ddLast, "aborted")
+		if err != nil {
+			controllerLogger.Errorf("Could not set status of %v to aborted: %v", serviceName, err)
+			return nil, err
+		}
+	}
+
+	// write changes in db
 	dd, err := service.newDeployment(taskDefArn, &d)
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
@@ -226,7 +243,7 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 
 func (c *Controller) getDeploys() ([]DynamoDeployment, error) {
 	s := Service{}
-	return s.getDeploys()
+	return s.getDeploys("byMonth", 20)
 }
 func (c *Controller) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
 	s := Service{}
