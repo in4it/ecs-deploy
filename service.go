@@ -180,6 +180,9 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	table := db.Table("Services")
 	err := table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
 	if err != nil {
+		if err.Error() == "dynamo: no item found" {
+			return nil, errors.New("NoItemsFound: no items found")
+		}
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case dynamodb.ErrCodeProvisionedThroughputExceededException:
@@ -202,22 +205,37 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	serviceLogger.Debugf("Retrieved last deployment %v at %v", dd.ServiceName, dd.Time)
 	return &dd, nil
 }
-func (s *Service) getDeploys() ([]DynamoDeployment, error) {
+func (s *Service) getDeploys(action string, limit int) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
 	// add date to table
-	for i := 0; i < 3; i++ {
-		var dd []DynamoDeployment
-		serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, i*-1, 0).Format("2006-01"))
-		err := table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
-		dds = append(dds, dd...)
+	var dd []DynamoDeployment
+	switch {
+	case action == "byMonth":
+		for i := 0; i < 3; i++ {
+			serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, i*-1, 0).Format("2006-01"))
+			err := table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
+			dds = append(dds, dd...)
+			if err != nil {
+				return dds, err
+			}
+			if len(dds) >= limit {
+				return dds[0:limit], nil
+			}
+		}
+	case action == "secondToLast":
+		serviceLogger.Debugf("Retrieving second last deploy")
+		err := table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(2).All(&dd)
 		if err != nil {
 			return dds, err
 		}
-		if len(dds) == 20 {
-			return dds, nil
+		if len(dd) != 2 {
+			return nil, errors.New("NoSecondToLast: No second to last deployment")
 		}
+		dds = dd[1:2]
+	default:
+		return nil, errors.New("No action specified")
 	}
 	return dds, nil
 }
