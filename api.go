@@ -1,13 +1,16 @@
 package main
 
 import (
+	//"github.com/RobotsAndPencils/go-saml"
 	"github.com/appleboy/gin-jwt"
+	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
 	"errors"
+	//"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -15,6 +18,8 @@ import (
 // API struct
 type API struct {
 	authMiddleware *jwt.GinJWTMiddleware
+	//sp             saml.ServiceProviderSettings
+	samlHelper *SAML
 }
 
 // deploy binding from JSON
@@ -67,24 +72,77 @@ type DeployResult struct {
 	DeploymentTime    time.Time `json:"deploymentTime"`
 }
 
-func (a *API) launch() {
+type RunningService struct {
+	ServiceName  string                     `json:"serviceName"`
+	ClusterName  string                     `json:"clusterName"`
+	RunningCount int64                      `json:"runningCount"`
+	Status       string                     `json:"status"`
+	Deployments  []RunningServiceDeployment `json:"deployments"`
+}
+type RunningServiceDeployment struct {
+	Status       string    `json:"status"`
+	RunningCount int64     `json:"runningCount"`
+	PendingCount int64     `json:"pendingCount"`
+	DesiredCount int64     `json:"desiredCount"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+func (a *API) launch() error {
+	if getEnv("SAML_ENABLED", "") == "yes" {
+		err := a.initSAML()
+		if err != nil {
+			return err
+		}
+	}
+
 	a.createAuthMiddleware()
 	a.createRoutes()
+
+	return nil
+}
+
+func (a *API) initSAML() error {
+	// initialize samlHelper
+	var err error
+	a.samlHelper, err = newSAML(getEnv("SAML_METADATA_URL", ""), []byte(getEnv("SAML_CERTIFICATE", "")), []byte(getEnv("SAML_PRIVATE_KEY", "")))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (a *API) createRoutes() {
 	// create
 	r := gin.Default()
 
+	// location
+	r.Use(location.Default())
+
 	// prefix
 	prefix := getEnv("URL_PREFIX", "")
 	apiPrefix := prefix + getEnv("URL_PREFIX_API", "/api/v1")
 
+	// webapp
+	r.Static(prefix+"/webapp", "./webapp/dist")
+
 	auth := r.Group(apiPrefix)
 	auth.Use(a.authMiddleware.MiddlewareFunc())
 	{
+		// frontend redirect
+		r.GET(prefix, a.redirectFrontendHandler)
+		r.GET(prefix+"/", a.redirectFrontendHandler)
+
 		// health check
 		r.GET(prefix+"/health", a.healthHandler)
+
+		// saml init
+		if getEnv("SAML_ENABLED", "") == "yes" {
+			r.POST(prefix+"/saml/acs", a.samlHelper.samlInitHandler)
+			r.GET(prefix+"/saml/acs", a.samlHelper.samlInitHandler)
+		}
+		r.GET(prefix+"/saml/enabled", a.samlHelper.samlEnabledHandler)
 
 		// swagger
 		r.GET(prefix+"/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -115,8 +173,11 @@ func (a *API) createRoutes() {
 		auth.GET("/deploy/status/:service/:time", a.getServiceStatusHandler)
 		// service list
 		auth.GET("/service/list", a.listServicesHandler)
+		// service list
+		auth.GET("/service/describe", a.describeServicesHandler)
 		// get service information
-		//auth.GET("/service/:service", a.getServiceHandler)
+		auth.GET("/service/describe/:service", a.describeServiceHandler)
+
 	}
 
 	// run API
@@ -131,10 +192,11 @@ func (a *API) createRoutes() {
 // @router /login [post]
 func (a *API) createAuthMiddleware() {
 	a.authMiddleware = &jwt.GinJWTMiddleware{
-		Realm:      "ecs-deploy",
-		Key:        []byte(getEnv("JWT_SECRET", "unsecure secret key 8a045eb")),
-		Timeout:    time.Hour,
-		MaxRefresh: time.Hour,
+		Realm:            "ecs-deploy",
+		Key:              []byte(getEnv("JWT_SECRET", "unsecure secret key 8a045eb")),
+		SigningAlgorithm: "HS256",
+		Timeout:          time.Hour,
+		MaxRefresh:       time.Hour,
 		Authenticator: func(userId string, password string, c *gin.Context) (string, bool) {
 			if (userId == "deploy" && password == getEnv("DEPLOY_PASSWORD", "deploy")) || (userId == "developer" && password == getEnv("DEVELOPER_PASSWORD", "developer")) {
 				return userId, true
@@ -143,7 +205,7 @@ func (a *API) createAuthMiddleware() {
 			return userId, false
 		},
 		Authorizator: func(userId string, c *gin.Context) bool {
-			if userId == "deploy" {
+			if userId != "" {
 				return true
 			}
 
@@ -373,6 +435,33 @@ func (a *API) listServicesHandler(c *gin.Context) {
 		})
 	}
 }
+
+func (a *API) describeServicesHandler(c *gin.Context) {
+	controller := Controller{}
+	services, err := controller.describeServices()
+	if err == nil {
+		c.JSON(200, gin.H{
+			"services": services,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) describeServiceHandler(c *gin.Context) {
+	controller := Controller{}
+	service, err := controller.describeService(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"service": service,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
 func (a *API) getServiceStatusHandler(c *gin.Context) {
 	controller := Controller{}
 	service, err := controller.getDeploymentStatus(c.Param("service"), c.Param("time"))
@@ -385,4 +474,8 @@ func (a *API) getServiceStatusHandler(c *gin.Context) {
 			"error": err.Error(),
 		})
 	}
+}
+
+func (a *API) redirectFrontendHandler(c *gin.Context) {
+	c.Redirect(http.StatusMovedPermanently, getEnv("URL_PREFIX", "")+"/webapp/")
 }

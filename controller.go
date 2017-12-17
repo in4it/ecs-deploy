@@ -255,6 +255,43 @@ func (c *Controller) getServices() ([]*DynamoServicesElement, error) {
 	err := s.getServices(&ds)
 	return ds.Services, err
 }
+
+func (c *Controller) describeServices() ([]RunningService, error) {
+	var rss []RunningService
+	services := make(map[string][]*string)
+	ecs := ECS{}
+	dss, _ := c.getServices()
+	for _, ds := range dss {
+		services[ds.C] = append(services[ds.C], &ds.S)
+	}
+	for clusterName, serviceList := range services {
+		newRss, err := ecs.describeServices(clusterName, serviceList)
+		if err != nil {
+			return []RunningService{}, err
+		}
+		rss = append(rss, newRss...)
+	}
+	return rss, nil
+}
+func (c *Controller) describeService(serviceName string) (RunningService, error) {
+	var rs RunningService
+	ecs := ECS{}
+	dss, _ := c.getServices()
+	for _, ds := range dss {
+		if ds.S == serviceName {
+			rss, err := ecs.describeServices(ds.C, []*string{&serviceName})
+			if err != nil {
+				return rs, err
+			}
+			if len(rss) != 1 {
+				return rs, errors.New("Empty RunningService object returned")
+			}
+			rs = rss[0]
+			return rs, nil
+		}
+	}
+	return rs, errors.New("Service " + serviceName + " not found")
+}
 func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResult, error) {
 	s := Service{}
 	dd, err := s.getDeploymentStatus(serviceName, time)

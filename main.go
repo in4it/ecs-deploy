@@ -52,5 +52,8 @@ func main() {
 
 	// Launch API
 	api := API{}
-	api.launch()
+	err := api.launch()
+	if err != nil {
+		panic(err)
+	}
 }

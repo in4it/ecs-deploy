@@ -1,3 +1,7 @@
 *.swp
 .env
 ecs-deploy
+*.crt
+*.key
+webapp/node_modules/
+webapp/dist/

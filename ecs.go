@@ -8,6 +8,7 @@ import (
 	"github.com/juju/loggo"
 
 	"errors"
+	"math"
 )
 
 // logging
@@ -306,4 +307,50 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	ecsLogger.Debugf("Service %v stable", dd.ServiceName)
 	service.setDeploymentStatus(dd, "success")
 	return nil
+}
+
+// describe services
+func (e *ECS) describeServices(clusterName string, serviceNames []*string) ([]RunningService, error) {
+	var rss []RunningService
+	svc := ecs.New(session.New())
+
+	// fetch per 10
+	var y float64 = float64(len(serviceNames)) / 10
+	for i := 0; i < int(math.Ceil(y)); i++ {
+
+		f := i * 10
+		t := int(math.Min(float64(10+10*i), float64(len(serviceNames))))
+
+		input := &ecs.DescribeServicesInput{
+			Cluster:  aws.String(clusterName),
+			Services: serviceNames[f:t],
+		}
+
+		result, err := svc.DescribeServices(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				ecsLogger.Errorf(aerr.Error())
+			} else {
+				ecsLogger.Errorf(err.Error())
+			}
+			return rss, err
+		}
+		for _, service := range result.Services {
+			rs := RunningService{ServiceName: *service.ServiceName, ClusterName: clusterName}
+			rs.RunningCount = *service.RunningCount
+			rs.Status = *service.Status
+			for _, deployment := range service.Deployments {
+				var ds RunningServiceDeployment
+				ds.Status = *deployment.Status
+				ds.RunningCount = *deployment.RunningCount
+				ds.PendingCount = *deployment.PendingCount
+				ds.DesiredCount = *deployment.DesiredCount
+				ds.CreatedAt = *deployment.CreatedAt
+				ds.UpdatedAt = *deployment.UpdatedAt
+				rs.Deployments = append(rs.Deployments, ds)
+			}
+			rss = append(rss, rs)
+		}
+	}
+	return rss, nil
 }
