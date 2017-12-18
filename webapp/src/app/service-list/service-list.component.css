@@ -1,0 +1,65 @@
+.services {
+  padding-bottom: 25px;
+  background-color: #f7f7f7;
+}
+
+.card {
+  float: left;
+  width: 33.333%;
+  padding: .75rem;
+  margin-bottom: 2rem;
+  border: 0;
+  background-color: #f7f7f7;
+  color: #4e5655;
+}
+
+.card > img {
+  margin-bottom: .75rem;
+}
+
+.row {
+  border-color: #6da9bc
+}
+
+.title {
+  color: #FFF;
+  background-color: #7bc1d8;
+  text-align: center;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.title h2 {
+  margin: 0;
+  padding: 0;
+  font-size: 20px;
+}
+.badge-success {
+  background-color: #9eb2af;
+  border-color: #869996;
+}
+
+.badge-small {
+  font-size: 90%;
+  vertical-align: center; 
+}
+
+.card-text {
+  font-size: 85%;
+}
+
+.action {
+  text-align: center;
+}
+a.btn-primary {
+  background-color: #FFF;
+  border-color: #4e5655;
+  color: #4e5655;
+}
+
+/* HEX: #d5e1df
+ HEX: #e3eaa7
+ HEX: #b5e7a0
+ HEX: #86af49
+*/
