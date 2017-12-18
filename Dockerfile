@@ -3,7 +3,8 @@
 #
 FROM node:8.9 as webapp-builder
 
-ENV PREFIX /ecs-deploy          # Change prefix if you need another url prefix
+# change PREFIX if you need another url prefix for the webapp
+ENV PREFIX /ecs-deploy
 
 COPY webapp/package.json webapp/package-lock.json ./
 
