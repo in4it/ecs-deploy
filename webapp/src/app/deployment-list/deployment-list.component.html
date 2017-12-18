@@ -1,0 +1,37 @@
+<div class="deployment-container">
+  <div class="row">
+    <div class="col-md-3">
+      <h2>Services</h2>
+      <div class="form-check abc-checkbox" *ngFor="let service of services">
+        <input class="form-check-input" id="checkbox_{{service.S}}" type="checkbox" (click)="filter($event, service.S)">
+        <label class="form-check-label" for="checkbox_{{service.S}}">
+          {{service.S}}
+        </label>
+      </div>
+    </div>
+    <div class="col-md-9">
+      <h2>Deployments</h2>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Service name</th>
+            <th>Deployment status</th>
+            <th>Task definition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let deployment of deployments">
+            <td>{{deployment.Date}}</td>
+            <td>{{deployment.ServiceName}}</td>
+            <td *ngIf="deployment.Status == 'success'"><span class="badge badge-success">{{deployment.Status}}</span></td>
+            <td *ngIf="deployment.Status == 'failed'"><span class="badge badge-danger">{{deployment.Status}}</span></td>
+            <td *ngIf="deployment.Status == 'aborted'"><span class="badge badge-info">{{deployment.Status}}</span></td>
+            <td *ngIf="deployment.Status == ''"></td>
+            <td>{{deployment.TaskDefinitionVersion}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

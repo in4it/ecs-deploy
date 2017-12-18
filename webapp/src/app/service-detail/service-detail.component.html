@@ -1,0 +1,31 @@
+<div class="service-detail-container">
+  <div class="offset-md-2 col-md-8">
+    <h1>{{service.serviceName}}</h1>
+    <ul class="nav nav-tabs">
+      <li class="nav-item">
+        <a class="nav-link" [class.active]="tab == 'service'" [routerLink]="" (click)="onClickService()">Service</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" [class.active]="tab == 'versions'" [routerLink]="" (click)="onClickVersions()">Versions</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link disabled">Scaling</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link disabled">Parameters</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link disabled">Event logs</a>
+      </li>
+    </ul>
+  </div>
+  <div class="offset-md-2 col-md-3 cluster-info" *ngIf="tab == 'service'">
+   <ul class="list-group list-group-horizontal">
+      <li class="list-group-item list-group-item-success" *ngIf="service.status == 'ACTIVE'">Service Status: {{service.status}}</li>
+      <li class="list-group-item list-group-item-warning" *ngIf="service.status != 'ACTIVE'">Service Status: {{service.status}}</li>
+    </ul> 
+  </div>
+  <div class="offset-md-2 col-md-3 cluster-info" *ngIf="tab == 'versions'">
+    versions
+  </div>
+</div>

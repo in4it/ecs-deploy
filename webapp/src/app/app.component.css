@@ -1,0 +1,14 @@
+@import url("https://fonts.googleapis.com/css?family=Ubuntu:300,400,500,700,300italic,400italic,500italic,700italic");
+
+body { 
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    font-family: 'Ubuntu', sans-serif;
+}
+
+.main-container {
+  text-align:left;
+  margin: 0;
+  padding: 0;
+}
