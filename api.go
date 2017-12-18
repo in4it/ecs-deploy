@@ -6,6 +6,7 @@ import (
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
+	"github.com/in4it/ecs-deploy/ngserve"
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
@@ -125,7 +126,7 @@ func (a *API) createRoutes() {
 	apiPrefix := prefix + getEnv("URL_PREFIX_API", "/api/v1")
 
 	// webapp
-	r.Static(prefix+"/webapp", "./webapp/dist")
+	r.Use(ngserve.ServeWithDefault(prefix+"/webapp", ngserve.LocalFile("./webapp/dist", false), "./webapp/dist/index.html"))
 
 	auth := r.Group(apiPrefix)
 	auth.Use(a.authMiddleware.MiddlewareFunc())
