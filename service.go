@@ -267,7 +267,7 @@ func (s *Service) getDeploymentStatus(serviceName string, strTime string) (*Dyna
 	db := dynamo.New(session.New(), &aws.Config{})
 	table := db.Table("Services")
 
-	layout := "2006-01-02T15:04:05.000000000Z"
+	layout := "2006-01-02T15:04:05.9Z"
 	t, err := time.Parse(layout, strTime)
 
 	if err != nil {
