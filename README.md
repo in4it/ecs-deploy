@@ -17,16 +17,18 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
 
 ## Environment variables
 
-AWS Specific variables:
+### AWS Specific variables:
 
 * AWS\_REGION=region                  # mandatory
 
-Authentication variables;
+### Authentication variables;
 * JWT\_SECRET=secret                   # mandatory
 * DEPLOY\_PASSWORD=deploy              # mandatory
 * DEVELOPER\_PASSWORD=developer        # mandatory
 
-Service specific variables (those will be used when deploying services):
+### Service specific variables 
+These will be used when deploying services
+
 * AWS\_ACCOUNT\_ENV=staging 
 * PARAMSTORE\_ENABLED=yes
 * PARAMSTORE\_PREFIX=mycompany 
@@ -34,6 +36,16 @@ Service specific variables (those will be used when deploying services):
 * CLOUDWATCH\_LOGS\_ENABLED=yes
 * CLOUDWATCH\_LOGS\_PREFIX=mycompany
 * LOADBALANCER\_DOMAIN=mycompany.com
+
+### SAML
+
+SAML can be enabled using the following environment variables
+* SAML\_ENABLED=yes
+* SAML\_ACS\_URL=https://mycompany.com/url-prefix
+* SAML\_CERTIFICATE=contents of your certificate
+* SAML\_PRIVATE\_KEY=contents of your private key
+* SAML\_METADATA\_URL=https://identity-provider/metadata.xml
+
 
 ## License
 Copyright 2017 in4it BVBA
