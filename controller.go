@@ -92,7 +92,9 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 
 	// Mark previous deployment as aborted if still running
-	service := Service{serviceName: serviceName, clusterName: d.Cluster}
+	service := newService()
+	service.serviceName = serviceName
+	service.clusterName = d.Cluster
 	ddLast, err := service.getLastDeploy()
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
@@ -175,7 +177,11 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	}
 
 	// create service in dynamodb
-	service := Service{serviceName: serviceName, clusterName: d.Cluster, listeners: listeners}
+	service := newService()
+	service.serviceName = serviceName
+	service.clusterName = d.Cluster
+	service.listeners = listeners
+
 	err = service.createService()
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
@@ -242,15 +248,15 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 }
 
 func (c *Controller) getDeploys() ([]DynamoDeployment, error) {
-	s := Service{}
+	s := newService()
 	return s.getDeploys("byMonth", 20)
 }
 func (c *Controller) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
-	s := Service{}
+	s := newService()
 	return s.getDeploysForService(serviceName)
 }
 func (c *Controller) getServices() ([]*DynamoServicesElement, error) {
-	s := Service{}
+	s := newService()
 	var ds DynamoServices
 	err := s.getServices(&ds)
 	return ds.Services, err
@@ -293,7 +299,7 @@ func (c *Controller) describeService(serviceName string) (RunningService, error)
 	return rs, errors.New("Service " + serviceName + " not found")
 }
 func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResult, error) {
-	s := Service{}
+	s := newService()
 	dd, err := s.getDeploymentStatus(serviceName, time)
 	if err != nil {
 		return nil, err

@@ -37,6 +37,9 @@ These will be used when deploying services
 * CLOUDWATCH\_LOGS\_PREFIX=mycompany
 * LOADBALANCER\_DOMAIN=mycompany.com
 
+### DynamoDB specific variables
+* DYNAMODB\_TABLE=Services
+
 ### SAML
 
 SAML can be enabled using the following environment variables
