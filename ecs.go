@@ -297,7 +297,7 @@ func (e *ECS) waitUntilServicesStable(serviceName string) error {
 	return nil
 }
 func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
-	service := Service{}
+	service := newService()
 	err := e.waitUntilServicesStable(dd.ServiceName)
 	ecsLogger.Debugf("Waiting for service %v to become stable finished", dd.ServiceName)
 	if err != nil {

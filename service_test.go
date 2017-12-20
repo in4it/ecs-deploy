@@ -10,7 +10,8 @@ func TestGetLastDeploy(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := Service{serviceName: getEnv("TEST_SERVICENAME", "ecs-deploy")}
+	service := newService()
+	service.serviceName = getEnv("TEST_SERVICENAME", "ecs-deploy")
 	dd, err := service.getLastDeploy()
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
@@ -29,7 +30,7 @@ func TestGetDeploymentByMonth(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	limit := 20
-	service := Service{}
+	service := newService()
 	dds, err := service.getDeploys("byMonth", limit)
 	if err != nil {
 		t.Errorf("getDeploys byMonth: %v", err)
@@ -43,7 +44,8 @@ func TestGetDeploymentSecondToLast(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := Service{serviceName: getEnv("TEST_SERVICENAME", "ecs-deploy")}
+	service := newService()
+	service.serviceName = getEnv("TEST_SERVICENAME", "ecs-deploy")
 	dds, err := service.getDeploys("secondToLast", 1)
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoSecondToLast") {

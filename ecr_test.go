@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -11,7 +10,7 @@ func TestListImages(t *testing.T) {
 	}
 	ecr := ECR{}
 	imageName := getEnv("TEST_IMAGENAME", "ecs-deploy")
-	result, err := ecr.listImagesWithTag(imageName)
+	_, err := ecr.listImagesWithTag(imageName)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 		return

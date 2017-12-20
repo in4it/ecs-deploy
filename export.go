@@ -71,7 +71,10 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 		return errors.New("No target group found for " + serviceName)
 	}
 	// get deployment obj
-	s := Service{serviceName: serviceName, clusterName: clusterName}
+	s := newService()
+	s.serviceName = serviceName
+	s.clusterName = clusterName
+
 	dd, err := s.getLastDeploy()
 	if err != nil {
 		return err
@@ -182,7 +185,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	e.p = Paramstore{}
 	e.p.getParameters()
 	// get services
-	s := Service{}
+	s := newService()
 	err := s.getServices(&ds)
 	if err != nil {
 		return nil, err
@@ -293,7 +296,7 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 	var clusterName string
 	var listenerRuleArn string
 	var ds DynamoServices
-	s := Service{}
+	s := newService()
 	s.getServices(&ds)
 	for _, service := range ds.Services {
 		if service.S == serviceName {
@@ -336,7 +339,7 @@ func (e *Export) getListenerRuleArns(serviceName string) (*ListenerRuleExport, e
 	var result *ListenerRuleExport
 	var exportRuleKeys RulePriority
 	exportRules := make(map[int64]ListenerRule)
-	s := Service{}
+	s := newService()
 	s.getServices(&ds)
 	for _, service := range ds.Services {
 		if service.S == serviceName {

@@ -16,6 +16,8 @@ import (
 var serviceLogger = loggo.GetLogger("service")
 
 type Service struct {
+	db          *dynamo.DB
+	table       dynamo.Table
 	serviceName string
 	clusterName string
 	listeners   []string
@@ -45,14 +47,18 @@ type DynamoServicesElement struct {
 	L []string
 }
 
-func (s *Service) initService(dsElement *DynamoServicesElement) error {
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
+func newService() *Service {
+	s := Service{}
+	s.db = dynamo.New(session.New(), &aws.Config{})
+	s.table = s.db.Table(getEnv("DYNAMODB_TABLE", "Services"))
+	return &s
+}
 
+func (s *Service) initService(dsElement *DynamoServicesElement) error {
 	ds := &DynamoServices{ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{dsElement}}
 
 	// __SERVICE not found, write first record
-	err := table.Put(ds).Run()
+	err := s.table.Put(ds).Run()
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put of first record: %v", err.Error())
@@ -62,9 +68,7 @@ func (s *Service) initService(dsElement *DynamoServicesElement) error {
 }
 
 func (s *Service) getServices(ds *DynamoServices) error {
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
-	err := table.Get("ServiceName", "__SERVICES").Range("Time", dynamo.Equal, "0").One(ds)
+	err := s.table.Get("ServiceName", "__SERVICES").Range("Time", dynamo.Equal, "0").One(ds)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
@@ -88,9 +92,6 @@ func (s *Service) getServices(ds *DynamoServices) error {
 	return nil
 }
 func (s *Service) createService() error {
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
-
 	// check input
 	if (s.serviceName == "") || (s.clusterName == "") || (len(s.listeners) == 0) {
 		serviceLogger.Errorf("Couldn't add %v (cluster = %v, listener # = %d)", s.serviceName, s.clusterName, len(s.listeners))
@@ -134,7 +135,7 @@ func (s *Service) createService() error {
 
 		// do a conditional put, where version
 		serviceLogger.Debugf("Putting new services record with version %v", ds.Version)
-		err = table.Put(ds).If("$ = ?", "Version", ds.Version-1).Run()
+		err = s.table.Put(ds).If("$ = ?", "Version", ds.Version-1).Run()
 
 		if err != nil {
 			if aerr, ok := err.(awserr.Error); ok {
@@ -161,12 +162,10 @@ func (s *Service) createService() error {
 	return nil
 }
 func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDeployment, error) {
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
 	day := time.Now().Format("2006-01-01")
 	month := time.Now().Format("2006-01")
 	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running"}
-	err := table.Put(w).Run()
+	err := s.table.Put(w).Run()
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
@@ -176,9 +175,7 @@ func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDe
 }
 func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	var dd DynamoDeployment
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
-	err := table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
+	err := s.table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
 			return nil, errors.New("NoItemsFound: no items found")
@@ -207,15 +204,13 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 }
 func (s *Service) getDeploys(action string, limit int) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
 	// add date to table
 	var dd []DynamoDeployment
 	switch {
 	case action == "byMonth":
 		for i := 0; i < 3; i++ {
 			serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, i*-1, 0).Format("2006-01"))
-			err := table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
+			err := s.table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
 			dds = append(dds, dd...)
 			if err != nil {
 				return dds, err
@@ -226,7 +221,7 @@ func (s *Service) getDeploys(action string, limit int) ([]DynamoDeployment, erro
 		}
 	case action == "secondToLast":
 		serviceLogger.Debugf("Retrieving second last deploy")
-		err := table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(2).All(&dd)
+		err := s.table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(2).All(&dd)
 		if err != nil {
 			return dds, err
 		}
@@ -241,20 +236,16 @@ func (s *Service) getDeploys(action string, limit int) ([]DynamoDeployment, erro
 }
 func (s *Service) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
 	serviceLogger.Debugf("Retrieving records for: %v", serviceName)
-	err := table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dds)
+	err := s.table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dds)
 	return dds, err
 }
 
 func (s *Service) setDeploymentStatus(d *DynamoDeployment, status string) error {
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
 
 	serviceLogger.Debugf("Setting status of service %v_%v to %v", d.ServiceName, d.Time.Format("2006-01-02T15:04:05-0700"), status)
 	d.Status = status
-	err := table.Put(d).Run()
+	err := s.table.Put(d).Run()
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
@@ -264,8 +255,6 @@ func (s *Service) setDeploymentStatus(d *DynamoDeployment, status string) error 
 }
 func (s *Service) getDeploymentStatus(serviceName string, strTime string) (*DynamoDeployment, error) {
 	var dd DynamoDeployment
-	db := dynamo.New(session.New(), &aws.Config{})
-	table := db.Table("Services")
 
 	layout := "2006-01-02T15:04:05.9Z"
 	t, err := time.Parse(layout, strTime)
@@ -276,7 +265,7 @@ func (s *Service) getDeploymentStatus(serviceName string, strTime string) (*Dyna
 	}
 
 	serviceLogger.Debugf("Retrieving status of service %v_%v", serviceName, strTime)
-	err = table.Get("ServiceName", serviceName).Range("Time", dynamo.Equal, t).Limit(1).One(&dd)
+	err = s.table.Get("ServiceName", serviceName).Range("Time", dynamo.Equal, t).Limit(1).One(&dd)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			serviceLogger.Errorf(aerr.Error())
