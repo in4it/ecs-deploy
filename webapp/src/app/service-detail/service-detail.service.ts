@@ -7,6 +7,8 @@ import { AuthService } from '../services/auth.service';
 
 
 export class ServiceDetail {
+  public versions: {}
+  public serviceName: string
   constructor(public service: {}) { }
 }
 
@@ -22,6 +24,7 @@ export class ServiceDetailService {
 
   getServiceDetail(serviceName: string) {
     this.sl$ = new BehaviorSubject<ServiceDetail>(new ServiceDetail({}))
+    this.sl.serviceName = serviceName
     this.getServices(serviceName)
     return this.sl$
   }
@@ -33,6 +36,9 @@ export class ServiceDetailService {
       this.sl$.next(this.sl)
       this.sl$.complete()
     });
-    
+  }
+
+  getVersions() {
+    return this.http.get('/ecs-deploy/api/v1/service/describe/'+this.sl.serviceName+'/versions', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
 }
