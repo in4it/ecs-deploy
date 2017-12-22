@@ -9,23 +9,138 @@
         <a class="nav-link" [class.active]="tab == 'versions'" [routerLink]="" (click)="onClickVersions()">Versions</a>
       </li>
       <li class="nav-item">
+        <a class="nav-link" [class.active]="tab == 'events'" [routerLink]="" (click)="onClickEvents()">Event logs</a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link disabled">Scaling</a>
       </li>
       <li class="nav-item">
         <a class="nav-link disabled">Parameters</a>
       </li>
-      <li class="nav-item">
-        <a class="nav-link disabled">Event logs</a>
-      </li>
     </ul>
   </div>
-  <div class="offset-md-2 col-md-3 cluster-info" *ngIf="tab == 'service'">
-   <ul class="list-group list-group-horizontal">
-      <li class="list-group-item list-group-item-success" *ngIf="service.status == 'ACTIVE'">Service Status: {{service.status}}</li>
-      <li class="list-group-item list-group-item-warning" *ngIf="service.status != 'ACTIVE'">Service Status: {{service.status}}</li>
-    </ul> 
+  <div class="offset-md-2 col-md-8" *ngIf="tab == 'service'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div *ngIf="!loading">
+      <div class="row">
+        <div class="col-md-4 cluster-info">
+          <ul class="list-group list-group-horizontal">
+            <li class="list-group-item list-group-item-success" *ngIf="service.status == 'ACTIVE'">Service Status: {{service.status}}</li>
+            <li class="list-group-item list-group-item-warning" *ngIf="service.status != 'ACTIVE'">Service Status: {{service.status}}</li>
+          </ul>
+        </div>
+        <div class="col-md-8 cluster-info right-buttons">
+            <ul class="list-inline">
+              <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+            </ul>
+        </div>
+      </div>
+      <div *ngIf="service['deploymentMap']['ACTIVE']">
+        <div class="alert alert-primary" role="alert" >
+          Deployment in progress...
+        </div>
+        <table class="table center-table">
+          <thead class="thead-default">
+            <tr>
+              <th class="w-40">Deployed at</th>
+              <th class="w-20">Services</th>
+              <th class="w-15"></th>
+              <th class="w-25"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{service["deploymentMap"]["ACTIVE"]["lastDeploy"]}}</td>
+              <td>
+                <strong>{{service["deploymentMap"]["ACTIVE"]["desiredCount"]}} / {{service["deploymentMap"]["ACTIVE"]["runningCount"]}}</strong> running
+                <span *ngIf="service['deploymentMap']['ACTIVE']['pendingCount'] &gt; 0"> ({{service['deploymentMap']['ACTIVE']['pendingCount']}} pending)</span>
+              </td>
+            </tr>
+        </table>
+        <p class="deploy-arrow text-center"><i class="fa fa-arrow-down fa-3x" aria-hidden="true"></i></p>
+      </div>
+      <table class="table center-table">
+        <thead class="thead-default">
+          <tr>
+            <th>Deployed at</th>
+            <th>Services</th>
+            <th>Tasks</th>
+            <th>Containers</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>{{service["deploymentMap"]["PRIMARY"]["lastDeploy"]}}</td>
+          <td>
+            <strong>{{service["deploymentMap"]["PRIMARY"]["desiredCount"]}} / {{service["deploymentMap"]["PRIMARY"]["runningCount"]}}</strong> running
+            <span *ngIf="service['deploymentMap']['PRIMARY']['pendingCount'] &gt; 0"> ({{service['deploymentMap']['PRIMARY']['pendingCount']}} pending)</span>
+          </td>
+          <td>
+            <strong>{{service["taskStatus"]["RUNNING"] || 0 }} / {{service["taskTotal"]}}</strong> running
+            <span *ngIf="service['taskStatus']['STOPPED'] &gt; 0"> ({{service['taskStatus']['STOPPED']}} stopped)</span>
+            <span *ngIf="service['taskStatus']['PENDING'] &gt; 0"> ({{service['taskStatus']['PENDING']}} stopped)</span>
+          </td>
+          <td>
+            <strong>{{service["containerStatus"]["RUNNING"] || 0 }} / {{service["containerTotal"]}}</strong> running
+            <span *ngIf="service['containerStatus']['STOPPED'] &gt; 0"> ({{service['containerStatus']['STOPPED']}} stopped)</span>
+            <span *ngIf="service['containerStatus']['PENDING'] &gt; 0"> ({{service['containerStatus']['PENDING']}} stopped)</span>
+          </td>
+        </tr>
+      </table>
+    </div>
   </div>
-  <div class="offset-md-2 col-md-3 cluster-info" *ngIf="tab == 'versions'">
-    versions
+  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'versions'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div class="right-buttons" *ngIf="!loading">
+      <ul class="list-inline">
+        <li class="list-inline-item"><a class="btn btn-primary" (click)="inspectChild.open(service.serviceName, selectedVersion)">Inspect</a></li>
+        <li class="list-inline-item"><a class="btn btn-primary" (click)="deployChild.open(service.serviceName, selectedVersion)">Deploy</a></li>
+      </ul>
+    </div>
+    <table class="table center-table" *ngIf="!loading">
+      <thead class="thead-default">
+        <tr>
+          <th>&nbsp;</th>
+          <th>image</th>
+          <th>tag</th>
+          <th>Last Deployed</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr *ngFor="let version of versions">
+        <td class="text-center"><input type="radio" class="form-check-input" name="selectedVersion" [(ngModel)]="selectedVersion" [value]="version.lastDeploy" class="text-center" /></td>
+        <td>{{version.imageName}}</td>
+        <td>{{version.tag}}</td>
+        <td>{{version.lastDeployMoment}}</td>
+      </tr>
+    </table>
+  </div>
+  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'events'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div *ngIf="!loading">
+      <div class="right-buttons">
+        <ul class="list-inline">
+          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+        </ul>
+      </div>
+      <table class="table center-table">
+        <thead class="thead-default">
+          <tr>
+            <th class="w-25">Timestamp</th>
+            <th class="w-75">Message</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr *ngFor="let event of service.events">
+          <td>{{event.createdAtFormatted}}</td>
+          <td>{{event.message}}</td>
+        </tr>
+      </table>
+    </div>
   </div>
 </div>
+<app-service-detail-inspect></app-service-detail-inspect>
+<app-service-detail-deploy (deployed)="deployed($event)" (deploying)="deploying($event)"></app-service-detail-deploy>

@@ -3,6 +3,18 @@
 }
 
 .cluster-info {
-  margin-top: 30px
+  margin-top: 30px;
+  margin-bottom: 30px;
+}
+.center-table {
+  margin: 0 auto;
 }
 
+div.right-buttons {
+  text-align: right;
+  margin-bottom: 20px;
+}
+
+.deploy-arrow {
+  padding: 30px;
+}

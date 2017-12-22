@@ -29,6 +29,8 @@ import { ServiceListService }   from './service-list/service-list.service';
 import { ServiceDetailComponent } from './service-detail/service-detail.component';
 import { ServiceDetailResolver } from './service-detail/service-detail-resolver.service';
 import { ServiceDetailService } from './service-detail/service-detail.service';
+import { InspectChildComponent } from './service-detail/inspect.component';
+import { DeployChildComponent } from './service-detail/deploy.component';
 
 // routes
 const appRoutes: Routes = [
@@ -75,6 +77,8 @@ const appRoutes: Routes = [
     ErrorComponent,
     ServiceListComponent,
     ServiceDetailComponent,
+    InspectChildComponent,
+    DeployChildComponent,
   ],
   imports: [
     BrowserModule,

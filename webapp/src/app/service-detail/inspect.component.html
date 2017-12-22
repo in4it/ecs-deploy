@@ -1,0 +1,75 @@
+<ng-template #inspect let-c="close" let-d="dismiss">
+  <div class="modal-header">
+    <h4 class="modal-title">{{serviceName}}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="d('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <h5>Service info</h5>
+    <div *ngIf="!loading">
+    <table class="table center-table">
+      <thead class="thead-default">
+        <tr>
+          <th>Name</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ClusterName</td>
+          <td>{{deployment.cluster}}</td>
+        </tr>
+        <tr>
+          <td>Deployed at</td>
+          <td>{{deployment.deploymentMoment}}</td>
+        </tr>
+        <tr>
+          <td>ServicePort</td>
+          <td>{{deployment.servicePort}}</td>
+        </tr>
+        <tr>
+          <td>DesiredCount</td>
+          <td>{{deployment.desiredCount}}</td>
+        </tr>
+      </tbody>
+    </table>
+    <h5>Container info</h5>
+    <table class="table center-table" *ngFor="let container of deployment.containers">
+      <thead class="thead-default">
+        <tr>
+          <th>Name</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td>ContainerName</td>
+        <td>{{container.containerName}}</td>
+      </tr>
+      <tr>
+        <td>ContainerImage</td>
+        <td *ngIf="container.ContainerImage != ''">{{container.ContainerImage}}</td>
+        <td *ngIf="container.ContainerImage == ''">{{serviceName}}</td>
+      </tr>
+      <tr>
+        <td>ContainerTag</td>
+        <td>{{container.containerTag}}</td>
+      </tr>
+      <tr>
+        <td>ContainerPort</td>
+        <td>{{container.containerPort}}</td>
+      </tr>
+      <tr>
+        <td>ContainerCommand</td>
+        <td><span *ngFor="let cmd of container.containerCommand">{{cmd}} </span></td>
+      </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-dark" (click)="c('Close click')">Close</button>
+  </div>
+</ng-template>

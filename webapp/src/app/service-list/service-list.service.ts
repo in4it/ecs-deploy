@@ -22,17 +22,16 @@ export class ServiceListService {
 
   getServiceList() {
     this.sl$ = new BehaviorSubject<ServiceList>(new ServiceList([]))
-    this.getServices()
-    return this.sl$
-  }
-
-  getServices() {
-    this.http.get('/ecs-deploy/api/v1/service/describe', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())}).subscribe(data => {
+    this.getServices().subscribe(data => {
       // Read the result field from the JSON response.
       this.sl.services = data['services'];
       this.sl$.next(this.sl)
       this.sl$.complete()
     });
-    
+    return this.sl$
+  }
+
+  getServices() {
+    return this.http.get('/ecs-deploy/api/v1/service/describe', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
 }

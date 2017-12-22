@@ -1,0 +1,18 @@
+<ng-template #deploy let-c="close" let-d="dismiss">
+  <div class="modal-header">
+    <h4 class="modal-title">Deploy {{serviceName}}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="d('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div *ngIf="!loading">
+      Are you sure you want to deploy <strong>{{versionMap[selectedVersion].tag}}</strong>, which corresponds with the <strong>{{serviceName}}</strong> deployment of <strong>{{selectedVersion}}</strong>?
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-dark" (click)="c('Close click')">Cancel</button>
+    <button type="button" class="btn btn-outline-dark btn-primary" (click)="c('Deploy')">Deploy</button>
+  </div>
+</ng-template>
