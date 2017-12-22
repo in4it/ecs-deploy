@@ -298,6 +298,42 @@ func (c *Controller) describeService(serviceName string) (RunningService, error)
 	}
 	return rs, errors.New("Service " + serviceName + " not found")
 }
+func (c *Controller) describeServiceVersions(serviceName string) ([]ServiceVersion, error) {
+	var imageName string
+	var sv []ServiceVersion
+	service := newService()
+	service.serviceName = serviceName
+	ecr := ECR{}
+	// get last service to know container name
+	ddLast, err := service.getLastDeploy()
+	if err != nil {
+		return sv, err
+	}
+	// get image linked with main container
+	for _, container := range ddLast.DeployData.Containers {
+		if container.ContainerName == serviceName {
+			if container.ContainerImage != "" {
+				imageName = container.ContainerImage
+			} else {
+				imageName = serviceName
+			}
+		}
+	}
+	if imageName == "" {
+		return sv, errors.New("Couldn't find imageName for service " + serviceName)
+	}
+	// get image tags
+	tags, err := ecr.listImagesWithTag(imageName)
+	if err != nil {
+		return sv, err
+	}
+	// populate last deployed on
+	sv, err = service.getServiceVersionsByTags(serviceName, imageName, tags)
+	if err != nil {
+		return sv, err
+	}
+	return sv, nil
+}
 func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResult, error) {
 	s := newService()
 	dd, err := s.getDeploymentStatus(serviceName, time)

@@ -9,6 +9,7 @@ import (
 	"github.com/juju/loggo"
 
 	"errors"
+	"math"
 	"time"
 )
 
@@ -278,4 +279,30 @@ func (s *Service) getDeploymentStatus(serviceName string, strTime string) (*Dyna
 	serviceLogger.Debugf("Retrieved deployment %v_%v with status %v", dd.ServiceName, dd.Time, dd.Status)
 
 	return &dd, nil
+}
+
+func (s *Service) getServiceVersionsByTags(serviceName, imageName string, tags map[string]string) ([]ServiceVersion, error) {
+	var svs []ServiceVersion
+	var dds []DynamoDeployment
+
+	matched := make(map[string]bool)
+
+	serviceLogger.Debugf("Retrieving records for: %v, imageId: %v", serviceName, imageName)
+	err := s.table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(int64(math.Max(float64(100), float64(len(tags))))).All(&dds)
+	for _, dd := range dds {
+		for _, container := range dd.DeployData.Containers {
+			if container.ContainerImage == imageName || (container.ContainerImage == "" && dd.ServiceName == imageName) {
+				for tag, imageId := range tags {
+					if tag == container.ContainerTag {
+						if _, ok := matched[tag]; !ok {
+							svs = append(svs, ServiceVersion{ImageName: imageName, Tag: tag, ImageId: imageId, LastDeploy: dd.Time})
+							matched[tag] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	return svs, err
+
 }

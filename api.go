@@ -88,6 +88,12 @@ type RunningServiceDeployment struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
+type ServiceVersion struct {
+	ImageName  string    `json:"imageName"`
+	Tag        string    `json:"tag"`
+	ImageId    string    `json:"imageId"`
+	LastDeploy time.Time `json:"lastDeploy"`
+}
 
 func (a *API) launch() error {
 	if getEnv("SAML_ENABLED", "") == "yes" {
@@ -178,6 +184,8 @@ func (a *API) createRoutes() {
 		auth.GET("/service/describe", a.describeServicesHandler)
 		// get service information
 		auth.GET("/service/describe/:service", a.describeServiceHandler)
+		// get version information
+		auth.GET("/service/describe/:service/versions", a.describeServiceVersionsHandler)
 
 	}
 
@@ -456,6 +464,19 @@ func (a *API) describeServiceHandler(c *gin.Context) {
 	if err == nil {
 		c.JSON(200, gin.H{
 			"service": service,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) describeServiceVersionsHandler(c *gin.Context) {
+	controller := Controller{}
+	versions, err := controller.describeServiceVersions(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"versions": versions,
 		})
 	} else {
 		c.JSON(200, gin.H{

@@ -25,7 +25,23 @@
       <li class="list-group-item list-group-item-warning" *ngIf="service.status != 'ACTIVE'">Service Status: {{service.status}}</li>
     </ul> 
   </div>
-  <div class="offset-md-2 col-md-3 cluster-info" *ngIf="tab == 'versions'">
-    versions
+  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'versions'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <table class="table center-table" *ngIf="!loading">
+      <thead class="thead-default">
+        <tr>
+          <th>image</th>
+          <th>tag</th>
+          <th>Last&nbsp;Deployed</th>
+        </tr>
+      </thead>
+      <tbody>
+      <tr *ngFor="let version of versions">
+        <td>{{version.imageName}}</td>
+        <td>{{version.tag}}</td>
+        <td>{{version.lastDeployMoment}}</td>
+      </tr>
+    </table>
   </div>
 </div>
