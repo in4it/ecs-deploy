@@ -320,7 +320,7 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 }
 
 // describe services
-func (e *ECS) describeServices(clusterName string, serviceNames []*string) ([]RunningService, error) {
+func (e *ECS) describeServices(clusterName string, serviceNames []*string, showEvents bool, showTasks bool) ([]RunningService, error) {
 	var rss []RunningService
 	svc := ecs.New(session.New())
 
@@ -359,8 +359,141 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string) ([]Ru
 				ds.UpdatedAt = *deployment.UpdatedAt
 				rs.Deployments = append(rs.Deployments, ds)
 			}
+			if showEvents {
+				for _, event := range service.Events {
+					event := RunningServiceEvent{
+						Id:        *event.Id,
+						CreatedAt: *event.CreatedAt,
+						Message:   *event.Message,
+					}
+					rs.Events = append(rs.Events, event)
+				}
+			}
+			if showTasks {
+				taskArns, err := e.listTasks(clusterName, *service.ServiceName)
+				if err != nil {
+					return rss, err
+				}
+				runningTasks, err := e.describeTasks(clusterName, taskArns)
+				if err != nil {
+					return rss, err
+				}
+				rs.Tasks = runningTasks
+			}
 			rss = append(rss, rs)
 		}
 	}
 	return rss, nil
+}
+
+// list tasks
+func (e *ECS) listTasks(clusterName, serviceName string) ([]*string, error) {
+	svc := ecs.New(session.New())
+	var tasks []*string
+
+	input := &ecs.ListTasksInput{
+		Cluster:     aws.String(clusterName),
+		ServiceName: aws.String(serviceName),
+	}
+
+	pageNum := 0
+	err := svc.ListTasksPages(input,
+		func(page *ecs.ListTasksOutput, lastPage bool) bool {
+			pageNum++
+			tasks = append(tasks, page.TaskArns...)
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+	}
+	return tasks, err
+}
+func (e *ECS) describeTasks(clusterName string, tasks []*string) ([]RunningTask, error) {
+	var rts []RunningTask
+	svc := ecs.New(session.New())
+
+	// fetch per 100
+	var y float64 = float64(len(tasks)) / 100
+	for i := 0; i < int(math.Ceil(y)); i++ {
+
+		f := i * 100
+		t := int(math.Min(float64(100+100*i), float64(len(tasks))))
+
+		input := &ecs.DescribeTasksInput{
+			Cluster: aws.String(clusterName),
+			Tasks:   tasks[f:t],
+		}
+
+		result, err := svc.DescribeTasks(input)
+		if err != nil {
+			if aerr, ok := err.(awserr.Error); ok {
+				ecsLogger.Errorf(aerr.Error())
+			} else {
+				ecsLogger.Errorf(err.Error())
+			}
+			return rts, err
+		}
+		for _, task := range result.Tasks {
+			rs := RunningTask{}
+			rs.ContainerInstanceArn = *task.ContainerInstanceArn
+			rs.Cpu = *task.Cpu
+			rs.CreatedAt = *task.CreatedAt
+			rs.DesiredStatus = *task.DesiredStatus
+			if task.ExecutionStoppedAt != nil {
+				rs.ExecutionStoppedAt = *task.ExecutionStoppedAt
+			}
+			if task.Group != nil {
+				rs.Group = *task.Group
+			}
+			rs.LastStatus = *task.LastStatus
+			rs.LaunchType = *task.LaunchType
+			rs.Memory = *task.Memory
+			if task.PullStartedAt != nil {
+				rs.PullStartedAt = *task.PullStartedAt
+			}
+			if task.PullStoppedAt != nil {
+				rs.PullStoppedAt = *task.PullStoppedAt
+			}
+			if task.StartedAt != nil {
+				rs.StartedAt = *task.StartedAt
+			}
+			if task.StartedBy != nil {
+				rs.StartedBy = *task.StartedBy
+			}
+			if task.StoppedAt != nil {
+				rs.StoppedAt = *task.StoppedAt
+			}
+			if task.StoppedReason != nil {
+				rs.StoppedReason = *task.StoppedReason
+			}
+			if task.StoppingAt != nil {
+				rs.StoppingAt = *task.StoppingAt
+			}
+			rs.TaskArn = *task.TaskArn
+			rs.TaskDefinitionArn = *task.TaskDefinitionArn
+			rs.Version = *task.Version
+			for _, container := range task.Containers {
+				var tc RunningTaskContainer
+				tc.ContainerArn = *container.ContainerArn
+				if container.ExitCode != nil {
+					tc.ExitCode = *container.ExitCode
+				}
+				if container.LastStatus != nil {
+					tc.LastStatus = *container.LastStatus
+				}
+				tc.Name = *container.Name
+				if container.Reason != nil {
+					tc.Reason = *container.Reason
+				}
+				rs.Containers = append(rs.Containers, tc)
+			}
+			rts = append(rts, rs)
+		}
+	}
+	return rts, nil
 }

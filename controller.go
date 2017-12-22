@@ -128,6 +128,23 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 	return ret, nil
 }
+func (c *Controller) redeploy(serviceName, time string) (*DeployResult, error) {
+	s := newService()
+	dd, err := s.getDeployment(serviceName, time)
+	if err != nil {
+		return nil, err
+	}
+
+	controllerLogger.Debugf("Redeploying %v_%v", serviceName, time)
+
+	ret, err := c.deploy(serviceName, *dd.DeployData)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ret, nil
+}
 
 // service not found, create ALB target group + rule
 func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *string) error {
@@ -264,6 +281,8 @@ func (c *Controller) getServices() ([]*DynamoServicesElement, error) {
 
 func (c *Controller) describeServices() ([]RunningService, error) {
 	var rss []RunningService
+	showEvents := false
+	showTasks := false
 	services := make(map[string][]*string)
 	ecs := ECS{}
 	dss, _ := c.getServices()
@@ -271,7 +290,7 @@ func (c *Controller) describeServices() ([]RunningService, error) {
 		services[ds.C] = append(services[ds.C], &ds.S)
 	}
 	for clusterName, serviceList := range services {
-		newRss, err := ecs.describeServices(clusterName, serviceList)
+		newRss, err := ecs.describeServices(clusterName, serviceList, showEvents, showTasks)
 		if err != nil {
 			return []RunningService{}, err
 		}
@@ -281,11 +300,13 @@ func (c *Controller) describeServices() ([]RunningService, error) {
 }
 func (c *Controller) describeService(serviceName string) (RunningService, error) {
 	var rs RunningService
+	showEvents := true
+	showTasks := true
 	ecs := ECS{}
 	dss, _ := c.getServices()
 	for _, ds := range dss {
 		if ds.S == serviceName {
-			rss, err := ecs.describeServices(ds.C, []*string{&serviceName})
+			rss, err := ecs.describeServices(ds.C, []*string{&serviceName}, showEvents, showTasks)
 			if err != nil {
 				return rs, err
 			}
@@ -298,9 +319,45 @@ func (c *Controller) describeService(serviceName string) (RunningService, error)
 	}
 	return rs, errors.New("Service " + serviceName + " not found")
 }
+func (c *Controller) describeServiceVersions(serviceName string) ([]ServiceVersion, error) {
+	var imageName string
+	var sv []ServiceVersion
+	service := newService()
+	service.serviceName = serviceName
+	ecr := ECR{}
+	// get last service to know container name
+	ddLast, err := service.getLastDeploy()
+	if err != nil {
+		return sv, err
+	}
+	// get image linked with main container
+	for _, container := range ddLast.DeployData.Containers {
+		if container.ContainerName == serviceName {
+			if container.ContainerImage != "" {
+				imageName = container.ContainerImage
+			} else {
+				imageName = serviceName
+			}
+		}
+	}
+	if imageName == "" {
+		return sv, errors.New("Couldn't find imageName for service " + serviceName)
+	}
+	// get image tags
+	tags, err := ecr.listImagesWithTag(imageName)
+	if err != nil {
+		return sv, err
+	}
+	// populate last deployed on
+	sv, err = service.getServiceVersionsByTags(serviceName, imageName, tags)
+	if err != nil {
+		return sv, err
+	}
+	return sv, nil
+}
 func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResult, error) {
 	s := newService()
-	dd, err := s.getDeploymentStatus(serviceName, time)
+	dd, err := s.getDeployment(serviceName, time)
 	if err != nil {
 		return nil, err
 	}
@@ -312,4 +369,12 @@ func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResul
 		TaskDefinitionArn: *dd.TaskDefinitionArn,
 	}
 	return ret, nil
+}
+func (c *Controller) getDeployment(serviceName, time string) (*Deploy, error) {
+	s := newService()
+	dd, err := s.getDeployment(serviceName, time)
+	if err != nil {
+		return nil, err
+	}
+	return dd.DeployData, nil
 }

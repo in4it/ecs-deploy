@@ -7,6 +7,8 @@ import { AuthService } from '../services/auth.service';
 
 
 export class ServiceDetail {
+  public versions: {}
+  public serviceName: string
   constructor(public service: {}) { }
 }
 
@@ -22,17 +24,27 @@ export class ServiceDetailService {
 
   getServiceDetail(serviceName: string) {
     this.sl$ = new BehaviorSubject<ServiceDetail>(new ServiceDetail({}))
-    this.getServices(serviceName)
-    return this.sl$
-  }
-
-  getServices(serviceName: string) {
-    this.http.get('/ecs-deploy/api/v1/service/describe/'+serviceName, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())}).subscribe(data => {
+    this.sl.serviceName = serviceName
+    this.getService(serviceName).subscribe(data => {
       // Read the result field from the JSON response.
       this.sl.service = data['service'];
       this.sl$.next(this.sl)
       this.sl$.complete()
     });
-    
+    return this.sl$
+  }
+
+  getService(serviceName: string) {
+    return this.http.get('/ecs-deploy/api/v1/service/describe/'+serviceName, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+
+  getVersions() {
+    return this.http.get('/ecs-deploy/api/v1/service/describe/'+this.sl.serviceName+'/versions', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  getDeployment(version) {
+    return this.http.get('/ecs-deploy/api/v1/deploy/get/'+this.sl.serviceName+'/'+version, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  deploy(serviceName, version) {
+    return this.http.post('/ecs-deploy/api/v1/deploy/'+serviceName+'/'+version, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
 }

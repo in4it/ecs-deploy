@@ -78,7 +78,9 @@ type RunningService struct {
 	ClusterName  string                     `json:"clusterName"`
 	RunningCount int64                      `json:"runningCount"`
 	Status       string                     `json:"status"`
+	Events       []RunningServiceEvent      `json:"events"`
 	Deployments  []RunningServiceDeployment `json:"deployments"`
+	Tasks        []RunningTask              `json:"tasks"`
 }
 type RunningServiceDeployment struct {
 	Status       string    `json:"status"`
@@ -87,6 +89,46 @@ type RunningServiceDeployment struct {
 	DesiredCount int64     `json:"desiredCount"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
+}
+type RunningServiceEvent struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+	Message   string    `json:"message"`
+}
+type ServiceVersion struct {
+	ImageName  string    `json:"imageName"`
+	Tag        string    `json:"tag"`
+	ImageId    string    `json:"imageId"`
+	LastDeploy time.Time `json:"lastDeploy"`
+}
+type RunningTask struct {
+	ContainerInstanceArn string                 `json:"containerInstanceArn"`
+	Containers           []RunningTaskContainer `json:"containers"`
+	Cpu                  string                 `json:"cpu"`
+	CreatedAt            time.Time              `json:"createdAt"`
+	DesiredStatus        string                 `json:"desiredStatus"`
+	ExecutionStoppedAt   time.Time              `json:"executionStoppedAt"`
+	Group                string                 `json:"group"`
+	LastStatus           string                 `json:"lastStatus"`
+	LaunchType           string                 `json:"launchType"`
+	Memory               string                 `json:"memory"`
+	PullStartedAt        time.Time              `json:"pullStartedAt"`
+	PullStoppedAt        time.Time              `json:"pullStoppedAt"`
+	StartedAt            time.Time              `json:"startedAt"`
+	StartedBy            string                 `json:"startedBy"`
+	StoppedAt            time.Time              `json:"stoppedAt"`
+	StoppedReason        string                 `json:"stoppedReason"`
+	StoppingAt           time.Time              `json:"stoppingAt"`
+	TaskArn              string                 `json:"taskArn"`
+	TaskDefinitionArn    string                 `json:"taskDefinitionArn"`
+	Version              int64                  `json:"version"`
+}
+type RunningTaskContainer struct {
+	ContainerArn string `json:"containerArn"`
+	ExitCode     int64  `json:"exitCode"`
+	LastStatus   string `json:"lastStatus"`
+	Name         string `json:"name"`
+	Reason       string `json:"reason"`
 }
 
 func (a *API) launch() error {
@@ -162,6 +204,9 @@ func (a *API) createRoutes() {
 		// Deploy
 		auth.POST("/deploy/:service", a.deployServiceHandler)
 
+		// Redeploy existing version
+		auth.POST("/deploy/:service/:time", a.redeployServiceHandler)
+
 		// Export
 		auth.GET("/export/terraform", a.exportTerraformHandler)
 		auth.GET("/export/terraform/:service/targetgrouparn", a.exportTerraformTargetGroupArnHandler)
@@ -171,13 +216,16 @@ func (a *API) createRoutes() {
 		// deploy list
 		auth.GET("/deploy/list", a.listDeploysHandler)
 		auth.GET("/deploy/list/:service", a.listDeploysForServiceHandler)
-		auth.GET("/deploy/status/:service/:time", a.getServiceStatusHandler)
+		auth.GET("/deploy/status/:service/:time", a.getDeploymentStatusHandler)
+		auth.GET("/deploy/get/:service/:time", a.getDeploymentHandler)
 		// service list
 		auth.GET("/service/list", a.listServicesHandler)
 		// service list
 		auth.GET("/service/describe", a.describeServicesHandler)
 		// get service information
 		auth.GET("/service/describe/:service", a.describeServiceHandler)
+		// get version information
+		auth.GET("/service/describe/:service/versions", a.describeServiceVersionsHandler)
 
 	}
 
@@ -295,6 +343,28 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 		}
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+}
+
+// @summary Redeploy existing service to ECS
+// @description Redeploy existing service to ECS
+// @id ecs-redeploy-service
+// @accept  json
+// @produce  json
+// @param   service         path    string     true        "service name"
+// @param   time            path    time       true        "timestamp"
+// @router /api/v1/deploy/{service} [post]
+func (a *API) redeployServiceHandler(c *gin.Context) {
+	controller := Controller{}
+	res, err := controller.redeploy(c.Param("service"), c.Param("time"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"message": res,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
 	}
 }
 
@@ -463,12 +533,38 @@ func (a *API) describeServiceHandler(c *gin.Context) {
 		})
 	}
 }
-func (a *API) getServiceStatusHandler(c *gin.Context) {
+func (a *API) describeServiceVersionsHandler(c *gin.Context) {
+	controller := Controller{}
+	versions, err := controller.describeServiceVersions(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"versions": versions,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) getDeploymentStatusHandler(c *gin.Context) {
 	controller := Controller{}
 	service, err := controller.getDeploymentStatus(c.Param("service"), c.Param("time"))
 	if err == nil {
 		c.JSON(200, gin.H{
 			"service": service,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) getDeploymentHandler(c *gin.Context) {
+	controller := Controller{}
+	deployment, err := controller.getDeployment(c.Param("service"), c.Param("time"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"deployment": deployment,
 		})
 	} else {
 		c.JSON(200, gin.H{
