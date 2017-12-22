@@ -237,6 +237,16 @@ func (e *ECS) createService(d Deploy) error {
 		Role:           aws.String(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role")),
 		ServiceName:    aws.String(e.serviceName),
 		TaskDefinition: aws.String(*e.taskDefArn),
+		PlacementStrategy: []*ecs.PlacementStrategy{
+			{
+				Field: aws.String("attribute:ecs.availability-zone"),
+				Type:  aws.String("spread"),
+			},
+			{
+				Field: aws.String("memory"),
+				Type:  aws.String("binpack"),
+			},
+		},
 	}
 
 	// check whether min/max is set
