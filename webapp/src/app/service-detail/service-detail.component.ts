@@ -112,7 +112,7 @@ export class ServiceDetailComponent implements OnInit {
       this.loading = loading
     }
   }
-  deployed() {
+  deployed(deployResult) {
     this.loading = true
     this.tab = "service"
     this.sds.getService(this.service.serviceName).subscribe(data => {
