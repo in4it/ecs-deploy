@@ -32,6 +32,27 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 		TaskRoleArn: aws.String(e.iamRoleArn),
 	}
 
+	// set network mode if set
+	if d.NetworkMode != "" {
+		e.taskDefinition.SetNetworkMode(d.NetworkMode)
+	}
+
+	// placement constraints
+	if len(d.PlacementConstraints) > 0 {
+		var pcs []*ecs.TaskDefinitionPlacementConstraint
+		for _, pc := range d.PlacementConstraints {
+			tdpc := &ecs.TaskDefinitionPlacementConstraint{}
+			if pc.Expression != "" {
+				tdpc.SetExpression(pc.Expression)
+			}
+			if pc.Type != "" {
+				tdpc.SetType(pc.Type)
+			}
+			pcs = append(pcs, tdpc)
+		}
+		e.taskDefinition.SetPlacementConstraints(pcs)
+	}
+
 	// loop over containers
 	for _, container := range d.Containers {
 
@@ -234,7 +255,6 @@ func (e *ECS) createService(d Deploy) error {
 				TargetGroupArn: aws.String(*e.targetGroupArn),
 			},
 		},
-		Role:           aws.String(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role")),
 		ServiceName:    aws.String(e.serviceName),
 		TaskDefinition: aws.String(*e.taskDefArn),
 		PlacementStrategy: []*ecs.PlacementStrategy{
@@ -247,6 +267,32 @@ func (e *ECS) createService(d Deploy) error {
 				Type:  aws.String("binpack"),
 			},
 		},
+	}
+
+	// network configuration
+	if d.NetworkMode == "awsvpc" && len(d.NetworkConfiguration.Subnets) > 0 {
+		var sns []*string
+		var sgs []*string
+		var aIp string
+		nc := &ecs.NetworkConfiguration{AwsvpcConfiguration: &ecs.AwsVpcConfiguration{}}
+		for i, _ := range d.NetworkConfiguration.Subnets {
+			sns = append(sns, &d.NetworkConfiguration.Subnets[i])
+		}
+		nc.AwsvpcConfiguration.SetSubnets(sns)
+		for i, _ := range d.NetworkConfiguration.SecurityGroups {
+			sgs = append(sgs, &d.NetworkConfiguration.SecurityGroups[i])
+		}
+		nc.AwsvpcConfiguration.SetSecurityGroups(sgs)
+		if d.NetworkConfiguration.AssignPublicIp == "" {
+			aIp = "DISABLED"
+		} else {
+			aIp = d.NetworkConfiguration.AssignPublicIp
+		}
+		nc.AwsvpcConfiguration.SetAssignPublicIp(aIp)
+		input.SetNetworkConfiguration(nc)
+	} else {
+		// only set role if network mode is not awsvpc (it will be set automatically)
+		input.SetRole(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
 	}
 
 	// check whether min/max is set

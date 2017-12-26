@@ -25,15 +25,18 @@ type API struct {
 
 // deploy binding from JSON
 type Deploy struct {
-	Cluster               string                  `json:"cluster" binding:"required"`
-	ServicePort           int64                   `json:"servicePort" binding:"required"`
-	ServiceProtocol       string                  `json:"serviceProtocol" binding:"required"`
-	DesiredCount          int64                   `json:"desiredCount" binding:"required"`
-	MinimumHealthyPercent int64                   `json:"minimumHealthyPercent"`
-	MaximumPercent        int64                   `json:"maximumPercent"`
-	Containers            []*DeployContainer      `json:"containers" binding:"required,dive"`
-	HealthCheck           DeployHealthCheck       `json:"healthCheck"`
-	RuleConditions        []*DeployRuleConditions `json:"ruleConditions`
+	Cluster               string                      `json:"cluster" binding:"required"`
+	ServicePort           int64                       `json:"servicePort" binding:"required"`
+	ServiceProtocol       string                      `json:"serviceProtocol" binding:"required"`
+	DesiredCount          int64                       `json:"desiredCount" binding:"required"`
+	MinimumHealthyPercent int64                       `json:"minimumHealthyPercent"`
+	MaximumPercent        int64                       `json:"maximumPercent"`
+	Containers            []*DeployContainer          `json:"containers" binding:"required,dive"`
+	HealthCheck           DeployHealthCheck           `json:"healthCheck"`
+	RuleConditions        []*DeployRuleConditions     `json:"ruleConditions`
+	NetworkMode           string                      `json:"networkMode"`
+	NetworkConfiguration  DeployNetworkConfiguration  `json:"networkConfiguration"`
+	PlacementConstraints  []DeployPlacementConstraint `json:"placementConstraints"`
 }
 type DeployContainer struct {
 	ContainerName     string    `json:"containerName" binding:"required"`
@@ -47,6 +50,15 @@ type DeployContainer struct {
 	MemoryReservation int64     `json:"memoryReservation"`
 	CPU               int64     `json:"cpu"`
 	CPUReservation    int64     `json:"cpuReservation"`
+}
+type DeployNetworkConfiguration struct {
+	AssignPublicIp string   `json:"assignPublicIp"`
+	SecurityGroups []string `json:"securityGroups"`
+	Subnets        []string `json:"subnets"`
+}
+type DeployPlacementConstraint struct {
+	Expression string `json:"expression"`
+	Type       string `json:"type"`
 }
 
 type DeployHealthCheck struct {
