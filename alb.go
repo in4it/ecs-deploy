@@ -171,6 +171,9 @@ func (a *ALB) createTargetGroup(serviceName string, d Deploy) (*string, error) {
 	if d.HealthCheck.Timeout > 0 {
 		input.SetHealthCheckTimeoutSeconds(*aws.Int64(d.HealthCheck.Timeout))
 	}
+	if d.NetworkMode == "awsvpc" && len(d.NetworkConfiguration.Subnets) > 0 {
+		input.SetTargetType("ip")
+	}
 
 	result, err := svc.CreateTargetGroup(input)
 	if err != nil {
