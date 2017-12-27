@@ -37,6 +37,7 @@ type Deploy struct {
 	NetworkMode           string                      `json:"networkMode"`
 	NetworkConfiguration  DeployNetworkConfiguration  `json:"networkConfiguration"`
 	PlacementConstraints  []DeployPlacementConstraint `json:"placementConstraints"`
+	LaunchType            string                      `JSON:"launchType"`
 }
 type DeployContainer struct {
 	ContainerName     string    `json:"containerName" binding:"required"`
