@@ -70,6 +70,7 @@ type DeployHealthCheck struct {
 	Interval           int64  `json:"interval"`
 	Matcher            string `json:"matcher"`
 	Timeout            int64  `json:"timeout"`
+	GracePeriodSeconds int64  `json:"gracePeriodSeconds"`
 }
 type DeployRuleConditions struct {
 	Listeners   []string `json:"listeners"`

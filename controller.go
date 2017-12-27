@@ -83,7 +83,7 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 		return nil, errors.New("Error during checking whether service exists")
 	} else {
 		// update service
-		_, err = ecs.updateService(serviceName, taskDefArn)
+		_, err = ecs.updateService(serviceName, taskDefArn, d)
 		controllerLogger.Debugf("Updating ecs service: %v", serviceName)
 		if err != nil {
 			controllerLogger.Errorf("Could not update service %v: %v", serviceName, err)

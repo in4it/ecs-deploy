@@ -197,13 +197,20 @@ func (e *ECS) serviceExists(serviceName string) (bool, error) {
 }
 
 // Update ECS service
-func (e *ECS) updateService(serviceName string, taskDefArn *string) (*string, error) {
+func (e *ECS) updateService(serviceName string, taskDefArn *string, d Deploy) (*string, error) {
 	svc := ecs.New(session.New())
 	input := &ecs.UpdateServiceInput{
 		Cluster:        aws.String(e.clusterName),
 		Service:        aws.String(serviceName),
 		TaskDefinition: aws.String(*taskDefArn),
 	}
+
+	// set gracePeriodSeconds
+	if d.HealthCheck.GracePeriodSeconds > 0 {
+		input.SetHealthCheckGracePeriodSeconds(d.HealthCheck.GracePeriodSeconds)
+	}
+
+	ecsLogger.Debugf("Running UpdateService with input: %+v", input)
 
 	result, err := svc.UpdateService(input)
 	if err != nil {
@@ -305,6 +312,11 @@ func (e *ECS) createService(d Deploy) error {
 	}
 	if (ecs.DeploymentConfiguration{}) != *dc {
 		input.SetDeploymentConfiguration(dc)
+	}
+
+	// set gracePeriodSeconds
+	if d.HealthCheck.GracePeriodSeconds > 0 {
+		input.SetHealthCheckGracePeriodSeconds(d.HealthCheck.GracePeriodSeconds)
 	}
 
 	// create service
