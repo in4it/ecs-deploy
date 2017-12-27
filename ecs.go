@@ -9,6 +9,7 @@ import (
 
 	"errors"
 	"math"
+	"strings"
 )
 
 // logging
@@ -278,6 +279,9 @@ func (e *ECS) createService(d Deploy) error {
 
 	// network configuration
 	if d.NetworkMode == "awsvpc" && len(d.NetworkConfiguration.Subnets) > 0 {
+		if strings.ToUpper(d.LaunchType) == "FARGATE" {
+			input.SetLaunchType("FARGATE")
+		}
 		var sns []*string
 		var sgs []*string
 		var aIp string
