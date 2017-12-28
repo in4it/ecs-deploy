@@ -158,7 +158,8 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 // check first whether the template is in the parameter store
 // if not, use the default template from the template path
 func (e *Export) getTemplate(template string) (*string, error) {
-	str, ok := e.p.parameters["TEMPLATES_EXPORT_"+strings.Replace(strings.ToUpper(template), ".", "_", -1)]
+	parameter, ok := e.p.parameters["TEMPLATES_EXPORT_"+strings.Replace(strings.ToUpper(template), ".", "_", -1)]
+	str := parameter.Value
 	if !ok {
 		b, err := ioutil.ReadFile("templates/export/" + template)
 		if err != nil {
@@ -183,7 +184,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	var ds DynamoServices
 	// get possible parameters
 	e.p = Paramstore{}
-	e.p.getParameters()
+	e.p.getParameters(e.p.getPrefix(), true)
 	// get services
 	s := newService()
 	err := s.getServices(&ds)

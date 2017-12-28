@@ -378,3 +378,50 @@ func (c *Controller) getDeployment(serviceName, time string) (*Deploy, error) {
 	}
 	return dd.DeployData, nil
 }
+func (c *Controller) getServiceParameters(serviceName, userId, creds string) (map[string]Parameter, string, error) {
+	var err error
+	p := Paramstore{}
+	role := getEnv("PARAMSTORE_ASSUME_ROLE", "")
+	if role != "" {
+		creds, err = p.assumeRole(role, userId, creds)
+		if err != nil {
+			return p.parameters, creds, err
+		}
+	}
+	err = p.getParameters("/"+getEnv("PARAMSTORE_PREFIX", "")+"-"+getEnv("AWS_ACCOUNT_ENV", "")+"/"+serviceName+"/", false)
+	if err != nil {
+		return p.parameters, creds, err
+	}
+	return p.parameters, creds, nil
+}
+func (c *Controller) putServiceParameter(serviceName, userId, creds string, parameter DeployServiceParameter) (map[string]int64, string, error) {
+	var err error
+	p := Paramstore{}
+	res := make(map[string]int64)
+	role := getEnv("PARAMSTORE_ASSUME_ROLE", "")
+	if role != "" {
+		creds, err = p.assumeRole(role, userId, creds)
+		if err != nil {
+			return res, creds, err
+		}
+	}
+	version, err := p.putParameter(serviceName, parameter)
+
+	res["version"] = *version
+
+	return res, creds, err
+}
+func (c *Controller) deleteServiceParameter(serviceName, userId, creds, parameter string) (string, error) {
+	var err error
+	p := Paramstore{}
+	role := getEnv("PARAMSTORE_ASSUME_ROLE", "")
+	if role != "" {
+		creds, err = p.assumeRole(role, userId, creds)
+		if err != nil {
+			return creds, err
+		}
+	}
+	err = p.deleteParameter(serviceName, parameter)
+
+	return creds, err
+}

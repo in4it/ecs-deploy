@@ -3,11 +3,14 @@ package main
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/juju/loggo"
 
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -17,7 +20,8 @@ var iamLogger = loggo.GetLogger("iam")
 
 // IAM struct
 type IAM struct {
-	accountId string
+	stsAssumingRole *sts.STS
+	accountId       string
 }
 
 // default IAM trust
@@ -33,7 +37,12 @@ func (e *IAM) getEcsServicePolicy() string {
 }
 
 func (e *IAM) getAccountId() error {
-	svc := sts.New(session.New())
+	var svc *sts.STS
+	if e.stsAssumingRole == nil {
+		svc = sts.New(session.New())
+	} else {
+		svc = e.stsAssumingRole
+	}
 	input := &sts.GetCallerIdentityInput{}
 
 	result, err := svc.GetCallerIdentity(input)
@@ -73,9 +82,8 @@ func (e *IAM) roleExists(roleName string) (*string, error) {
 			iamLogger.Errorf(err.Error())
 		}
 		return nil, errors.New(fmt.Sprintf("Could not retrieve role: %v (check AWS credentials)", roleName))
-	} else {
-		return result.Role.Arn, nil
 	}
+	return result.Role.Arn, nil
 }
 
 func (e *IAM) createRole(roleName, assumePolicyDocument string) (*string, error) {
@@ -182,4 +190,46 @@ func (e *IAM) attachRolePolicy(roleName, policyArn string) error {
 		return errors.New("Could not attach role policy to role")
 	}
 	return nil
+}
+
+func (e *IAM) assumeRole(roleArn, roleSessionName, prevCreds string) (*credentials.Credentials, string, error) {
+	sess := session.Must(session.NewSession())
+	// check previous credentials
+	var value credentials.Value
+	var creds *credentials.Credentials
+	if prevCreds != "" {
+		iamLogger.Debugf("Found previous credentials")
+		err := json.Unmarshal([]byte(prevCreds), &value)
+		if err == nil {
+			iamLogger.Debugf("Unmarshalled previous credentials")
+			creds = credentials.NewStaticCredentialsFromCreds(value)
+			// test old credentials
+			e.stsAssumingRole = sts.New(sess, &aws.Config{Credentials: creds})
+			if e.stsAssumingRole == nil {
+				return creds, "", errors.New("Could not assume role")
+			}
+			err = e.getAccountId()
+			if err != nil {
+				iamLogger.Debugf("Credentials are expired")
+				creds = nil
+			}
+		}
+	}
+	// retrieve new credentials for roleArn
+	if creds == nil {
+		iamLogger.Debugf("Using new credentials")
+		creds = stscreds.NewCredentials(sess, roleArn, func(a *stscreds.AssumeRoleProvider) {
+			a.RoleSessionName = roleSessionName
+		})
+	}
+	// convert credentials to json
+	valCreds, err := creds.Get()
+	if err != nil {
+		return creds, "", err
+	}
+	jsonCreds, err := json.Marshal(valCreds)
+	if err != nil {
+		return creds, "", err
+	}
+	return creds, string(jsonCreds), nil
 }

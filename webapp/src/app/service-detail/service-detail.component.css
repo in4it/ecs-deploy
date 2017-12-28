@@ -18,3 +18,8 @@ div.right-buttons {
 .deploy-arrow {
   padding: 30px;
 }
+
+.checkbox-label {
+  margin-bottom: 0px;
+  padding-top: 5px;
+}

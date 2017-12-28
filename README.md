@@ -54,6 +54,9 @@ To create a new key and certificate, the following openssl command can be used:
 openssl req -x509 -newkey rsa:2048 -keyout myservice.key -out myservice.cert -days 3650 -nodes -subj "/CN=myservice.mycompany.com"
 ```
 
+# Web UI
+
+* PARAMSTORE\_ASSUME\_ROLE=arn # arn to assume when querying the parameter store
 
 ## License
 Copyright 2017 in4it BVBA
