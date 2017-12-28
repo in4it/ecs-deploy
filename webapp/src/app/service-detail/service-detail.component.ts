@@ -5,6 +5,7 @@ import { Observable } from 'rxjs/Observable';
 import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 import { InspectChildComponent }  from './inspect.component';
 import { DeployChildComponent }  from './deploy.component';
+import { ConfirmChildComponent }  from './confirm.component';
 
 import * as moment from 'moment';
 
@@ -17,7 +18,14 @@ export class ServiceDetailComponent implements OnInit {
 
   service: any = {};
   versions: any = {};
+  parameters: any = {};
   loading: boolean = false;
+  saving: boolean = false;
+
+  selectedParameter: string = "";
+  newParameter: boolean = false;
+  newParameterInput: any = {};
+  parameterInput: any = {};
 
   selectedVersion: any
 
@@ -25,6 +33,7 @@ export class ServiceDetailComponent implements OnInit {
 
   @ViewChild(InspectChildComponent) inspectChild;
   @ViewChild(DeployChildComponent) deployChild;
+  @ViewChild(ConfirmChildComponent) confirmChild;
 
   constructor(
     private route: ActivatedRoute,
@@ -119,6 +128,80 @@ export class ServiceDetailComponent implements OnInit {
       this.loading = false
       this.formatServiceData(data["service"])
     });
+  }
+
+  /*
+   *
+   *  Parameters
+   *
+   */
+  onClickParameters() {
+    this.parameters = [];
+    this.tab = "parameters"
+    this.loading = true
+    this.sds.listParameters().subscribe(data => {
+      this.loading = false
+      this.parameters["keys"] = []
+      this.parameters["map"] = data['parameters'];
+      for (let key in this.parameters["map"]) {
+        this.parameters["keys"].push(key)
+      }
+    });
+  }
+  
+  showNewParameter() {
+    this.newParameter = true
+  }
+  saveNewParameter() {
+    if("name" in this.newParameterInput && "value" in this.newParameterInput) {
+      this.saving = true
+      this.sds.putParameter(this.newParameterInput).subscribe(data => {
+        this.saving = false
+        this.newParameterInput = {}
+        this.newParameter = false
+        this.onClickParameters()
+      });
+    }
+  }
+  editParameter(parameter) {
+    this.selectedParameter = parameter
+    this.parameterInput["value"] = this.parameters["map"][parameter]["value"]
+    if(this.parameters["map"][parameter]["type"] == "SecureString") {
+      this.parameterInput["encrypted"] = true
+    } else {
+      this.parameterInput["encrypted"] = false
+    }
+    this.parameterInput["name"] = parameter
+  }
+  saveParameter(parameter): void {
+    if("value" in this.parameterInput) {
+      this.saving = true
+      this.sds.putParameter(this.parameterInput).subscribe(data => {
+        if(this.parameters["map"][parameter]["type"] == "SecureString") {
+          this.parameters["map"][parameter]["value"] = "***"
+        } else {
+          this.parameters["map"][parameter]["value"] = this.parameterInput["value"]
+        }
+        this.saving = false
+        this.selectedParameter = ""
+        this.parameterInput = {}
+      });
+    }
+  }
+  
+  deletingParameter(loading) {
+    if(loading) {
+      this.loading = loading
+    }
+  }
+  deletedParameter(selectedParameter) {
+    this.loading = true
+    delete this.parameters["map"][selectedParameter]
+    this.parameters["keys"] = []
+    for (let key in this.parameters["map"]) {
+      this.parameters["keys"].push(key)
+    }
+    this.loading = false
   }
   
 

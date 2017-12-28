@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
 	"github.com/in4it/ecs-deploy/ngserve"
+	"github.com/in4it/ecs-deploy/session"
+	"github.com/juju/loggo"
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
@@ -15,6 +17,9 @@ import (
 	"net/http"
 	"time"
 )
+
+// logging
+var apiLogger = loggo.GetLogger("api")
 
 // API struct
 type API struct {
@@ -85,6 +90,11 @@ type DeployResult struct {
 	TaskDefinitionArn string    `json:"taskDefinitionArn"`
 	Status            string    `json:"status"`
 	DeploymentTime    time.Time `json:"deploymentTime"`
+}
+type DeployServiceParameter struct {
+	Name      string `json:"name" binding:"required"`
+	Value     string `json:"value" binding:"required"`
+	Encrypted bool   `json:"encrypted"`
 }
 
 type RunningService struct {
@@ -177,6 +187,9 @@ func (a *API) createRoutes() {
 	// location
 	r.Use(location.Default())
 
+	// cookie sessions
+	r.Use(session.SessionHandler("ecs-deploy", getEnv("JWT_SECRET", "unsecure secret key 8a045eb")))
+
 	// prefix
 	prefix := getEnv("URL_PREFIX", "")
 	apiPrefix := prefix + getEnv("URL_PREFIX_API", "/api/v1")
@@ -240,6 +253,11 @@ func (a *API) createRoutes() {
 		auth.GET("/service/describe/:service", a.describeServiceHandler)
 		// get version information
 		auth.GET("/service/describe/:service/versions", a.describeServiceVersionsHandler)
+
+		// parameter store
+		auth.GET("/service/parameter/:service/list", a.listServiceParameters)
+		auth.POST("/service/parameter/:service/put", a.putServiceParameter)
+		auth.POST("/service/parameter/:service/delete/:parameter", a.deleteServiceParameter)
 
 	}
 
@@ -589,4 +607,75 @@ func (a *API) getDeploymentHandler(c *gin.Context) {
 
 func (a *API) redirectFrontendHandler(c *gin.Context) {
 	c.Redirect(http.StatusMovedPermanently, getEnv("URL_PREFIX", "")+"/webapp/")
+}
+
+func (a *API) listServiceParameters(c *gin.Context) {
+	var creds string
+	claims := jwt.ExtractClaims(c)
+	controller := Controller{}
+	session := session.RetrieveSession(c)
+	if c, ok := session.Get("paramstore_creds").(string); ok {
+		creds = c
+	}
+	parameters, creds, err := controller.getServiceParameters(c.Param("service"), claims["id"].(string), creds)
+	session.Set("paramstore_creds", creds)
+	session.Save()
+	if err == nil {
+		c.JSON(200, gin.H{
+			"parameters": parameters,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) putServiceParameter(c *gin.Context) {
+	var json DeployServiceParameter
+	var creds string
+	claims := jwt.ExtractClaims(c)
+	controller := Controller{}
+	session := session.RetrieveSession(c)
+	if c, ok := session.Get("paramstore_creds").(string); ok {
+		creds = c
+	}
+	if err := c.ShouldBindJSON(&json); err == nil {
+		res, creds, err := controller.putServiceParameter(c.Param("service"), claims["id"].(string), creds, json)
+		session.Set("paramstore_creds", creds)
+		session.Save()
+		if err == nil {
+			c.JSON(200, gin.H{
+				"parameters": res,
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"error": err.Error(),
+			})
+		}
+	} else {
+		c.JSON(200, gin.H{
+			"error": "Invalid input",
+		})
+	}
+}
+func (a *API) deleteServiceParameter(c *gin.Context) {
+	var creds string
+	claims := jwt.ExtractClaims(c)
+	controller := Controller{}
+	session := session.RetrieveSession(c)
+	if c, ok := session.Get("paramstore_creds").(string); ok {
+		creds = c
+	}
+	creds, err := controller.deleteServiceParameter(c.Param("service"), claims["id"].(string), creds, c.Param("parameter"))
+	session.Set("paramstore_creds", creds)
+	session.Save()
+	if err == nil {
+		c.JSON(200, gin.H{
+			"message": "OK",
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
 }

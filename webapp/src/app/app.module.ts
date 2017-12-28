@@ -31,6 +31,7 @@ import { ServiceDetailResolver } from './service-detail/service-detail-resolver.
 import { ServiceDetailService } from './service-detail/service-detail.service';
 import { InspectChildComponent } from './service-detail/inspect.component';
 import { DeployChildComponent } from './service-detail/deploy.component';
+import { ConfirmChildComponent } from './service-detail/confirm.component';
 
 // routes
 const appRoutes: Routes = [
@@ -79,6 +80,7 @@ const appRoutes: Routes = [
     ServiceDetailComponent,
     InspectChildComponent,
     DeployChildComponent,
+    ConfirmChildComponent,
   ],
   imports: [
     BrowserModule,

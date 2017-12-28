@@ -5,21 +5,20 @@ import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 import * as moment from 'moment';
 
 @Component({
-  selector: 'app-service-detail-deploy',
-  templateUrl: './deploy.component.html',
+  selector: 'app-service-detail-confirm',
+  templateUrl: './confirm.component.html',
 })
-export class DeployChildComponent implements OnInit {
+export class ConfirmChildComponent implements OnInit {
 
   closeResult: string;
-  selectedVersion: string;
+  selectedParameter: string;
   loading: boolean = false;
   serviceName: string;
-  versionMap: any;
 
-  @ViewChild('deploy') deployModal : NgbModal;
+  @ViewChild('confirm') confirmModal : NgbModal;
 
-  @Output() deployed: EventEmitter<any> = new EventEmitter<any>();
-  @Output() deploying: EventEmitter<any> = new EventEmitter<any>();
+  @Output() deletedParameter: EventEmitter<any> = new EventEmitter<any>();
+  @Output() deletingParameter: EventEmitter<any> = new EventEmitter<any>();
 
   constructor(
     private modalService: NgbModal,
@@ -29,25 +28,23 @@ export class DeployChildComponent implements OnInit {
   ngOnInit(): void { 
 
   }
-  setVersionMap(versionMap): void {
-    this.versionMap = versionMap
-  }
 
-  open(serviceName, selectedVersion) {
-    if(!selectedVersion) {
+  open(action, serviceName, selectedParameter) {
+    if(!selectedParameter) {
       return
     }
+    this.loading = true
     this.serviceName = serviceName
-    this.selectedVersion = selectedVersion
-    this.modalService.open(this.deployModal, { windowClass: 'deploy-modal' } ).result.then((result) => {
-     this.closeResult = `Closed with: ${result}`;
-      if(result == "Deploy") {
+    this.selectedParameter = selectedParameter
+    this.modalService.open(this.confirmModal, { windowClass: 'confirm-modal' } ).result.then((result) => {
+      this.closeResult = `Closed with: ${result}`;
+      if(result == "DeleteParameter") {
         this.loading = true
-        this.deploying.emit(true)
-        this.sds.deploy(serviceName, selectedVersion).subscribe(data => {
+        this.deletingParameter.emit(true)
+        this.sds.deleteParameter(this.serviceName, selectedParameter).subscribe(data => {
           this.loading = false
-          this.deploying.emit(false)
-          this.deployed.emit(data)
+          this.deletingParameter.emit(false)
+          this.deletedParameter.emit(selectedParameter)
         })
       }
     }, (reason) => {

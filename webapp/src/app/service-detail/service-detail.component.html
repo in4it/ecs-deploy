@@ -12,10 +12,10 @@
         <a class="nav-link" [class.active]="tab == 'events'" [routerLink]="" (click)="onClickEvents()">Event logs</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link disabled">Scaling</a>
+        <a class="nav-link" [class.active]="tab == 'parameters'" [routerLink]="" (click)="onClickParameters()">Parameters</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link disabled">Parameters</a>
+        <a class="nav-link disabled">Scaling</a>
       </li>
     </ul>
   </div>
@@ -141,6 +141,67 @@
       </table>
     </div>
   </div>
+  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'parameters'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div *ngIf="!loading">
+      <div class="right-buttons">
+        <ul class="list-inline">
+          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="showNewParameter()"><i class="fa fa-file-text-o" aria-hidden="true"></i> New Parameter</button></li>
+        </ul>
+      </div>
+      <table class="table center-table">
+        <thead class="thead-default">
+          <tr>
+            <th class="w-25">Parameter Name</th>
+            <th class="w-75">Parameter Value</th>
+          </tr>
+        </thead>
+        <tbody>
+        <tr *ngIf="newParameter">
+          <td class="align-middle">
+            <input type="text" class="form-control" placeholder="Name..." name="parameterName" [(ngModel)]="newParameterInput.name" />
+          </td>
+          <td class="align-middle">
+            <div class="row align-middle">
+              <div class="col-md-7 mx-auto h-100">
+                <input type="text" class="form-control" placeholder="Value..." name="parameterValue" [(ngModel)]="newParameterInput.value" />
+              </div>
+              <div class="col-md-2">
+                <label class="checkbox-label">
+                  <input type="checkbox" [(ngModel)]="newParameterInput.encrypted" value="true" >&nbsp;Encrypt
+                </label>
+              </div>
+              <div class="col-md-2">
+                <button [disabled]="saving" class="btn btn-primary" (click)="saveNewParameter()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
+              </div>
+            </div>
+          </td>
+        </tr>
+        <tr *ngFor="let parameter of parameters.keys">
+          <td class="align-middle">{{parameter}}</td>
+          <td class="align-middle" *ngIf="selectedParameter == parameter">
+            <div class="row align-middle">
+              <div class="col-9">
+                <input type="text" class="form-control" *ngIf="parameters.map[parameter]['value'] != '***'" name="parameterValue" [(ngModel)]="parameterInput.value" />
+                <input type="text" class="form-control" placeholder="new value..." *ngIf="parameters.map[parameter]['value'] == '***'" name="parameterValue" [(ngModel)]="parameterInput.value" />
+              </div>
+              <div class="col-2">
+                <button [disabled]="saving" class="btn btn-primary" (click)="saveParameter(parameter)"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
+              </div>
+            </div>
+          </td>
+          <td *ngIf="selectedParameter != parameter">
+            {{parameters.map[parameter]["value"]}}&nbsp;<button class="btn" (click)="editParameter(parameter)"><i class="fa fa-pencil align-baseline" aria-hidden="true"></i></button>
+            <button class="btn float-right" (click)="confirmChild.open('deleteParameter', service.serviceName, parameter)"><i class="fa fa-trash" aria-hidden="true"></i></button>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
 </div>
+<app-service-detail-confirm (deletedParameter)="deletedParameter($event)" (deletingParameter)="deletingParameter($event)"></app-service-detail-confirm>
 <app-service-detail-inspect></app-service-detail-inspect>
 <app-service-detail-deploy (deployed)="deployed($event)" (deploying)="deploying($event)"></app-service-detail-deploy>

@@ -1,0 +1,15 @@
+<ng-template #confirm let-c="close" let-d="dismiss">
+  <div class="modal-header">
+    <h4 class="modal-title">Delete {{selectedParameter}}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="d('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    Are you sure you delete parameter <strong>{{selectedParameter}}</strong>?
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-dark" (click)="c('Close click')">Cancel</button>
+    <button type="button" class="btn btn-outline-dark btn-danger" (click)="c('DeleteParameter')">Delete</button>
+  </div>
+</ng-template>

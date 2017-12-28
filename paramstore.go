@@ -13,9 +13,18 @@ import (
 // logging
 var paramstoreLogger = loggo.GetLogger("paramstore")
 
+// parameter type
+type Parameter struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	Value   string `json:"value"`
+	Version int64  `json:"version"`
+}
+
 // Paramstore struct
 type Paramstore struct {
-	parameters map[string]string
+	parameters      map[string]Parameter
+	ssmAssumingRole *ssm.SSM
 }
 
 func (p *Paramstore) isEnabled() bool {
@@ -33,16 +42,44 @@ func (p *Paramstore) getPrefix() string {
 		return "/" + getEnv("PARAMSTORE_PREFIX", "") + "-" + getEnv("AWS_ACCOUNT_ENV", "") + "/ecs-deploy/"
 	}
 }
-func (p *Paramstore) getParameters() error {
-	p.parameters = make(map[string]string)
-	if p.getPrefix() == "" {
+func (p *Paramstore) getPrefixForService(serviceName string) string {
+	if getEnv("PARAMSTORE_PREFIX", "") == "" {
+		return ""
+	} else {
+		return "/" + getEnv("PARAMSTORE_PREFIX", "") + "-" + getEnv("AWS_ACCOUNT_ENV", "") + "/" + serviceName + "/"
+	}
+}
+func (p *Paramstore) assumeRole(roleArn, roleSessionName, prevCreds string) (string, error) {
+	iam := IAM{}
+	creds, jsonCreds, err := iam.assumeRole(roleArn, roleSessionName, prevCreds)
+	if err != nil {
+		return "", err
+	}
+	// assume role
+	sess := session.Must(session.NewSession())
+	p.ssmAssumingRole = ssm.New(sess, &aws.Config{Credentials: creds})
+	if p.ssmAssumingRole == nil {
+		return "", errors.New("Could not assume role")
+	}
+	paramstoreLogger.Debugf("Assumed role %v with roleSessionName %v", roleArn, roleSessionName)
+
+	return jsonCreds, nil
+}
+func (p *Paramstore) getParameters(prefix string, withDecryption bool) error {
+	var svc *ssm.SSM
+	p.parameters = make(map[string]Parameter)
+	if prefix == "" {
 		// no valid prefix - parameter store not in use
 		return nil
 	}
-	svc := ssm.New(session.New())
+	if p.ssmAssumingRole == nil {
+		svc = ssm.New(session.New())
+	} else {
+		svc = p.ssmAssumingRole
+	}
 	input := &ssm.GetParametersByPathInput{
-		Path:           aws.String(p.getPrefix()),
-		WithDecryption: aws.Bool(true),
+		Path:           aws.String(prefix),
+		WithDecryption: aws.Bool(withDecryption),
 	}
 
 	pageNum := 0
@@ -50,9 +87,20 @@ func (p *Paramstore) getParameters() error {
 		func(page *ssm.GetParametersByPathOutput, lastPage bool) bool {
 			pageNum++
 			for _, param := range page.Parameters {
-				paramName := strings.Replace(*param.Name, p.getPrefix(), "", -1)
-				paramstoreLogger.Debugf("Imported parameter: %v", paramName)
-				p.parameters[paramName] = *param.Value
+				var value string
+				paramName := strings.Replace(*param.Name, prefix, "", -1)
+				paramstoreLogger.Debugf("Read parameter: %v", paramName)
+				if withDecryption || *param.Type != "SecureString" {
+					value = *param.Value
+				} else {
+					value = "***"
+				}
+				p.parameters[paramName] = Parameter{
+					Name:    *param.Name,
+					Type:    *param.Type,
+					Value:   value,
+					Version: *param.Version,
+				}
 			}
 			return pageNum <= 50 // 50 iterations max
 		})
@@ -68,9 +116,9 @@ func (p *Paramstore) getParameters() error {
 	return nil
 }
 func (p *Paramstore) getParameterValue(name string) (*string, error) {
-	if val, ok := p.parameters[name]; ok {
-		if val != "" {
-			return &val, nil
+	if param, ok := p.parameters[name]; ok {
+		if param.Value != "" {
+			return &param.Value, nil
 		}
 	} else {
 		return nil, errors.New("Tried getParameterValue on parameter that doesn't exist: " + name)
@@ -135,4 +183,58 @@ func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) string {
     ]
   }`
 	return policy
+}
+func (p *Paramstore) putParameter(serviceName string, parameter DeployServiceParameter) (*int64, error) {
+	var svc *ssm.SSM
+	if p.ssmAssumingRole == nil {
+		svc = ssm.New(session.New())
+	} else {
+		svc = p.ssmAssumingRole
+	}
+
+	input := &ssm.PutParameterInput{
+		Name:      aws.String(p.getPrefixForService(serviceName) + parameter.Name),
+		Value:     aws.String(parameter.Value),
+		Overwrite: aws.Bool(true),
+	}
+	if parameter.Encrypted {
+		input.SetType("SecureString")
+		input.SetKeyId(getEnv("PARAMSTORE_KMS_ARN", ""))
+	} else {
+		input.SetType("String")
+	}
+
+	result, err := svc.PutParameter(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			paramstoreLogger.Errorf(aerr.Error())
+		} else {
+			paramstoreLogger.Errorf(err.Error())
+		}
+		return nil, err
+	}
+	return result.Version, nil
+}
+func (p *Paramstore) deleteParameter(serviceName, parameter string) error {
+	var svc *ssm.SSM
+	if p.ssmAssumingRole == nil {
+		svc = ssm.New(session.New())
+	} else {
+		svc = p.ssmAssumingRole
+	}
+
+	input := &ssm.DeleteParameterInput{
+		Name: aws.String(p.getPrefixForService(serviceName) + parameter),
+	}
+
+	_, err := svc.DeleteParameter(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			paramstoreLogger.Errorf(aerr.Error())
+		} else {
+			paramstoreLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
 }

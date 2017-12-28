@@ -47,4 +47,13 @@ export class ServiceDetailService {
   deploy(serviceName, version) {
     return this.http.post('/ecs-deploy/api/v1/deploy/'+serviceName+'/'+version, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
+  listParameters() {
+    return this.http.get('/ecs-deploy/api/v1/service/parameter/'+this.sl.serviceName+'/list', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  putParameter(data) {
+    return this.http.post('/ecs-deploy/api/v1/service/parameter/'+this.sl.serviceName+'/put', data, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  deleteParameter(serviceName, selectedParameter) {
+    return this.http.post('/ecs-deploy/api/v1/service/parameter/'+serviceName+'/delete/' + selectedParameter, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
 }
