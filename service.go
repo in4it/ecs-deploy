@@ -25,10 +25,10 @@ type Service struct {
 }
 
 type DynamoDeployment struct {
-	ServiceName       string
-	Time              time.Time
-	Day               string
-	Month             string
+	ServiceName       string    `dynamo:"ServiceName,hash"`
+	Time              time.Time `dynamo:"Time,range" index:"DayIndex,range" index:"MonthIndex,range"`
+	Day               string    `index:"DayIndex,hash"`
+	Month             string    `index:"MonthIndex,hash"`
 	Status            string
 	Tag               string
 	TaskDefinitionArn *string
@@ -305,4 +305,18 @@ func (s *Service) getServiceVersionsByTags(serviceName, imageName string, tags m
 	}
 	return svs, err
 
+}
+
+func (s *Service) createTable() error {
+	err := s.db.CreateTable(getEnv("DYNAMODB_TABLE", "Services"), DynamoDeployment{}).
+		Provision(2, 1).
+		ProvisionIndex("DayIndex", 1, 1).
+		ProvisionIndex("MonthIndex", 1, 1).
+		Run()
+	if err != nil {
+		return err
+	}
+
+	s.table = s.db.Table(getEnv("DYNAMODB_TABLE", "Services"))
+	return nil
 }

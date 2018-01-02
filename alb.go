@@ -24,6 +24,7 @@ type ALB struct {
 	listeners        []*elbv2.Listener
 	domain           string
 	rules            map[string][]*elbv2.Rule
+	dnsName          string
 }
 
 func newALB(loadBalancerName string) (*ALB, error) {
@@ -73,6 +74,99 @@ func newALB(loadBalancerName string) (*ALB, error) {
 	}
 
 	return &a, nil
+}
+
+// get the listeners for the loadbalancer
+func newALBAndCreate(loadBalancerName, ipAddressType string, scheme string, securityGroups []string, subnets []string, lbType string) (*ALB, error) {
+	a := ALB{}
+	svc := elbv2.New(session.New())
+	input := &elbv2.CreateLoadBalancerInput{
+		IpAddressType:  aws.String(ipAddressType),
+		Name:           aws.String(loadBalancerName),
+		Scheme:         aws.String(scheme),
+		SecurityGroups: aws.StringSlice(securityGroups),
+		Subnets:        aws.StringSlice(subnets),
+		Type:           aws.String(lbType),
+	}
+
+	result, err := svc.CreateLoadBalancer(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+			return nil, aerr
+		}
+		albLogger.Errorf(err.Error())
+		return nil, err
+	}
+	if len(result.LoadBalancers) == 0 {
+		return nil, errors.New("No loadbalancers returned")
+	}
+	a.loadBalancerArn = aws.StringValue(result.LoadBalancers[0].LoadBalancerArn)
+	a.dnsName = aws.StringValue(result.LoadBalancers[0].DNSName)
+	a.vpcId = aws.StringValue(result.LoadBalancers[0].VpcId)
+	return &a, nil
+}
+
+func (a *ALB) deleteLoadBalancer() error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.DeleteLoadBalancerInput{
+		LoadBalancerArn: aws.String(a.loadBalancerArn),
+	}
+	_, err := svc.DeleteLoadBalancer(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+			return aerr
+		}
+		albLogger.Errorf(err.Error())
+		return err
+	}
+	return nil
+}
+
+func (a *ALB) createListener(protocol string, port int64, targetGroupArn string) error {
+	// only HTTP is supported for now
+	svc := elbv2.New(session.New())
+	input := &elbv2.CreateListenerInput{
+		LoadBalancerArn: aws.String(a.loadBalancerArn),
+		Port:            aws.Int64(port),
+		Protocol:        aws.String(protocol),
+		DefaultActions: []*elbv2.Action{
+			{Type: aws.String("forward"), TargetGroupArn: aws.String(targetGroupArn)},
+		},
+	}
+
+	result, err := svc.CreateListener(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+		} else {
+			albLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	if len(result.Listeners) == 0 {
+		return errors.New("No listeners returned")
+	}
+	a.listeners = append(a.listeners, result.Listeners[0])
+	return nil
+}
+func (a *ALB) deleteListener(listenerArn string) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.DeleteListenerInput{
+		ListenerArn: aws.String(listenerArn),
+	}
+
+	_, err := svc.DeleteListener(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+		} else {
+			albLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 // get the listeners for the loadbalancer
@@ -198,6 +292,22 @@ func (a *ALB) createTargetGroup(serviceName string, d Deploy) (*string, error) {
 		return nil, errors.New("Could not create target group (target group list is empty)")
 	}
 	return result.TargetGroups[0].TargetGroupArn, nil
+}
+func (a *ALB) deleteTargetGroup(targetGroupArn string) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.DeleteTargetGroupInput{
+		TargetGroupArn: aws.String(targetGroupArn),
+	}
+	_, err := svc.DeleteTargetGroup(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+		} else {
+			albLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 func (a *ALB) getHighestRule() (int64, error) {

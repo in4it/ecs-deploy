@@ -425,3 +425,31 @@ func (c *Controller) deleteServiceParameter(serviceName, userId, creds, paramete
 
 	return creds, err
 }
+
+func (c *Controller) deleteService(serviceName string) error {
+	var ds *DynamoServices
+	var clusterName string
+	service := Service{}
+	err := service.getServices(ds)
+	if err != nil {
+		return err
+	}
+	for _, v := range ds.Services {
+		if v.S == serviceName {
+			clusterName = v.C
+		}
+	}
+	alb, err := newALB(clusterName)
+	if err != nil {
+		return err
+	}
+	targetGroupArn, err := alb.getTargetGroupArn(serviceName)
+	if err != nil {
+		return err
+	}
+	err = alb.deleteTargetGroup(*targetGroupArn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
