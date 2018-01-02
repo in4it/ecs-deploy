@@ -32,6 +32,9 @@ func (e *IAM) getEcsTaskIAMTrust() string {
 func (e *IAM) getEcsServiceIAMTrust() string {
 	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ecs.amazonaws.com" }, "Effect": "Allow" } ] }`
 }
+func (e *IAM) getEC2IAMTrust() string {
+	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ec2.amazonaws.com" }, "Effect": "Allow" } ] }`
+}
 func (e *IAM) getEcsServicePolicy() string {
 	return `arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole`
 }
@@ -121,6 +124,129 @@ func (e *IAM) createRole(roleName, assumePolicyDocument string) (*string, error)
 	} else {
 		return result.Role.Arn, nil
 	}
+}
+func (e *IAM) deleteRolePolicy(roleName, policyName string) error {
+	svc := iam.New(session.New())
+	input := &iam.DeleteRolePolicyInput{
+		RoleName:   aws.String(roleName),
+		PolicyName: aws.String(policyName),
+	}
+
+	_, err := svc.DeleteRolePolicy(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *IAM) deleteRole(roleName string) error {
+	svc := iam.New(session.New())
+	input := &iam.DeleteRoleInput{
+		RoleName: aws.String(roleName),
+	}
+
+	_, err := svc.DeleteRole(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *IAM) createInstanceProfile(instanceProfileName string) error {
+	svc := iam.New(session.New())
+	input := &iam.CreateInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+		Path:                aws.String("/"),
+	}
+
+	_, err := svc.CreateInstanceProfile(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *IAM) addRoleToInstanceProfile(instanceProfileName, roleName string) error {
+	svc := iam.New(session.New())
+	input := &iam.AddRoleToInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+		RoleName:            aws.String(roleName),
+	}
+
+	_, err := svc.AddRoleToInstanceProfile(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *IAM) removeRoleFromInstanceProfile(instanceProfileName, roleName string) error {
+	svc := iam.New(session.New())
+	input := &iam.RemoveRoleFromInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+		RoleName:            aws.String(roleName),
+	}
+
+	_, err := svc.RemoveRoleFromInstanceProfile(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *IAM) deleteInstanceProfile(instanceProfileName string) error {
+	svc := iam.New(session.New())
+	input := &iam.DeleteInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+	}
+
+	_, err := svc.DeleteInstanceProfile(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *IAM) waitUntilInstanceProfileExists(instanceProfileName string) error {
+	svc := iam.New(session.New())
+	input := &iam.GetInstanceProfileInput{
+		InstanceProfileName: aws.String(instanceProfileName),
+	}
+
+	err := svc.WaitUntilInstanceProfileExists(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			iamLogger.Errorf(aerr.Error())
+		} else {
+			iamLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 func (e *IAM) putRolePolicy(roleName, policyName, policy string) error {

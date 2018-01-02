@@ -4,12 +4,19 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/juju/loggo"
 
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"math"
 	"strings"
+	"time"
 )
 
 // logging
@@ -23,6 +30,224 @@ type ECS struct {
 	taskDefinition *ecs.RegisterTaskDefinitionInput
 	taskDefArn     *string
 	targetGroupArn *string
+}
+
+// create cluster
+func (e *ECS) createCluster(clusterName string) (*string, error) {
+	svc := ecs.New(session.New())
+	createClusterInput := &ecs.CreateClusterInput{
+		ClusterName: aws.String(clusterName),
+	}
+
+	result, err := svc.CreateCluster(createClusterInput)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return nil, err
+	}
+	return result.Cluster.ClusterArn, nil
+}
+func (e *ECS) getECSAMI() (string, error) {
+	var amiId string
+	svc := ec2.New(session.New())
+	input := &ec2.DescribeImagesInput{
+		Owners: []*string{aws.String("591542846629")}, // AWS
+		Filters: []*ec2.Filter{
+			{Name: aws.String("name"), Values: []*string{aws.String("amzn-ami-*-amazon-ecs-optimized")}},
+			{Name: aws.String("virtualization-type"), Values: []*string{aws.String("hvm")}},
+		},
+	}
+	result, err := svc.DescribeImages(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return amiId, err
+	}
+	if len(result.Images) == 0 {
+		return amiId, errors.New("No ECS AMI found")
+	}
+	layout := "2006-01-02T15:04:05.000Z"
+	var lastTime time.Time
+	for _, v := range result.Images {
+		t, err := time.Parse(layout, *v.CreationDate)
+		if err != nil {
+			return amiId, err
+		}
+		if t.After(lastTime) {
+			lastTime = t
+			amiId = *v.ImageId
+		}
+	}
+	return amiId, nil
+}
+func (e *ECS) importKeyPair(keyName string, publicKey []byte) error {
+	svc := ec2.New(session.New())
+	input := &ec2.ImportKeyPairInput{
+		KeyName:           aws.String(keyName),
+		PublicKeyMaterial: publicKey,
+	}
+	_, err := svc.ImportKeyPair(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) getPubKeyFromPrivateKey(privateKey string) ([]byte, error) {
+	var pubASN1 []byte
+	var key *rsa.PrivateKey
+	block, _ := pem.Decode([]byte(privateKey))
+	if block == nil {
+		return pubASN1, errors.New("No private key found")
+	}
+	if block.Type != "RSA PRIVATE KEY" {
+		return pubASN1, errors.New("Key not a RSA PRIVATE KEY")
+	}
+	key, err := x509.ParsePKCS1PrivateKey([]byte(block.Bytes))
+	if err != nil {
+		return pubASN1, err
+	}
+	pubASN1, err = x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		return pubASN1, err
+	}
+	return []byte(base64.StdEncoding.EncodeToString(pubASN1)), nil
+}
+func (e *ECS) deleteKeyPair(keyName string) error {
+	svc := ec2.New(session.New())
+	input := &ec2.DeleteKeyPairInput{
+		KeyName: aws.String(keyName),
+	}
+	_, err := svc.DeleteKeyPair(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) createLaunchConfiguration(clusterName string, keyName string, instanceType string, instanceProfile string, securitygroups []string) error {
+	svc := autoscaling.New(session.New())
+	amiId, err := e.getECSAMI()
+	if err != nil {
+		return err
+	}
+	input := &autoscaling.CreateLaunchConfigurationInput{
+		IamInstanceProfile:      aws.String(instanceProfile),
+		ImageId:                 aws.String(amiId),
+		InstanceType:            aws.String(instanceType),
+		KeyName:                 aws.String(keyName),
+		LaunchConfigurationName: aws.String(clusterName),
+		SecurityGroups:          aws.StringSlice(securitygroups),
+		UserData:                aws.String(base64.StdEncoding.EncodeToString([]byte("#!/bin/bash\necho 'ECS_CLUSTER=" + clusterName + "'  > /etc/ecs/ecs.config\nstart ecs\n"))),
+	}
+	ecsLogger.Debugf("createLaunchConfiguration with: %+v", input)
+	_, err = svc.CreateLaunchConfiguration(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+			if strings.Contains(aerr.Message(), "Invalid IamInstanceProfile") {
+				ecsLogger.Errorf("Caught RetryableError: %v", aerr.Message())
+				return errors.New("RetryableError: Invalid IamInstanceProfile")
+			}
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) deleteLaunchConfiguration(clusterName string) error {
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DeleteLaunchConfigurationInput{
+		LaunchConfigurationName: aws.String(clusterName),
+	}
+	_, err := svc.DeleteLaunchConfiguration(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) createAutoScalingGroup(clusterName string, desiredCapacity int64, maxSize int64, minSize int64, subnets []string) error {
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.CreateAutoScalingGroupInput{
+		AutoScalingGroupName:    aws.String(clusterName),
+		DesiredCapacity:         aws.Int64(desiredCapacity),
+		HealthCheckType:         aws.String("EC2"),
+		LaunchConfigurationName: aws.String(clusterName),
+		MaxSize:                 aws.Int64(maxSize),
+		MinSize:                 aws.Int64(minSize),
+		Tags: []*autoscaling.Tag{
+			{Key: aws.String("Name"), Value: aws.String("ecs-" + clusterName), PropagateAtLaunch: aws.Bool(true)},
+			{Key: aws.String("Cluster"), Value: aws.String(clusterName), PropagateAtLaunch: aws.Bool(true)},
+		},
+		TerminationPolicies: []*string{aws.String("OldestLaunchConfiguration"), aws.String("Default")},
+		VPCZoneIdentifier:   aws.String(strings.Join(subnets, ",")),
+	}
+	_, err := svc.CreateAutoScalingGroup(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) deleteAutoScalingGroup(clusterName string, forceDelete bool) error {
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DeleteAutoScalingGroupInput{
+		AutoScalingGroupName: aws.String(clusterName),
+		ForceDelete:          aws.Bool(forceDelete),
+	}
+	_, err := svc.DeleteAutoScalingGroup(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+
+// delete cluster
+func (e *ECS) deleteCluster(clusterName string) error {
+	svc := ecs.New(session.New())
+	deleteClusterInput := &ecs.DeleteClusterInput{
+		Cluster: aws.String(clusterName),
+	}
+
+	_, err := svc.DeleteCluster(deleteClusterInput)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
 }
 
 // Creates ECS repository
