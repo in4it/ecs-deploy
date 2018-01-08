@@ -1,7 +1,10 @@
 BINARY = ecs-deploy
 GOARCH = amd64
 
-all: build
+all: deps build
+
+deps:
+	go get -d -v ./...
 
 build:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} . ; 
