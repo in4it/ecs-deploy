@@ -9,7 +9,7 @@ import (
 )
 
 // logging
-var ecrLogger = loggo.GetLogger("ecs")
+var ecrLogger = loggo.GetLogger("ecr")
 
 // ECR struct
 type ECR struct {

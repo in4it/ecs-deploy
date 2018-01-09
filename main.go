@@ -24,7 +24,6 @@ func startup_checks() {
 		"AWS_REGION",
 		"JWT_SECRET",
 		"DEPLOY_PASSWORD",
-		"DEVELOPER_PASSWORD",
 	}
 	for _, envVar := range mandatoryEnvVars {
 		if !envExists(envVar) {

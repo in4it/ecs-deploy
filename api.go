@@ -107,12 +107,13 @@ type RunningService struct {
 	Tasks        []RunningTask              `json:"tasks"`
 }
 type RunningServiceDeployment struct {
-	Status       string    `json:"status"`
-	RunningCount int64     `json:"runningCount"`
-	PendingCount int64     `json:"pendingCount"`
-	DesiredCount int64     `json:"desiredCount"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	Status         string    `json:"status"`
+	RunningCount   int64     `json:"runningCount"`
+	PendingCount   int64     `json:"pendingCount"`
+	DesiredCount   int64     `json:"desiredCount"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	TaskDefinition string    `json:"taskDefinition"`
 }
 type RunningServiceEvent struct {
 	CreatedAt time.Time `json:"createdAt"`

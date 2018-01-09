@@ -242,28 +242,28 @@ func (a *ALB) createTargetGroup(serviceName string, d Deploy) (*string, error) {
 		Protocol: aws.String(d.ServiceProtocol),
 	}
 	if d.HealthCheck.HealthyThreshold != 0 {
-		input.SetHealthyThresholdCount(*aws.Int64(d.HealthCheck.HealthyThreshold))
+		input.SetHealthyThresholdCount(d.HealthCheck.HealthyThreshold)
 	}
 	if d.HealthCheck.UnhealthyThreshold != 0 {
-		input.SetUnhealthyThresholdCount(*aws.Int64(d.HealthCheck.UnhealthyThreshold))
+		input.SetUnhealthyThresholdCount(d.HealthCheck.UnhealthyThreshold)
 	}
 	if d.HealthCheck.Path != "" {
-		input.SetHealthCheckPath(*aws.String(d.HealthCheck.Path))
+		input.SetHealthCheckPath(d.HealthCheck.Path)
 	}
 	if d.HealthCheck.Port != "" {
-		input.SetHealthCheckPort(*aws.String(d.HealthCheck.Port))
+		input.SetHealthCheckPort(d.HealthCheck.Port)
 	}
 	if d.HealthCheck.Protocol != "" {
-		input.SetHealthCheckProtocol(*aws.String(d.HealthCheck.Protocol))
+		input.SetHealthCheckProtocol(d.HealthCheck.Protocol)
 	}
 	if d.HealthCheck.Interval != 0 {
-		input.SetHealthCheckIntervalSeconds(*aws.Int64(d.HealthCheck.Interval))
+		input.SetHealthCheckIntervalSeconds(d.HealthCheck.Interval)
 	}
 	if d.HealthCheck.Matcher != "" {
 		input.SetMatcher(&elbv2.Matcher{HttpCode: aws.String(d.HealthCheck.Matcher)})
 	}
 	if d.HealthCheck.Timeout > 0 {
-		input.SetHealthCheckTimeoutSeconds(*aws.Int64(d.HealthCheck.Timeout))
+		input.SetHealthCheckTimeoutSeconds(d.HealthCheck.Timeout)
 	}
 	if d.NetworkMode == "awsvpc" && len(d.NetworkConfiguration.Subnets) > 0 {
 		input.SetTargetType("ip")
@@ -580,4 +580,45 @@ func (a *ALB) findRule(listener string, targetGroupArn string, conditionField []
 		return nil, nil, errors.New("Listener not found in rule list")
 	}
 	return nil, nil, errors.New("Priority not found for rule: listener " + listener + ", targetGroupArn: " + targetGroupArn + ", Field: " + strings.Join(conditionField, ",") + ", Value: " + strings.Join(conditionValue, ","))
+}
+
+func (a *ALB) updateHealthCheck(targetGroupArn string, healthCheck DeployHealthCheck) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.ModifyTargetGroupInput{
+		TargetGroupArn: aws.String(targetGroupArn),
+	}
+	if healthCheck.HealthyThreshold != 0 {
+		input.SetHealthyThresholdCount(healthCheck.HealthyThreshold)
+	}
+	if healthCheck.UnhealthyThreshold != 0 {
+		input.SetUnhealthyThresholdCount(healthCheck.UnhealthyThreshold)
+	}
+	if healthCheck.Path != "" {
+		input.SetHealthCheckPath(healthCheck.Path)
+	}
+	if healthCheck.Port != "" {
+		input.SetHealthCheckPort(healthCheck.Port)
+	}
+	if healthCheck.Protocol != "" {
+		input.SetHealthCheckProtocol(healthCheck.Protocol)
+	}
+	if healthCheck.Interval != 0 {
+		input.SetHealthCheckIntervalSeconds(healthCheck.Interval)
+	}
+	if healthCheck.Matcher != "" {
+		input.SetMatcher(&elbv2.Matcher{HttpCode: aws.String(healthCheck.Matcher)})
+	}
+	if healthCheck.Timeout > 0 {
+		input.SetHealthCheckTimeoutSeconds(healthCheck.Timeout)
+	}
+	_, err := svc.ModifyTargetGroup(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+			return aerr
+		}
+		albLogger.Errorf(err.Error())
+		return err
+	}
+	return nil
 }

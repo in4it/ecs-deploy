@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"github.com/juju/loggo"
 
 	"errors"
@@ -28,6 +29,17 @@ func (c *Controller) createRepository(repository string) (*string, error) {
 }
 
 func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error) {
+	// get last deployment
+	service := newService()
+	service.serviceName = serviceName
+	service.clusterName = d.Cluster
+	ddLast, err := service.getLastDeploy()
+	if err != nil {
+		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
+			controllerLogger.Errorf("Error while getting last deployment for %v: %v", serviceName, err)
+			return nil, err
+		}
+	}
 	// validate
 	for _, container := range d.Containers {
 		if container.Memory == 0 && container.MemoryReservation == 0 {
@@ -82,6 +94,16 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	} else if err != nil {
 		return nil, errors.New("Error during checking whether service exists")
 	} else {
+		// update healthchecks if changed
+		if !cmp.Equal(ddLast.DeployData.HealthCheck, d.HealthCheck) {
+			controllerLogger.Debugf("Updating ecs healthcheck: %v", serviceName)
+			alb, err := newALB(d.Cluster)
+			targetGroupArn, err := alb.getTargetGroupArn(serviceName)
+			if err != nil {
+				return nil, err
+			}
+			alb.updateHealthCheck(*targetGroupArn, d.HealthCheck)
+		}
 		// update service
 		_, err = ecs.updateService(serviceName, taskDefArn, d)
 		controllerLogger.Debugf("Updating ecs service: %v", serviceName)
@@ -92,16 +114,6 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 
 	// Mark previous deployment as aborted if still running
-	service := newService()
-	service.serviceName = serviceName
-	service.clusterName = d.Cluster
-	ddLast, err := service.getLastDeploy()
-	if err != nil {
-		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
-			controllerLogger.Errorf("Error while getting last deployment for %v: %v", serviceName, err)
-			return nil, err
-		}
-	}
 	if ddLast != nil && ddLast.Status == "running" {
 		err = service.setDeploymentStatus(ddLast, "aborted")
 		if err != nil {
@@ -283,6 +295,7 @@ func (c *Controller) describeServices() ([]RunningService, error) {
 	var rss []RunningService
 	showEvents := false
 	showTasks := false
+	showStoppedTasks := false
 	services := make(map[string][]*string)
 	ecs := ECS{}
 	dss, _ := c.getServices()
@@ -290,7 +303,7 @@ func (c *Controller) describeServices() ([]RunningService, error) {
 		services[ds.C] = append(services[ds.C], &ds.S)
 	}
 	for clusterName, serviceList := range services {
-		newRss, err := ecs.describeServices(clusterName, serviceList, showEvents, showTasks)
+		newRss, err := ecs.describeServices(clusterName, serviceList, showEvents, showTasks, showStoppedTasks)
 		if err != nil {
 			return []RunningService{}, err
 		}
@@ -302,11 +315,12 @@ func (c *Controller) describeService(serviceName string) (RunningService, error)
 	var rs RunningService
 	showEvents := true
 	showTasks := true
+	showStoppedTasks := false
 	ecs := ECS{}
 	dss, _ := c.getServices()
 	for _, ds := range dss {
 		if ds.S == serviceName {
-			rss, err := ecs.describeServices(ds.C, []*string{&serviceName}, showEvents, showTasks)
+			rss, err := ecs.describeServices(ds.C, []*string{&serviceName}, showEvents, showTasks, showStoppedTasks)
 			if err != nil {
 				return rs, err
 			}
