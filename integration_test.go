@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,6 +26,15 @@ var ecsSecurityGroups = getEnv("TEST_ECS_SG", "")
 var ecsMinSize = getEnv("TEST_ECS_MINSIZE", "1")
 var ecsMaxSize = getEnv("TEST_ECS_MAXSIZE", "1")
 var ecsDesiredSize = getEnv("TEST_ECS_DESIREDSIZE", "1")
+var paramstoreEnabled = getEnv("TEST_PARAMSTORE_ENABLED", "no")
+var randSrc = rand.NewSource(time.Now().UnixNano())
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
 
 var ecsDefault = Deploy{
 	Cluster:               clusterName,
@@ -34,12 +45,31 @@ var ecsDefault = Deploy{
 	MaximumPercent:        200,
 	Containers: []*DeployContainer{
 		{
-			ContainerName:     "default",
-			ContainerTag:      "latest",
+			ContainerName:     "integrationtest-default",
 			ContainerPort:     80,
 			ContainerImage:    "nginx",
+			ContainerURI:      "index.docker.io/nginx:alpine",
 			Essential:         true,
-			MemoryReservation: 256,
+			MemoryReservation: 128,
+			CPUReservation:    64,
+		},
+	},
+}
+var ecsDefaultFailingHealthCheck = Deploy{
+	Cluster:               clusterName,
+	ServicePort:           80,
+	ServiceProtocol:       "HTTP",
+	DesiredCount:          1,
+	MinimumHealthyPercent: 100,
+	MaximumPercent:        200,
+	Containers: []*DeployContainer{
+		{
+			ContainerName:     "integrationtest-default",
+			ContainerPort:     80,
+			ContainerImage:    "nginx",
+			ContainerURI:      "index.docker.io/redis:latest",
+			Essential:         true,
+			MemoryReservation: 128,
 			CPUReservation:    64,
 		},
 	},
@@ -53,10 +83,10 @@ var ecsDeploy = Deploy{
 	MaximumPercent:        200,
 	Containers: []*DeployContainer{
 		{
-			ContainerName:     "ecs-deploy",
+			ContainerName:     "integrationtest-ecs-deploy",
 			ContainerTag:      "latest",
 			ContainerPort:     8080,
-			ContainerImage:    "in4it/ecs-deploy",
+			ContainerURI:      "index.docker.io/in4it/ecs-deploy:latest",
 			Essential:         true,
 			MemoryReservation: 256,
 			CPUReservation:    64,
@@ -68,6 +98,15 @@ func TestClusterIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
+	// setup teardown capture (ctrl+c)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		fmt.Println("Caught SIGINT: running teardown")
+		teardown(t)
+		os.Exit(1)
+	}()
 	// integration test for cluster
 	if accountId == nil {
 		t.Skip(noAWSMsg)
@@ -79,8 +118,10 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	// vars
 	ecs := ECS{}
 	iam := IAM{}
+	paramstore := Paramstore{}
 	service := newService()
 	controller := Controller{}
+	cloudwatch := CloudWatch{}
 	roleName := "ecs-" + clusterName
 
 	// create dynamodb table
@@ -146,15 +187,13 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	if err != nil {
 		for i := 0; i < 5 && err != nil; i++ {
 			if strings.HasPrefix(err.Error(), "RetryableError:") {
-				fmt.Println("Error: %v - waiting 10s and retrying...", err.Error())
+				fmt.Printf("Error: %v - waiting 10s and retrying...\n", err.Error())
 				time.Sleep(10 * time.Second)
 				err = ecs.createLaunchConfiguration(clusterName, keyName, instanceType, instanceProfile, strings.Split(ecsSecurityGroups, ","))
 			}
 		}
 		if err != nil {
 			t.Errorf("Fatal Error: %v\n", err)
-			// return teardown (couldn't launch)
-			return teardown
 		}
 	}
 
@@ -167,6 +206,11 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 		t.Errorf("Error: %v\n", err)
 	}
 
+	// create log group
+	err = cloudwatch.createLogGroup(clusterName, cloudwatchLogsPrefix+"-"+environment)
+	if err != nil {
+		t.Errorf("Error: %v\n", err)
+	}
 	// create cluster
 	clusterArn, err := ecs.createCluster(clusterName)
 	if err != nil {
@@ -183,7 +227,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
-	defaultTargetGroupArn, err := alb.createTargetGroup("default", ecsDefault)
+	defaultTargetGroupArn, err := alb.createTargetGroup("integrationtest-default", ecsDefault)
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
@@ -191,17 +235,97 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
+	// create env vars
+	if strings.ToLower(paramstoreEnabled) == "yes" {
+		paramstore.putParameter("integrationtest-ecs-deploy", DeployServiceParameter{
+			Name:  "JWT_TOKEN",
+			Value: RandStringBytesMaskImprSrc(16),
+		})
+		paramstore.putParameter("integrationtest-ecs-deploy", DeployServiceParameter{
+			Name:  "DEPLOY_PASSWORD",
+			Value: RandStringBytesMaskImprSrc(8),
+		})
+		paramstore.putParameter("integrationtest-ecs-deploy", DeployServiceParameter{
+			Name:  "URL_PREFIX",
+			Value: "/integrationtest-ecs-deploy",
+		})
+	}
 
-	// deploy
-	controller.deploy("ecs-deploy", ecsDeploy)
-
-	// wait until service is stable
-	err = ecs.waitUntilServicesStable("ecs-deploy")
+	// wait for autoscaling group to be in service
+	fmt.Println("Wait for autoscaling group to be in service")
+	ecs.waitForAutoScalingGroupInService(clusterName)
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
 
-	fmt.Println("Waiting before teardown")
+	// deploy (2 times: one time to create and one update)
+	var deployRes *DeployResult
+	for y := 0; y < 2; y++ {
+		service.serviceName = "integrationtest-default"
+		deployRes, err = controller.deploy(service.serviceName, ecsDefault)
+		if err != nil {
+			t.Errorf("Error: %v\n", err)
+			// can't recover from this
+			return teardown
+		}
+		fmt.Printf("Deployed %v with task definition %v\n", deployRes.ServiceName, deployRes.TaskDefinitionArn)
+
+		var deployed bool
+		for i := 0; i < 30 && !deployed; i++ {
+			dd, err := service.getLastDeploy()
+			if err != nil {
+				t.Errorf("Error: %v\n", err)
+			}
+			if dd != nil && dd.Status == "success" {
+				deployed = true
+			} else {
+				fmt.Printf("Waiting for deploy %v to have status success (latest status: %v)\n", service.serviceName, dd.Status)
+				time.Sleep(30 * time.Second)
+			}
+		}
+		if !deployed {
+			fmt.Println("Couldn't deploy service")
+			return teardown
+		}
+	}
+
+	// deploy an update with healthchecks that fail and observe rolling back
+	controller.deploy(service.serviceName, ecsDefaultFailingHealthCheck)
+	var deployed bool
+	for i := 0; i < 30 && !deployed; i++ {
+		dd, err := service.getLastDeploy()
+		if err != nil {
+			t.Errorf("Error: %v\n", err)
+		}
+		if dd != nil && dd.Status != "running" {
+			deployed = true
+		} else {
+			fmt.Printf("Waiting for deploy to be rolled back (latest status: %v)\n", dd.Status)
+			time.Sleep(30 * time.Second)
+		}
+	}
+	settled := false
+	var runningService RunningService
+	for i := 0; i < 30 && !settled; i++ {
+		runningService, err = ecs.describeService(clusterName, service.serviceName, false, false, false)
+		if err != nil {
+			t.Errorf("Error: %v\n", err)
+		}
+		if len(runningService.Deployments) == 1 && runningService.Deployments[0].TaskDefinition == deployRes.TaskDefinitionArn {
+			settled = true
+		} else {
+			fmt.Printf("Waiting for deployments to be 1 (currently %d) and task definition to be %v (currently %v)\n",
+				len(runningService.Deployments), deployRes.TaskDefinitionArn, runningService.Deployments[0].TaskDefinition)
+			time.Sleep(30 * time.Second)
+		}
+	}
+	if !settled {
+		t.Errorf("Error: Rollback didn't happen: wrong task definition (expected: %v): %+v\n", deployRes.TaskDefinitionArn, runningService.Deployments)
+	} else {
+		fmt.Println("Rolled back")
+	}
+
+	fmt.Println("Waiting before teardown (or ctrl+c)")
 	time.Sleep(120 * time.Second)
 
 	// return teardown
@@ -210,7 +334,9 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 func teardown(t *testing.T) {
 	iam := IAM{}
 	ecs := ECS{}
+	paramstore := Paramstore{}
 	roleName := "ecs-" + clusterName
+	cloudwatch := CloudWatch{}
 	err := ecs.deleteAutoScalingGroup(clusterName, true)
 	if err != nil {
 		t.Errorf("Error: %v", err)
@@ -243,24 +369,29 @@ func teardown(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	ecsDeployTargetGroup, err := alb.getTargetGroupArn("ecs-deploy")
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	err = alb.deleteTargetGroup(*ecsDeployTargetGroup)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	defaultTargetGroup, err := alb.getTargetGroupArn("default")
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	err = alb.deleteTargetGroup(*defaultTargetGroup)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
 	for _, v := range alb.listeners {
 		err = alb.deleteListener(*v.ListenerArn)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+	}
+	// will be enabled later
+	/*ecsDeployTargetGroup, err := alb.getTargetGroupArn("integrationtest-ecs-deploy")
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if ecsDeployTargetGroup != nil {
+		err = alb.deleteTargetGroup(*ecsDeployTargetGroup)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+	}*/
+	defaultTargetGroup, err := alb.getTargetGroupArn("integrationtest-default")
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if defaultTargetGroup != nil {
+		err = alb.deleteTargetGroup(*defaultTargetGroup)
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}
@@ -269,8 +400,69 @@ func teardown(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
+	err = ecs.deleteService(clusterName, "integrationtest-default")
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	err = ecs.waitUntilServicesInactive(clusterName, "integrationtest-default")
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	fmt.Println("Wait for autoscaling group to not exist")
+	err = ecs.waitForAutoScalingGroupNotExists(clusterName)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	var drained bool
+	fmt.Println("Waiting for EC2 instances to drain from ECS cluster")
+	for i := 0; i < 5 && !drained; i++ {
+		instanceArns, err := ecs.listContainerInstances(clusterName)
+		if err != nil {
+			t.Errorf("Error: %v", err)
+		}
+		if len(instanceArns) == 0 {
+			drained = true
+		} else {
+			time.Sleep(5 * time.Second)
+		}
+	}
 	err = ecs.deleteCluster(clusterName)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
+	err = cloudwatch.deleteLogGroup(cloudwatchLogsPrefix + "-" + environment)
+	if err != nil {
+		t.Errorf("Error: %v\n", err)
+	}
+	paramstore.deleteParameter("integrationtest-ecs-deploy", "JWT_TOKEN")
+	if err != nil {
+		t.Errorf("Error: %v\n", err)
+	}
+	paramstore.deleteParameter("integrationtest-ecs-deploy", "DEPLOY_PASSWORD")
+	if err != nil {
+		t.Errorf("Error: %v\n", err)
+	}
+	paramstore.deleteParameter("integrationtest-ecs-deploy", "URL_PREFIX")
+	if err != nil {
+		t.Errorf("Error: %v\n", err)
+	}
+}
+
+// stackoverflow
+func RandStringBytesMaskImprSrc(n int) string {
+	b := make([]byte, n)
+	// A randSrc.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, randSrc.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = randSrc.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return string(b)
 }

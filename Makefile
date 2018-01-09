@@ -13,7 +13,7 @@ test:
 	go test
 
 integrationTest:
-	export $$(cat .env | grep -v '^\#' | xargs) && go test -run Integration
+	export $$(cat .env | grep -v '^\#' | xargs) && go test -timeout 1h -run Integration
 	
 clean:
 	rm -f ${BINARY}-linux-${GOARCH}

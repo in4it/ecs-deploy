@@ -213,6 +213,38 @@ func (e *ECS) createAutoScalingGroup(clusterName string, desiredCapacity int64, 
 	}
 	return nil
 }
+func (e *ECS) waitForAutoScalingGroupInService(clusterName string) error {
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []*string{aws.String(clusterName)},
+	}
+	err := svc.WaitUntilGroupInService(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) waitForAutoScalingGroupNotExists(clusterName string) error {
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []*string{aws.String(clusterName)},
+	}
+	err := svc.WaitUntilGroupNotExists(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
 func (e *ECS) deleteAutoScalingGroup(clusterName string, forceDelete bool) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DeleteAutoScalingGroupInput{
@@ -469,6 +501,43 @@ func (e *ECS) updateService(serviceName string, taskDefArn *string, d Deploy) (*
 	return result.Service.ServiceName, nil
 }
 
+// delete ECS service
+func (e *ECS) deleteService(clusterName, serviceName string) error {
+	// first set desiredCount to 0
+	svc := ecs.New(session.New())
+	input := &ecs.UpdateServiceInput{
+		Cluster:      aws.String(clusterName),
+		Service:      aws.String(serviceName),
+		DesiredCount: aws.Int64(0),
+	}
+
+	_, err := svc.UpdateService(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	// delete service
+	input2 := &ecs.DeleteServiceInput{
+		Cluster: aws.String(clusterName),
+		Service: aws.String(serviceName),
+	}
+
+	_, err = svc.DeleteService(input2)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+
 // create service
 func (e *ECS) createService(d Deploy) error {
 	svc := ecs.New(session.New())
@@ -572,6 +641,28 @@ func (e *ECS) createService(d Deploy) error {
 	return nil
 }
 
+// wait until service is inactive
+func (e *ECS) waitUntilServicesInactive(clusterName, serviceName string) error {
+	svc := ecs.New(session.New())
+	input := &ecs.DescribeServicesInput{
+		Cluster:  aws.String(clusterName),
+		Services: []*string{aws.String(serviceName)},
+	}
+
+	ecsLogger.Debugf("Waiting for service %v on %v to become inactive", serviceName, clusterName)
+
+	err := svc.WaitUntilServicesInactive(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}
+
 // wait until service is stable
 func (e *ECS) waitUntilServicesStable(serviceName string) error {
 	svc := ecs.New(session.New())
@@ -595,19 +686,96 @@ func (e *ECS) waitUntilServicesStable(serviceName string) error {
 }
 func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	service := newService()
+	// check whether service exists, otherwise wait might give error
 	err := e.waitUntilServicesStable(dd.ServiceName)
 	ecsLogger.Debugf("Waiting for service %v to become stable finished", dd.ServiceName)
 	if err != nil {
 		ecsLogger.Debugf("waitUntilServiceStable didn't succeed: %v", err)
 		service.setDeploymentStatus(dd, "failed")
 	}
-	ecsLogger.Debugf("Service %v stable", dd.ServiceName)
+	// check whether deployment has latest task definition
+	runningService, err := e.describeService(dd.DeployData.Cluster, dd.ServiceName, false, true, true)
+	if err != nil {
+		return err
+	}
+	if len(runningService.Deployments) != 1 {
+		ecsLogger.Debugf("Deployment failed: deployment still running")
+		service.setDeploymentStatus(dd, "failed")
+		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	if runningService.Deployments[0].TaskDefinition != *dd.TaskDefinitionArn {
+		ecsLogger.Debugf("Deployment failed: Still running old task definition")
+		service.setDeploymentStatus(dd, "failed")
+		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	for _, t := range runningService.Tasks {
+		if t.TaskDefinitionArn == *dd.TaskDefinitionArn && t.LastStatus != "RUNNING" {
+			ecsLogger.Debugf("Deployment failed: found task with taskdefinition %v and status %v (expected RUNNING)", t.TaskDefinitionArn, t.LastStatus)
+			service.setDeploymentStatus(dd, "failed")
+			err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+		ecsLogger.Debugf("Found task with taskdefinition %v and status %v", t.TaskDefinitionArn, t.LastStatus)
+	}
+
+	// set success
 	service.setDeploymentStatus(dd, "success")
 	return nil
 }
+func (e *ECS) rollback(clusterName, serviceName string) error {
+	ecsLogger.Debugf("Starting rollback")
+	service := newService()
+	service.serviceName = serviceName
+	dd, err := service.getDeploys("secondToLast", 1)
+	if err != nil {
+		ecsLogger.Errorf("Error: %v", err.Error())
+		return err
+	}
+	if len(dd) == 0 || dd[0].Status != "success" {
+		ecsLogger.Debugf("Rollback: Previous deploy was not successful")
+		dd, err := service.getDeploys("byMonth", 10)
+		if err != nil {
+			return err
+		}
+		ecsLogger.Debugf("Rollback: checking last %d deploys", len(dd))
+	}
+	for _, v := range dd {
+		ecsLogger.Debugf("Looping previous deployments: %v with status %v", *v.TaskDefinitionArn, v.Status)
+		if v.Status == "success" {
+			ecsLogger.Debugf("Rollback: rolling back to %v", *v.TaskDefinitionArn)
+			e.updateService(v.ServiceName, v.TaskDefinitionArn, *v.DeployData)
+			return nil
+		}
+	}
+	ecsLogger.Debugf("Could not rollback, no stable version found")
+	return errors.New("Could not rollback, no stable version found")
+}
 
 // describe services
-func (e *ECS) describeServices(clusterName string, serviceNames []*string, showEvents bool, showTasks bool) ([]RunningService, error) {
+func (e *ECS) describeService(clusterName string, serviceName string, showEvents bool, showTasks bool, showStoppedTasks bool) (RunningService, error) {
+	s, err := e.describeServices(clusterName, []*string{aws.String(serviceName)}, showEvents, showTasks, showStoppedTasks)
+	if err == nil && len(s) == 1 {
+		return s[0], nil
+	} else {
+		if err == nil {
+			return RunningService{}, errors.New("describeService: No error, but array length != 1")
+		} else {
+			return RunningService{}, err
+		}
+	}
+}
+func (e *ECS) describeServices(clusterName string, serviceNames []*string, showEvents bool, showTasks bool, showStoppedTasks bool) ([]RunningService, error) {
 	var rss []RunningService
 	svc := ecs.New(session.New())
 
@@ -644,6 +812,7 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string, showE
 				ds.DesiredCount = *deployment.DesiredCount
 				ds.CreatedAt = *deployment.CreatedAt
 				ds.UpdatedAt = *deployment.UpdatedAt
+				ds.TaskDefinition = *deployment.TaskDefinition
 				rs.Deployments = append(rs.Deployments, ds)
 			}
 			if showEvents {
@@ -657,9 +826,16 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string, showE
 				}
 			}
 			if showTasks {
-				taskArns, err := e.listTasks(clusterName, *service.ServiceName)
+				taskArns, err := e.listTasks(clusterName, *service.ServiceName, "RUNNING")
 				if err != nil {
 					return rss, err
+				}
+				if showStoppedTasks {
+					taskArnsStopped, err := e.listTasks(clusterName, *service.ServiceName, "STOPPED")
+					if err != nil {
+						return rss, err
+					}
+					taskArns = append(taskArns, taskArnsStopped...)
 				}
 				runningTasks, err := e.describeTasks(clusterName, taskArns)
 				if err != nil {
@@ -674,13 +850,16 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string, showE
 }
 
 // list tasks
-func (e *ECS) listTasks(clusterName, serviceName string) ([]*string, error) {
+func (e *ECS) listTasks(clusterName, serviceName, desiredStatus string) ([]*string, error) {
 	svc := ecs.New(session.New())
 	var tasks []*string
 
 	input := &ecs.ListTasksInput{
 		Cluster:     aws.String(clusterName),
 		ServiceName: aws.String(serviceName),
+	}
+	if desiredStatus == "STOPPED" {
+		input.SetDesiredStatus(desiredStatus)
 	}
 
 	pageNum := 0
@@ -783,4 +962,30 @@ func (e *ECS) describeTasks(clusterName string, tasks []*string) ([]RunningTask,
 		}
 	}
 	return rts, nil
+}
+
+func (e *ECS) listContainerInstances(clusterName string) ([]string, error) {
+	svc := ecs.New(session.New())
+	input := &ecs.ListContainerInstancesInput{
+		Cluster: aws.String(clusterName),
+	}
+	var instanceArns []*string
+
+	pageNum := 0
+	err := svc.ListContainerInstancesPages(input,
+		func(page *ecs.ListContainerInstancesOutput, lastPage bool) bool {
+			pageNum++
+			instanceArns = append(instanceArns, page.ContainerInstanceArns...)
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return aws.StringValueSlice(instanceArns), err
+	}
+	return aws.StringValueSlice(instanceArns), nil
 }

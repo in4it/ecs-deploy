@@ -176,6 +176,9 @@ func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDe
 }
 func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	var dd DynamoDeployment
+	if s.serviceName == "" {
+		return nil, errors.New("serviceName not set")
+	}
 	err := s.table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
