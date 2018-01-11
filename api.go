@@ -43,6 +43,8 @@ type Deploy struct {
 	NetworkConfiguration  DeployNetworkConfiguration  `json:"networkConfiguration"`
 	PlacementConstraints  []DeployPlacementConstraint `json:"placementConstraints"`
 	LaunchType            string                      `json:"launchType"`
+	DeregistrationDelay   int64                       `json:"deregistrationDelay"`
+	Stickiness            DeployStickiness            `json:"stickiness"`
 }
 type DeployContainer struct {
 	ContainerName     string    `json:"containerName" binding:"required"`
@@ -66,7 +68,6 @@ type DeployPlacementConstraint struct {
 	Expression string `json:"expression"`
 	Type       string `json:"type"`
 }
-
 type DeployHealthCheck struct {
 	HealthyThreshold   int64  `json:"healthyThreshold"`
 	UnhealthyThreshold int64  `json:"unhealthyThreshold"`
@@ -82,6 +83,10 @@ type DeployRuleConditions struct {
 	Listeners   []string `json:"listeners"`
 	PathPattern string   `json:"pathPattern"`
 	Hostname    string   `json:"hostname"`
+}
+type DeployStickiness struct {
+	Enabled  bool  `json:"enabled"`
+	Duration int64 `json:"duration"`
 }
 
 type DeployResult struct {
@@ -363,6 +368,7 @@ func (a *API) healthHandler(c *gin.Context) {
 func (a *API) deployServiceHandler(c *gin.Context) {
 	var json Deploy
 	controller := Controller{}
+	controller.setDeployDefaults(&json)
 	if err := c.ShouldBindJSON(&json); err == nil {
 		if err = a.deployServiceValidator(c.Param("service"), json); err == nil {
 			res, err := controller.deploy(c.Param("service"), json)

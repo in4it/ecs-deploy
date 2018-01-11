@@ -94,15 +94,22 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	} else if err != nil {
 		return nil, errors.New("Error during checking whether service exists")
 	} else {
+		alb, err := newALB(d.Cluster)
+		targetGroupArn, err := alb.getTargetGroupArn(serviceName)
+		if err != nil {
+			return nil, err
+		}
 		// update healthchecks if changed
 		if !cmp.Equal(ddLast.DeployData.HealthCheck, d.HealthCheck) {
 			controllerLogger.Debugf("Updating ecs healthcheck: %v", serviceName)
-			alb, err := newALB(d.Cluster)
-			targetGroupArn, err := alb.getTargetGroupArn(serviceName)
+			alb.updateHealthCheck(*targetGroupArn, d.HealthCheck)
+		}
+		// update target group attributes if changed
+		if !cmp.Equal(ddLast.DeployData.Stickiness, d.Stickiness) || ddLast.DeployData.DeregistrationDelay != d.DeregistrationDelay {
+			err = alb.modifyTargetGroupAttributes(*targetGroupArn, d)
 			if err != nil {
 				return nil, err
 			}
-			alb.updateHealthCheck(*targetGroupArn, d.HealthCheck)
 		}
 		// update service
 		_, err = ecs.updateService(serviceName, taskDefArn, d)
@@ -171,6 +178,13 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	targetGroupArn, err := alb.createTargetGroup(serviceName, d)
 	if err != nil {
 		return err
+	}
+	// modify target group attributes
+	if d.DeregistrationDelay != -1 || d.Stickiness.Enabled {
+		err = alb.modifyTargetGroupAttributes(*targetGroupArn, d)
+		if err != nil {
+			return err
+		}
 	}
 
 	// deploy rules for target group
@@ -478,4 +492,9 @@ func (c *Controller) scaleService(serviceName string, desiredCount int64) error 
 	ecs := ECS{}
 	ecs.manualScaleService(clusterName, serviceName, desiredCount)
 	return nil
+}
+
+func (c *Controller) setDeployDefaults(d *Deploy) {
+	d.DeregistrationDelay = -1
+	d.Stickiness.Duration = -1
 }

@@ -56,6 +56,30 @@ var ecsDefault = Deploy{
 		},
 	},
 }
+var ecsDefaultWithChanges = Deploy{
+	Cluster:               clusterName,
+	ServicePort:           80,
+	ServiceProtocol:       "HTTP",
+	DesiredCount:          1,
+	MinimumHealthyPercent: 100,
+	MaximumPercent:        200,
+	DeregistrationDelay:   0,
+	Stickiness: DeployStickiness{
+		Enabled:  true,
+		Duration: 10000,
+	},
+	Containers: []*DeployContainer{
+		{
+			ContainerName:     "integrationtest-default",
+			ContainerPort:     80,
+			ContainerImage:    "nginx",
+			ContainerURI:      "index.docker.io/nginx:alpine",
+			Essential:         true,
+			MemoryReservation: 128,
+			CPUReservation:    64,
+		},
+	},
+}
 var ecsDefaultFailingHealthCheck = Deploy{
 	Cluster:               clusterName,
 	ServicePort:           80,
@@ -131,6 +155,9 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	controller := Controller{}
 	cloudwatch := CloudWatch{}
 	roleName := "ecs-" + clusterName
+
+	// set deploy default
+	controller.setDeployDefaults(&ecsDefault)
 
 	// create dynamodb table
 	err := service.createTable()
@@ -270,7 +297,11 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	var deployRes *DeployResult
 	for y := 0; y < 2; y++ {
 		service.serviceName = "integrationtest-default"
-		deployRes, err = controller.deploy(service.serviceName, ecsDefault)
+		if y == 0 {
+			deployRes, err = controller.deploy(service.serviceName, ecsDefault)
+		} else {
+			deployRes, err = controller.deploy(service.serviceName, ecsDefaultWithChanges)
+		}
 		if err != nil {
 			t.Errorf("Error: %v\n", err)
 			// can't recover from this
