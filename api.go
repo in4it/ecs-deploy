@@ -106,6 +106,8 @@ type RunningService struct {
 	ServiceName  string                     `json:"serviceName"`
 	ClusterName  string                     `json:"clusterName"`
 	RunningCount int64                      `json:"runningCount"`
+	PendingCount int64                      `json:"pendingCount"`
+	DesiredCount int64                      `json:"desiredCount"`
 	Status       string                     `json:"status"`
 	Events       []RunningServiceEvent      `json:"events"`
 	Deployments  []RunningServiceDeployment `json:"deployments"`

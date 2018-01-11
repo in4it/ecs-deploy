@@ -56,4 +56,7 @@ export class ServiceDetailService {
   deleteParameter(serviceName, selectedParameter) {
     return this.http.post('/ecs-deploy/api/v1/service/parameter/'+serviceName+'/delete/' + selectedParameter, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
+  setDesiredCount(data) {
+    return this.http.post('/ecs-deploy/api/v1/service/scale/'+this.sl.serviceName+'/' + data.desiredCount, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
 }

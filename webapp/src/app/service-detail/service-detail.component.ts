@@ -7,6 +7,8 @@ import { InspectChildComponent }  from './inspect.component';
 import { DeployChildComponent }  from './deploy.component';
 import { ConfirmChildComponent }  from './confirm.component';
 
+import { AlertService } from '../services/index';
+
 import * as moment from 'moment';
 
 @Component({
@@ -27,7 +29,10 @@ export class ServiceDetailComponent implements OnInit {
   newParameterInput: any = {};
   parameterInput: any = {};
 
-  selectedVersion: any
+  selectedVersion: any;
+
+  editManualScaling: boolean = false;
+  scalingInput: any = {};
 
   tab = "service"
 
@@ -38,7 +43,8 @@ export class ServiceDetailComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private sds: ServiceDetailService
+    private sds: ServiceDetailService,
+    private alertService: AlertService
   ) {}
 
   ngOnInit(): void {
@@ -69,6 +75,9 @@ export class ServiceDetailComponent implements OnInit {
   }
   onClickEvents() {
     this.tab = "events"
+  }
+  onClickScaling() {
+    this.tab = "scaling"
   }
   refresh() {
     this.loading = true
@@ -204,5 +213,23 @@ export class ServiceDetailComponent implements OnInit {
     this.loading = false
   }
   
+  editDesiredCount() {
+    this.scalingInput.desiredCount = this.service.desiredCount
+    this.editManualScaling = true
+  }
+  saveDesiredCount(): void {
+    if("desiredCount" in this.scalingInput) {
+      this.saving = true
+      this.sds.setDesiredCount(this.scalingInput).subscribe(data => {
+        if(data["message"] != "OK") {
+          this.alertService.error(data["error"]);
+        }
+        this.service["desiredCount"] = this.scalingInput["desiredCount"]
+        this.saving = false
+        this.editManualScaling = false
+        this.scalingInput = {}
+      });
+    }
+  }
 
 }

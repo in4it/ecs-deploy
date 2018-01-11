@@ -803,6 +803,8 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string, showE
 		for _, service := range result.Services {
 			rs := RunningService{ServiceName: *service.ServiceName, ClusterName: clusterName}
 			rs.RunningCount = *service.RunningCount
+			rs.PendingCount = *service.PendingCount
+			rs.DesiredCount = *service.DesiredCount
 			rs.Status = *service.Status
 			for _, deployment := range service.Deployments {
 				var ds RunningServiceDeployment
