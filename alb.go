@@ -622,3 +622,36 @@ func (a *ALB) updateHealthCheck(targetGroupArn string, healthCheck DeployHealthC
 	}
 	return nil
 }
+
+func (a *ALB) modifyTargetGroupAttributes(targetGroupArn string, d Deploy) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.ModifyTargetGroupAttributesInput{
+		TargetGroupArn: aws.String(targetGroupArn),
+		Attributes:     []*elbv2.TargetGroupAttribute{},
+	}
+
+	if d.DeregistrationDelay != -1 {
+		delay := strconv.FormatInt(d.DeregistrationDelay, 10)
+		input.Attributes = append(input.Attributes, &elbv2.TargetGroupAttribute{Key: aws.String("deregistration_delay.timeout_seconds"), Value: aws.String(delay)})
+	}
+
+	if d.Stickiness.Enabled {
+		input.Attributes = append(input.Attributes, &elbv2.TargetGroupAttribute{Key: aws.String("stickiness.enabled"), Value: aws.String("true")})
+		input.Attributes = append(input.Attributes, &elbv2.TargetGroupAttribute{Key: aws.String("stickiness.type"), Value: aws.String("lb_cookie")})
+		if d.Stickiness.Duration != -1 {
+			sd := strconv.FormatInt(d.Stickiness.Duration, 10)
+			input.Attributes = append(input.Attributes, &elbv2.TargetGroupAttribute{Key: aws.String("stickiness.lb_cookie.duration_seconds"), Value: aws.String(sd)})
+		}
+	}
+
+	_, err := svc.ModifyTargetGroupAttributes(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+			return aerr
+		}
+		albLogger.Errorf(err.Error())
+		return err
+	}
+	return nil
+}
