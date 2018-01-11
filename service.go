@@ -31,15 +31,20 @@ type DynamoDeployment struct {
 	Month             string    `index:"MonthIndex,hash"`
 	Status            string
 	Tag               string
+	Scaling           DynamoDeploymentScaling
 	TaskDefinitionArn *string
 	DeployData        *Deploy
 }
 
+type DynamoDeploymentScaling struct {
+	DesiredCount int64
+}
+
 // dynamo services struct
 type DynamoServices struct {
-	ServiceName string
+	ServiceName string `dynamo:"ServiceName,hash"`
 	Services    []*DynamoServicesElement
-	Time        string
+	Time        string `dynamo:"Time,range"`
 	Version     int64
 }
 type DynamoServicesElement struct {
@@ -166,7 +171,16 @@ func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDe
 	day := time.Now().Format("2006-01-01")
 	month := time.Now().Format("2006-01")
 	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running"}
-	err := s.table.Put(w).Run()
+
+	lastDeploy, err := s.getLastDeploy()
+	if err != nil {
+		w.Scaling.DesiredCount = d.DesiredCount
+	} else {
+		w.Scaling = lastDeploy.Scaling
+		w.Scaling.DesiredCount = Max(d.DesiredCount, lastDeploy.Scaling.DesiredCount)
+	}
+
+	err = s.table.Put(w).Run()
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
@@ -321,5 +335,35 @@ func (s *Service) createTable() error {
 	}
 
 	s.table = s.db.Table(getEnv("DYNAMODB_TABLE", "Services"))
+	return nil
+}
+func (s *Service) getClusterName() (string, error) {
+	var clusterName string
+	var ds DynamoServices
+	serviceLogger.Debugf("Going to determine clusterName of %v", s.serviceName)
+	err := s.getServices(&ds)
+	if err != nil {
+		return clusterName, err
+	}
+	for _, v := range ds.Services {
+		if v.S == s.serviceName {
+			clusterName = v.C
+		}
+	}
+	if clusterName == "" {
+		return clusterName, errors.New("Service not found")
+	}
+	return clusterName, nil
+}
+func (s *Service) setScalingProperty(desiredCount int64) error {
+	dd, err := s.getLastDeploy()
+	dd.Scaling.DesiredCount = desiredCount
+
+	err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
+
+	if err != nil {
+		serviceLogger.Errorf("Error during put: %v", err.Error())
+		return err
+	}
 	return nil
 }

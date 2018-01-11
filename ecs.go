@@ -989,3 +989,26 @@ func (e *ECS) listContainerInstances(clusterName string) ([]string, error) {
 	}
 	return aws.StringValueSlice(instanceArns), nil
 }
+
+// manual scale ECS service
+func (e *ECS) manualScaleService(clusterName, serviceName string, desiredCount int64) error {
+	svc := ecs.New(session.New())
+	input := &ecs.UpdateServiceInput{
+		Cluster:      aws.String(clusterName),
+		Service:      aws.String(serviceName),
+		DesiredCount: aws.Int64(desiredCount),
+	}
+
+	ecsLogger.Debugf("Manually scaling %v to a count of %d", serviceName, desiredCount)
+
+	_, err := svc.UpdateService(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+		return err
+	}
+	return nil
+}

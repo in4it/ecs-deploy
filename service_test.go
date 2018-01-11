@@ -59,3 +59,14 @@ func TestGetDeploymentSecondToLast(t *testing.T) {
 		fmt.Printf("Retrieved second to last record: %v_%v\n", dds[0].ServiceName, dds[0].Time)
 	}
 }
+func TestGetServices(t *testing.T) {
+	if accountId == nil {
+		t.Skip(noAWSMsg)
+	}
+	service := newService()
+	var ds DynamoServices
+	err := service.getServices(&ds)
+	if err != nil {
+		t.Errorf("Couldn't retrieve services from dynamodb: %v\n", err.Error())
+	}
+}
