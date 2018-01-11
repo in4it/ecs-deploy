@@ -13,8 +13,8 @@ import (
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
 	"errors"
-	//"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -254,6 +254,8 @@ func (a *API) createRoutes() {
 		auth.GET("/service/describe/:service", a.describeServiceHandler)
 		// get version information
 		auth.GET("/service/describe/:service/versions", a.describeServiceVersionsHandler)
+		// scale service
+		auth.POST("/service/scale/:service/:count", a.scaleServiceHandler)
 
 		// parameter store
 		auth.GET("/service/parameter/:service/list", a.listServiceParameters)
@@ -670,6 +672,26 @@ func (a *API) deleteServiceParameter(c *gin.Context) {
 	creds, err := controller.deleteServiceParameter(c.Param("service"), claims["id"].(string), creds, c.Param("parameter"))
 	session.Set("paramstore_creds", creds)
 	session.Save()
+	if err == nil {
+		c.JSON(200, gin.H{
+			"message": "OK",
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) scaleServiceHandler(c *gin.Context) {
+	controller := Controller{}
+	desiredCount, err := strconv.ParseInt(c.Param("count"), 10, 64)
+	if err != nil {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	err = controller.scaleService(c.Param("service"), desiredCount)
 	if err == nil {
 		c.JSON(200, gin.H{
 			"message": "OK",

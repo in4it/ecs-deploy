@@ -467,3 +467,15 @@ func (c *Controller) deleteService(serviceName string) error {
 	}
 	return nil
 }
+func (c *Controller) scaleService(serviceName string, desiredCount int64) error {
+	service := newService()
+	service.serviceName = serviceName
+	clusterName, err := service.getClusterName()
+	if err != nil {
+		return err
+	}
+	service.setScalingProperty(desiredCount)
+	ecs := ECS{}
+	ecs.manualScaleService(clusterName, serviceName, desiredCount)
+	return nil
+}

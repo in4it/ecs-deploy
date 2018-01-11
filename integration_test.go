@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+var runIntegrationTest = getEnv("TEST_RUN_INTEGRATION", "no")
 var region = getEnv("AWS_REGION", "")
 var clusterName = getEnv("TEST_CLUSTERNAME", "integrationtest")
 var environment = getEnv("TEST_ENVIRONMENT", "")
@@ -98,6 +99,13 @@ func TestClusterIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
+	if runIntegrationTest != "yes" {
+		fmt.Println("Skipping integrationtest (env var TEST_RUN_INTEGRATION != yes)")
+		t.Skip("skipping integration test")
+	}
+	// Do you want to run integration test?
+	fmt.Println("Going to run integration test in 5s... (You can hit ctrl+c now to abort)")
+	time.Sleep(5 * time.Second)
 	// setup teardown capture (ctrl+c)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
