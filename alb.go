@@ -644,6 +644,11 @@ func (a *ALB) modifyTargetGroupAttributes(targetGroupArn string, d Deploy) error
 		}
 	}
 
+	if len(input.Attributes) == 0 {
+		albLogger.Errorf("Tried to modify target group, but no attributes were passed")
+		return nil
+	}
+
 	_, err := svc.ModifyTargetGroupAttributes(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
