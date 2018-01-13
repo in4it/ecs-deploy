@@ -5,3 +5,4 @@ ecs-deploy
 *.key
 webapp/node_modules/
 webapp/dist/
+vendor/
