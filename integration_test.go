@@ -293,11 +293,11 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 		t.Errorf("Error: %v\n", err)
 	}
 
-	// deploy (2 times: one time to create and one update)
+	// deploy (3 times: one time to create, one to update and one with different layout)
 	var deployRes *DeployResult
 	for y := 0; y < 2; y++ {
 		service.serviceName = "integrationtest-default"
-		if y == 0 {
+		if y == 0 || y == 1 {
 			deployRes, err = controller.deploy(service.serviceName, ecsDefault)
 		} else {
 			deployRes, err = controller.deploy(service.serviceName, ecsDefaultWithChanges)

@@ -9,6 +9,7 @@ import (
 	"github.com/in4it/ecs-deploy/ngserve"
 	"github.com/in4it/ecs-deploy/session"
 	"github.com/juju/loggo"
+	"github.com/robbiet480/go.sns"
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
@@ -163,6 +164,22 @@ type RunningTaskContainer struct {
 	Reason       string `json:"reason"`
 }
 
+// SNS payload
+type SNSPayload struct {
+	Message          string `json:"Message"`
+	MessageId        string `json:"MessageId"`
+	Signature        string `json:"Signature"`
+	SignatureVersion string `json:"SignatureVersion"`
+	SigningCertURL   string `json:"SigningCertURL"`
+	SubscribeURL     string `json:"SubscribeURL"`
+	Subject          string `json:"Subject"`
+	Timestamp        string `json:"Timestamp"`
+	Token            string `json:"Token"`
+	TopicArn         string `json:"TopicArn"`
+	Type             string `json:"Type" binding:"required"`
+	UnsubscribeURL   string `json:"UnsubscribeURL"`
+}
+
 func (a *API) launch() error {
 	if getEnv("SAML_ENABLED", "") == "yes" {
 		err := a.initSAML()
@@ -232,6 +249,9 @@ func (a *API) createRoutes() {
 
 		// refresh token
 		auth.GET("/refresh_token", a.authMiddleware.RefreshHandler)
+
+		// webhook
+		auth.POST("/webhook", a.webhookHandler)
 
 		// ECR
 		auth.POST("/ecr/create/:repository", a.ecrCreateHandler)
@@ -709,4 +729,42 @@ func (a *API) scaleServiceHandler(c *gin.Context) {
 			"error": err.Error(),
 		})
 	}
+}
+
+func (a *API) webhookHandler(c *gin.Context) {
+	var err error
+
+	snsMessageType := a.getHeader(c, "x-amz-sns-message-type")
+	if snsMessageType == "SubscriptionConfirmation" {
+		var snsPayload sns.Payload
+		if err := c.ShouldBindJSON(&snsPayload); err == nil {
+			err = snsPayload.VerifyPayload()
+			if err == nil {
+				_, err = snsPayload.Subscribe()
+			}
+		}
+	} else if snsMessageType == "Notification" {
+		var snsPayload SNSPayload
+		if err := c.ShouldBindJSON(&snsPayload); err == nil {
+			apiLogger.Errorf("To be handled: got notification: %+v", snsPayload)
+		}
+	} else {
+		err = errors.New("MessageType not recognized")
+	}
+	if err == nil {
+		c.JSON(200, gin.H{
+			"message": "OK",
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+
+func (a *API) getHeader(c *gin.Context, key string) string {
+	if values, _ := c.Request.Header[key]; len(values) > 0 {
+		return values[0]
+	}
+	return ""
 }
