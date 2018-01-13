@@ -62,10 +62,10 @@
   revision = "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae"
 
 [[projects]]
+  branch = "master"
   name = "github.com/gin-gonic/gin"
-  packages = [".","binding","render"]
-  revision = "d459835d2b077e44f7c9b453505ee29881d5d12d"
-  version = "v1.2"
+  packages = [".","binding","json","render"]
+  revision = "a712f77d7aaec7eb4766a663924aaa4e54d3fe70"
 
 [[projects]]
   name = "github.com/go-ini/ini"
@@ -143,6 +143,12 @@
   packages = ["."]
   revision = "2eee05ed794112d45db504eb05aa693efd2b8b09"
   version = "v0.1.0"
+
+[[projects]]
+  name = "github.com/json-iterator/go"
+  packages = ["."]
+  revision = "f7279a603edee96fe7764d3de9c6ff8cf9970994"
+  version = "1.0.4"
 
 [[projects]]
   branch = "master"
@@ -237,6 +243,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "bf7376d80a12682cbf67530fc5b543d845a34cdba8094f02a4ba86fed012b636"
+  inputs-digest = "3fb4d23df548f3e09e4936ae3fde554bf0d40d5a225afb5b5f541b59d671dbfb"
   solver-name = "gps-cdcl"
   solver-version = 1
