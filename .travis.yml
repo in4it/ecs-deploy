@@ -10,3 +10,5 @@ before_install:
 
 install:
   - dep ensure
+
+cache: vendor
