@@ -748,12 +748,14 @@ func (a *API) scaleServiceHandler(c *gin.Context) {
 func (a *API) webhookHandler(c *gin.Context) {
 	var err error
 
-	snsMessageType := a.getHeader(c, "x-amz-sns-message-type")
+	snsMessageType := c.GetHeader("x-amz-sns-message-type")
+	apiLogger.Debugf("Checking message type: %v", snsMessageType)
 	if snsMessageType == "SubscriptionConfirmation" {
 		var snsPayload sns.Payload
-		if err := c.ShouldBindJSON(&snsPayload); err == nil {
+		if err = c.ShouldBindJSON(&snsPayload); err == nil {
 			err = snsPayload.VerifyPayload()
 			if err == nil {
+				apiLogger.Debugf("Verified Payload. Subscribing...")
 				_, err = snsPayload.Subscribe()
 			}
 		}
@@ -770,6 +772,7 @@ func (a *API) webhookHandler(c *gin.Context) {
 			"message": "OK",
 		})
 	} else {
+		apiLogger.Errorf("Error: %v", err.Error())
 		c.JSON(200, gin.H{
 			"error": err.Error(),
 		})
@@ -807,11 +810,4 @@ func (a *API) describeServiceTaskdefinitionHandler(c *gin.Context) {
 			"error": err.Error(),
 		})
 	}
-}
-
-func (a *API) getHeader(c *gin.Context, key string) string {
-	if values, _ := c.Request.Header[key]; len(values) > 0 {
-		return values[0]
-	}
-	return ""
 }
