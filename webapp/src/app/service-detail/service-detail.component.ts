@@ -34,6 +34,8 @@ export class ServiceDetailComponent implements OnInit {
   editManualScaling: boolean = false;
   scalingInput: any = {};
 
+  runTaskInput: Array<any> = [];
+
   tab = "service"
 
   @ViewChild(InspectChildComponent) inspectChild;
@@ -81,6 +83,22 @@ export class ServiceDetailComponent implements OnInit {
   }
   onClickRunTask() {
     this.tab = "runTask"
+    this.loading = true
+    this.sds.getTaskDefinition().subscribe(data => {
+      this.loading = false
+      if("taskDefinition" in data) {
+        this.service["taskDefinition"] = data["taskDefinition"]
+        this.service["taskDefinition"]["containerDefinitions"].forEach((container, index) => {
+          console.log(container)
+          this.runTaskInput[container["name"]] = {}
+          if container["name"] == this.service.serviceName {
+            this.runTaskInput[container["name"]]["enabled"] = true
+          } else {
+            this.runTaskInput[container["name"]]["enabled"] = false
+          }
+        }
+      }
+    });
   }
   refresh() {
     this.loading = true

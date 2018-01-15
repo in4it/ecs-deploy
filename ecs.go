@@ -32,6 +32,17 @@ type ECS struct {
 	targetGroupArn *string
 }
 
+// Task definition and Container definition
+type TaskDefinition struct {
+	Family               string                `json:"family"`
+	Revision             int64                 `json:"revision"`
+	ExecutionRoleArn     string                `json:"executionRole"`
+	ContainerDefinitions []ContainerDefinition `json:"containerDefinitions"`
+}
+type ContainerDefinition struct {
+	Name string `json:"name"`
+}
+
 // create cluster
 func (e *ECS) createCluster(clusterName string) (*string, error) {
 	svc := ecs.New(session.New())
@@ -1095,14 +1106,4 @@ func (e *ECS) describeTaskDefinition(taskDefinitionNameOrArn string) (TaskDefini
 	taskDefinition.ContainerDefinitions = containerDefinitions
 
 	return taskDefinition, nil
-}
-
-type TaskDefinition struct {
-	Family               string                `json:"family"`
-	Revision             int64                 `json:"revision"`
-	ExecutionRoleArn     string                `json:"executionRole"`
-	ContainerDefinitions []ContainerDefinition `json:"containerDefinition""`
-}
-type ContainerDefinition struct {
-	Name string `json:"name"`
 }
