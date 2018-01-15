@@ -1014,3 +1014,95 @@ func (e *ECS) manualScaleService(clusterName, serviceName string, desiredCount i
 	}
 	return nil
 }
+
+// run one-off task
+func (e *ECS) runTask(clusterName, taskDefinition string, containerInstances []string, runTask RunTask) (string, error) {
+	var taskArn string
+	svc := ecs.New(session.New())
+	input := &ecs.StartTaskInput{
+		Cluster:            aws.String(clusterName),
+		TaskDefinition:     aws.String(taskDefinition),
+		ContainerInstances: aws.StringSlice(containerInstances),
+		StartedBy:          aws.String(runTask.StartedBy),
+	}
+
+	taskOverride := &ecs.TaskOverride{}
+	var containerOverrides []*ecs.ContainerOverride
+	for _, co := range runTask.ContainerOverrides {
+		containerOverrides = append(containerOverrides, &ecs.ContainerOverride{
+			Command: aws.StringSlice(co.Command),
+			Name:    aws.String(co.ContainerName),
+		})
+	}
+	taskOverride.SetContainerOverrides(containerOverrides)
+	input.SetOverrides(taskOverride)
+
+	ecsLogger.Debugf("Running ad-hoc task using taskdef %s", taskDefinition)
+
+	result, err := svc.StartTask(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+		return taskArn, err
+	}
+	if len(result.Tasks) == 0 {
+		return taskArn, errors.New("No task arn returned")
+	}
+	return aws.StringValue(result.Tasks[0].TaskArn), nil
+}
+
+func (e *ECS) getTaskDefinition(clusterName, serviceName string) (string, error) {
+	runningService, err := e.describeService(clusterName, serviceName, false, false, false)
+	if err != nil {
+		return "", nil
+	}
+	for _, d := range runningService.Deployments {
+		if d.Status == "PRIMARY" {
+			return d.TaskDefinition, nil
+		}
+	}
+	return "", errors.New("No task definition found")
+}
+func (e *ECS) describeTaskDefinition(taskDefinitionNameOrArn string) (TaskDefinition, error) {
+	var taskDefinition TaskDefinition
+	svc := ecs.New(session.New())
+	input := &ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: aws.String(taskDefinitionNameOrArn),
+	}
+
+	result, err := svc.DescribeTaskDefinition(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+		return taskDefinition, err
+	}
+
+	taskDefinition.Family = aws.StringValue(result.TaskDefinition.Family)
+	taskDefinition.Revision = aws.Int64Value(result.TaskDefinition.Revision)
+	taskDefinition.ExecutionRoleArn = aws.StringValue(result.TaskDefinition.ExecutionRoleArn)
+	var containerDefinitions []ContainerDefinition
+	for _, cd := range result.TaskDefinition.ContainerDefinitions {
+		var containerDefinition ContainerDefinition
+		containerDefinition.Name = aws.StringValue(cd.Name)
+		containerDefinitions = append(containerDefinitions, containerDefinition)
+	}
+	taskDefinition.ContainerDefinitions = containerDefinitions
+
+	return taskDefinition, nil
+}
+
+type TaskDefinition struct {
+	Family               string                `json:"family"`
+	Revision             int64                 `json:"revision"`
+	ExecutionRoleArn     string                `json:"executionRole"`
+	ContainerDefinitions []ContainerDefinition `json:"containerDefinition""`
+}
+type ContainerDefinition struct {
+	Name string `json:"name"`
+}

@@ -17,6 +17,9 @@
       <li class="nav-item">
         <a class="nav-link" [class.active]="tab == 'scaling'" [routerLink]="" (click)="onClickScaling()">Scaling</a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link" [class.active]="tab == 'runTask'" [routerLink]="" (click)="onClickRunTask()">Run Task</a>
+      </li>
     </ul>
   </div>
   <div class="offset-md-2 col-md-8" *ngIf="tab == 'service'">
@@ -202,6 +205,45 @@
     </div>
   </div>
   <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'scaling'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div *ngIf="!loading">
+      <div class="right-buttons">
+        <ul class="list-inline">
+          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+        </ul>
+      </div>
+      <table class="table center-table">
+        <thead class="thead-default">
+          <tr>
+            <th class="w-25"><strong>Manual Scaling</strong></th>
+            <th class="w-25">Running Count</th>
+            <th class="w-25">Desired Count</th>
+            <th class="w-25">&nbsp;</th>
+          </tr>
+        </thead>
+        <tbody>
+            <td>{{service["serviceName"]}}</td>
+            <td>{{service["runningCount"]}} ({{service["pendingCount"]}} pending)</td>
+            <td *ngIf="editManualScaling">
+              <div class="row align-middle">
+                <div class="col-6">
+                  <input type="text" class="form-control" name="desiredCount" [(ngModel)]="scalingInput.desiredCount" />
+                </div>
+                <div class="col-2">
+                  <button [disabled]="saving" class="btn btn-primary" (click)="saveDesiredCount()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                  <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
+                </div>
+              </div>
+            </td>
+            <td *ngIf="!editManualScaling">
+              {{service["desiredCount"]}}&nbsp;<button class="btn" (click)="editDesiredCount()"><i class="fa fa-pencil align-baseline" aria-hidden="true"></i></button>
+            </td>
+        <tbody>
+      </table>
+    </div>
+  </div>
+  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'runTask'">
     <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
     <span *ngIf="loading" class="sr-only">Loading...</span>
     <div *ngIf="!loading">

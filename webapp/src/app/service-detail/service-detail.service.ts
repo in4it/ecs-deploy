@@ -59,4 +59,7 @@ export class ServiceDetailService {
   setDesiredCount(data) {
     return this.http.post('/ecs-deploy/api/v1/service/scale/'+this.sl.serviceName+'/' + data.desiredCount, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
+  getTaskDefinition() {
+    return this.http.get('/ecs-deploy/api/v1/service/taskdefinition/'+this.sl.serviceName+'/get', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
 }
