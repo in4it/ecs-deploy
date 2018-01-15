@@ -16,6 +16,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -170,8 +171,8 @@ type RunTask struct {
 	ContainerOverrides []RunTaskContainerOverride `json:"containerOverrides"`
 }
 type RunTaskContainerOverride struct {
-	ContainerName string   `json:"containerName"`
-	Command       []string `json:"command"`
+	Name    string   `json:"name"`
+	Command []string `json:"command"`
 }
 
 // SNS payload
@@ -298,11 +299,16 @@ func (a *API) createRoutes() {
 		auth.POST("/service/runtask/:service", a.runTaskHandler)
 		// get taskdefinition
 		auth.GET("/service/describe/:service/taskdefinition", a.describeServiceTaskdefinitionHandler)
+		// get all tasks
+		auth.GET("/service/describe/:service/tasks", a.describeTasksHandler)
 
 		// parameter store
 		auth.GET("/service/parameter/:service/list", a.listServiceParametersHandler)
 		auth.POST("/service/parameter/:service/put", a.putServiceParameterHandler)
 		auth.POST("/service/parameter/:service/delete/:parameter", a.deleteServiceParameterHandler)
+
+		// cloudwatch logs
+		auth.GET("/service/log/:service/get/:taskarn/:container/:start/:end", a.getServiceLogsHandler)
 	}
 
 	// run API
@@ -782,10 +788,12 @@ func (a *API) runTaskHandler(c *gin.Context) {
 	var json RunTask
 	controller := Controller{}
 	if err := c.ShouldBindJSON(&json); err == nil {
-		controller.runTask(c.Param("service"), json)
+		claims := jwt.ExtractClaims(c)
+		json.StartedBy = strings.Replace(claims["id"].(string), "@", "-", -1)
+		taskArn, err := controller.runTask(c.Param("service"), json)
 		if err == nil {
 			c.JSON(200, gin.H{
-				"message": "OK",
+				"taskArn": taskArn,
 			})
 		} else {
 			c.JSON(200, gin.H{
@@ -804,6 +812,47 @@ func (a *API) describeServiceTaskdefinitionHandler(c *gin.Context) {
 	if err == nil {
 		c.JSON(200, gin.H{
 			"taskDefinition": taskDefinition,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) describeTasksHandler(c *gin.Context) {
+	controller := Controller{}
+	taskArns, err := controller.listTasks(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"tasks": taskArns,
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) getServiceLogsHandler(c *gin.Context) {
+	controller := Controller{}
+	layout := "2006-01-02T15:04:05.9Z"
+	start, err := time.Parse(layout, c.Param("start"))
+	if err != nil {
+		c.JSON(200, gin.H{
+			"error": "Can't parse start date: " + err.Error(),
+		})
+		return
+	}
+	end, err := time.Parse(layout, c.Param("end"))
+	if err != nil {
+		c.JSON(200, gin.H{
+			"error": "Can't parse end date",
+		})
+		return
+	}
+	logs, err := controller.getServiceLogs(c.Param("service"), c.Param("taskarn"), c.Param("container"), start, end)
+	if err == nil {
+		c.JSON(200, gin.H{
+			"logs": logs,
 		})
 	} else {
 		c.JSON(200, gin.H{

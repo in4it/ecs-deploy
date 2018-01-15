@@ -62,4 +62,13 @@ export class ServiceDetailService {
   getTaskDefinition() {
     return this.http.get('/ecs-deploy/api/v1/service/describe/'+this.sl.serviceName+'/taskdefinition', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
+  runTask(data) {
+    return this.http.post('/ecs-deploy/api/v1/service/runtask/'+this.sl.serviceName, data, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  describeTasks() {
+    return this.http.get('/ecs-deploy/api/v1/service/describe/'+this.sl.serviceName+'/tasks', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  getServiceLog(params) {
+    return this.http.get('/ecs-deploy/api/v1/service/log/'+this.sl.serviceName+'/get/'+params.taskArn+'/'+params.containerName+'/'+params.start+'/'+params.end, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
 }

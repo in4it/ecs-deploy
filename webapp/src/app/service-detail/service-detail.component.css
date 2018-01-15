@@ -15,6 +15,10 @@ div.right-buttons {
   margin-bottom: 20px;
 }
 
+div.bottom-buttons {
+  margin-top: 30px;
+}
+
 .deploy-arrow {
   padding: 30px;
 }
@@ -22,4 +26,8 @@ div.right-buttons {
 .checkbox-label {
   margin-bottom: 0px;
   padding-top: 5px;
+}
+
+table.run-task {
+  margin-bottom: 30px;
 }
