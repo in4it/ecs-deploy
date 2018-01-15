@@ -242,16 +242,17 @@ func (a *API) createRoutes() {
 		// swagger
 		r.GET(prefix+"/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+		// webhook
+		r.POST(prefix+"/webhook", a.webhookHandler)
+
 		// login handlers
 		r.POST(prefix+"/login", a.authMiddleware.LoginHandler)
+
 		// health with auth
 		auth.GET("/health", a.healthHandler)
 
 		// refresh token
 		auth.GET("/refresh_token", a.authMiddleware.RefreshHandler)
-
-		// webhook
-		auth.POST("/webhook", a.webhookHandler)
 
 		// ECR
 		auth.POST("/ecr/create/:repository", a.ecrCreateHandler)
