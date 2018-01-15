@@ -32,8 +32,10 @@ type DynamoDeployment struct {
 	Status            string
 	Tag               string
 	Scaling           DynamoDeploymentScaling
+	ManualTasksArns   []string
 	TaskDefinitionArn *string
 	DeployData        *Deploy
+	Version           int64
 }
 
 type DynamoDeploymentScaling struct {
@@ -170,7 +172,7 @@ func (s *Service) createService() error {
 func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDeployment, error) {
 	day := time.Now().Format("2006-01-01")
 	month := time.Now().Format("2006-01")
-	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running"}
+	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running", Version: 1}
 
 	lastDeploy, err := s.getLastDeploy()
 	if err != nil {
@@ -360,6 +362,24 @@ func (s *Service) setScalingProperty(desiredCount int64) error {
 	dd.Scaling.DesiredCount = desiredCount
 
 	err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
+
+	if err != nil {
+		serviceLogger.Errorf("Error during put: %v", err.Error())
+		return err
+	}
+	return nil
+}
+func (s *Service) setManualTasksArn(manualTaskArn string) error {
+	dd, err := s.getLastDeploy()
+	dd.ManualTasksArns = append(dd.ManualTasksArns, manualTaskArn)
+	dd.Version = dd.Version + 1
+
+	if dd.Version > 1 {
+		err = s.table.Put(dd).If("$ = ?", "Version", (dd.Version - 1)).Run()
+	} else {
+		// version was not set, don't use version conditional
+		err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
+	}
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Controller struct
@@ -499,24 +500,28 @@ func (c *Controller) setDeployDefaults(d *Deploy) {
 	d.Stickiness.Duration = -1
 }
 
-func (c *Controller) runTask(serviceName string, runTask RunTask) error {
+func (c *Controller) runTask(serviceName string, runTask RunTask) (string, error) {
 	service := newService()
 	service.serviceName = serviceName
+	var taskArn string
 	clusterName, err := service.getClusterName()
 	if err != nil {
-		return err
+		return taskArn, err
 	}
 	ecs := ECS{}
-	containerInstances, err := ecs.listContainerInstances(clusterName)
-	if err != nil {
-		return err
-	}
 	taskDefinition, err := ecs.getTaskDefinition(clusterName, serviceName)
 	if err != nil {
-		return err
+		return taskArn, err
 	}
-	ecs.runTask(clusterName, taskDefinition, containerInstances, runTask)
-	return nil
+	taskArn, err = ecs.runTask(clusterName, taskDefinition, runTask)
+	if err != nil {
+		return taskArn, err
+	}
+	err = service.setManualTasksArn(taskArn)
+	if err != nil {
+		return taskArn, err
+	}
+	return taskArn, nil
 }
 func (c *Controller) describeTaskDefinition(serviceName string) (TaskDefinition, error) {
 	var taskDefinition TaskDefinition
@@ -536,4 +541,34 @@ func (c *Controller) describeTaskDefinition(serviceName string) (TaskDefinition,
 		return taskDefinition, err
 	}
 	return taskDefinition, nil
+}
+func (c *Controller) listTasks(serviceName string) ([]RunningTask, error) {
+	var tasks []RunningTask
+	var taskArns []*string
+	service := newService()
+	service.serviceName = serviceName
+	clusterName, err := service.getClusterName()
+	if err != nil {
+		return tasks, err
+	}
+	ecs := ECS{}
+	runningTasks, err := ecs.listTasks(clusterName, serviceName, "RUNNING", "family")
+	if err != nil {
+		return tasks, err
+	}
+	stoppedTasks, err := ecs.listTasks(clusterName, serviceName, "STOPPED", "family")
+	if err != nil {
+		return tasks, err
+	}
+	taskArns = append(taskArns, runningTasks...)
+	taskArns = append(taskArns, stoppedTasks...)
+	tasks, err = ecs.describeTasks(clusterName, taskArns)
+	if err != nil {
+		return tasks, err
+	}
+	return tasks, nil
+}
+func (c *Controller) getServiceLogs(serviceName, taskArn, containerName string, start, end time.Time) (CloudWatchLog, error) {
+	cloudwatch := CloudWatch{}
+	return cloudwatch.getLogEventsByTime(getEnv("CLOUDWATCH_LOGS_PREFIX", "")+"-"+getEnv("AWS_ACCOUNT_ENV", ""), containerName+"/"+containerName+"/"+taskArn, start, end, "")
 }

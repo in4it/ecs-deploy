@@ -23,6 +23,7 @@ export class ServiceDetailComponent implements OnInit {
   parameters: any = {};
   loading: boolean = false;
   saving: boolean = false;
+  loadingLogs: boolean = false;
 
   selectedParameter: string = "";
   newParameter: boolean = false;
@@ -34,7 +35,10 @@ export class ServiceDetailComponent implements OnInit {
   editManualScaling: boolean = false;
   scalingInput: any = {};
 
-  runTaskInput: Array<any> = [];
+  runTaskInput: any = {};
+  runTaskConfig: any = { "maxExecutionTime": 900};
+
+  logsInput: any = {};
 
   tab = "service"
 
@@ -89,15 +93,64 @@ export class ServiceDetailComponent implements OnInit {
       if("taskDefinition" in data) {
         this.service["taskDefinition"] = data["taskDefinition"]
         this.service["taskDefinition"]["containerDefinitions"].forEach((container, index) => {
-          console.log(container)
           this.runTaskInput[container["name"]] = {}
-          if container["name"] == this.service.serviceName {
+          if(container["name"] == this.service.serviceName) {
             this.runTaskInput[container["name"]]["enabled"] = true
           } else {
             this.runTaskInput[container["name"]]["enabled"] = false
           }
-        }
+        })
       }
+    });
+  }
+  onClickLogs(loading) {
+    this.tab = "logs"
+    this.loading = loading
+    this.sds.getTaskDefinition().subscribe(taskData => {
+      if("taskDefinition" in taskData) {
+        this.service["taskDefinition"] = taskData["taskDefinition"]
+        this.logsInput["containers"] = [{ "id": "", "name": "Select Container" }]
+        if(!("selectedContainer" in this.logsInput)) {
+          this.logsInput["selectedContainer"] = this.logsInput["containers"][0]
+        }
+        this.service["taskDefinition"]["containerDefinitions"].forEach((container, index) => {
+          this.logsInput["containers"].push({ "id": container["name"], "name": container["name"] })
+        })
+      }
+      this.sds.describeTasks().subscribe(data => {
+        this.loading = false
+        this.logsInput["taskArns"] = [{ "id": "", "name": "Select Task" }]
+        data["tasks"].forEach((task, index) => {
+          let s = task["taskArn"].split("/")
+          let startedBy
+          if(task["startedBy"].substring(0, 3) == "ecs") {
+            startedBy = "ecs"
+          } else {
+            let b = task["startedBy"].split("-")
+            startedBy = b[0]
+          }
+          let startedAt = moment(task["startedAt"])
+          let n = s[1] + " (" + task["lastStatus"] + ")"
+          if(task["lastStatus"] == "PENDING") {
+            n = n + ", started by " + startedBy
+          }  else {
+            n = n + ", started " + startedAt.fromNow() + " by " + startedBy
+          }
+          this.logsInput["taskArns"].push(
+            { 
+              "id": s[1],
+              "name": n,
+            }
+          )
+          // check whether there's already a taskArn selected, which matches the id
+          //if("selectedTaskArn" in this.logsInput && this.logsInput["selectedTaskArn"] == s[1]) {
+          //  this.logsInput["selectedTaskArn"] = this.logsInput["taskArns"][this.logsInput["taskArns"].length-1]
+          //}
+        })
+        if(!("selectedTaskArn" in this.logsInput)) {
+          this.logsInput["selectedTaskArn"] = this.logsInput["taskArns"][0]
+        }
+      })
     });
   }
   refresh() {
@@ -252,5 +305,101 @@ export class ServiceDetailComponent implements OnInit {
       });
     }
   }
-
+  runTask(): void {
+    let valid = false
+    let runTaskData = {
+      "containerOverrides": []
+    }
+    let enabledContainers = []
+    console.log(this.runTaskInput)
+    this.service["taskDefinition"]["containerDefinitions"].forEach((v, i) => {
+      let containerName = v.name
+      let container = this.runTaskInput[containerName]
+      if(container["enabled"]) {
+        if("containerCommand" in container) {
+          valid = true
+          enabledContainers.push(containerName)
+        }
+        if(container["environmentVariables"]) {
+          runTaskData["containerOverrides"].push({
+            "name": containerName,
+            "command": ["bash", "-c", "eval $(aws-env) && " + container["containerCommand"]]
+          })
+        } else {
+          runTaskData["containerOverrides"].push({
+            "name": containerName,
+            "command": ["sh", "-c", container["containerCommand"]]
+          })
+        }
+      } else {
+        // check if essential, otherwise sleep until timeout
+        if(v.essential) {
+          runTaskData["containerOverrides"].push({
+            "name": containerName,
+            "command": ["sh", "-c", "echo 'Container disabled' && sleep "+(this.runTaskConfig.maxExecutionTime+60) ]
+          })
+        } else {
+          runTaskData["containerOverrides"].push({
+            "name": containerName,
+            "command": ["sh", "-c", "echo 'Container disabled'"]
+          })
+        }
+      }
+    })
+    if(valid) {
+      this.saving = true
+      this.sds.runTask(runTaskData).subscribe(data => {
+        if("taskArn" in data) {
+          console.log("Taskarn: ", data["taskArn"])
+        } else {
+          this.alertService.error(data["error"]);
+        }
+        let t = data["taskArn"].split("/")
+        this.saving = false
+        this.logsInput["selectedContainer"] = { "id": enabledContainers[0], "name": enabledContainers[0] }
+        this.logsInput["selectedTaskArn"] =  { "id": t[1] }
+        this.onClickLogs(true)
+        this.updateLogs()
+      });
+    } else {
+      this.alertService.error("Invalid task configuration")
+    }
+  }
+  updateLogs(): void {
+    if(this.logsInput["selectedContainer"]["id"] == "" || this.logsInput["selectedTaskArn"]["id"] == "") {
+      return
+    }
+    let params = {
+      "containerName": this.logsInput["selectedContainer"]["id"],
+      "taskArn": this.logsInput["selectedTaskArn"]["id"],
+      "start": moment().subtract(1, 'day').toISOString(),
+      "end": moment().toISOString(),
+    }
+    this.loadingLogs = true
+    delete this.service["logs"]
+    this.sds.getServiceLog(params).subscribe(data => {
+      this.loadingLogs = false
+      if("error" in data) {
+        if(data["error"].startsWith("ResourceNotFoundException")) {
+          this.service["logs"] = { "count": 0 }
+        } else {
+          this.alertService.error(data["error"]);
+        }
+        return
+      }
+      this.service["logs"] = data["logs"]
+      if(!this.service["logs"]["logEvents"]) {
+        this.service["logs"]["count"] = 0
+      } else {
+        this.service["logs"]["count"] = this.service["logs"]["logEvents"].length
+      }
+    });
+  }
+  refreshLogs(): void {
+    this.onClickLogs(false)
+    this.updateLogs()
+  }
+  compareByID(v1, v2) {
+    return v1 && v2 && v1["id"] == v2["id"];
+  }
 }

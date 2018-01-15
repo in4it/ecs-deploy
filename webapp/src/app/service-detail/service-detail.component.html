@@ -9,7 +9,10 @@
         <a class="nav-link" [class.active]="tab == 'versions'" [routerLink]="" (click)="onClickVersions()">Versions</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" [class.active]="tab == 'events'" [routerLink]="" (click)="onClickEvents()">Event logs</a>
+        <a class="nav-link" [class.active]="tab == 'events'" [routerLink]="" (click)="onClickEvents()">Event Logs</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" [class.active]="tab == 'logs'" [routerLink]="" (click)="onClickLogs(true)">App Logs</a>
       </li>
       <li class="nav-item">
         <a class="nav-link" [class.active]="tab == 'parameters'" [routerLink]="" (click)="onClickParameters()">Parameters</a>
@@ -247,13 +250,34 @@
     <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
     <span *ngIf="loading" class="sr-only">Loading...</span>
     <div *ngIf="!loading">
+      <h3>General configuration</h3>
+      <table class="table center-table run-task">
+        <thead class="thead-default">
+          <tr>
+            <th class="w-25">Property</th>
+            <th class="w-75">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Max. execution time (sec.)</td>
+            <td>
+              <div class="row">
+                <div class="col-2">
+                  <input type="text" class="form-control" name="maxExecutionTime" [(ngModel)]="runTaskConfig.maxExecutionTime" />
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
       <div *ngFor="let container of service['taskDefinition']['containerDefinitions']">
         <h3>{{container.name}}</h3>
-        <table class="table center-table" *ngIf="runTaskInput[container.name].enabled">
+        <table class="table center-table run-task" *ngIf="runTaskInput[container.name].enabled">
           <thead class="thead-default">
             <tr>
-              <th class="w-25">Name</th>
-              <th class="w-75">Property</th>
+              <th class="w-25">Property</th>
+              <th class="w-75">Value</th>
             </tr>
           </thead>
           <tbody>
@@ -261,27 +285,84 @@
               <td>Configuration</td>
               <td>
                 <div class="row">
-                  <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enabled
-                  </label>
+                  <div class="col-6">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enabled
+                    </label>
+                  </div>
                 </div>
                 <div class="row">
-                  <label class="checkbox-label">
-                    <input type="checkbox" [(ngModel)]="runTaskInput[container.name].environmentVariables" value="true" checked="true"/>&nbsp;Load environment variables
-                  </label>
+                  <div class="col-6">
+                    <label class="checkbox-label">
+                      <input type="checkbox" [(ngModel)]="runTaskInput[container.name].environmentVariables" value="true" checked="true"/>&nbsp;Load environment variables
+                    </label>
+                  </div>
                 </div>
               </td>
             </tr>
             <tr>
               <td>Command</td>
-              <td><input type="text" class="form-control" name="containerCommand" [(ngModel)]="runTaskInput.containerCommand" /></td>
+              <td>
+                <div class="row">
+                  <div class="col-12">
+                    <input type="text" class="form-control" name="containerCommand" [(ngModel)]="runTaskInput[container.name].containerCommand" placeHolder="echo &quot;this is a command&quot;" />
+                  </div>
+                </div>
+              </td>
             </tr>
           <tbody>
         </table>
         <label class="checkbox-label" *ngIf="!runTaskInput[container.name].enabled">
-          <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enabled <br />
+          <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enable <br />
         </label>
       </div>
+      <div class="bottom-buttons">
+        <button [disabled]="saving" class="btn btn-primary" (click)="runTask()"><i class="fa fa-play" aria-hidden="true"></i>&nbsp;&nbsp;Run Task</button>
+        <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
+      </div>
+    </div>
+  </div>
+  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'logs'">
+    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+    <span *ngIf="loading" class="sr-only">Loading...</span>
+    <div *ngIf="!loading">
+      <div class="form-group row">
+        <div class="col-md-8">
+          <select class="form-control" [(ngModel)]="logsInput.selectedTaskArn" (ngModelChange)="updateLogs()" [compareWith]="compareByID">
+            <option *ngFor="let t of logsInput['taskArns']" [ngValue]="t">{{t.name}}</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <select class="form-control" [(ngModel)]="logsInput.selectedContainer" (ngModelChange)="updateLogs()" [compareWith]="compareByID">
+            <option *ngFor="let c of logsInput['containers']" [ngValue]="c">{{c.name}}</option>
+          </select>
+        </div>
+      </div>
+      <div class="right-buttons">
+        <ul class="list-inline">
+          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+        </ul>
+      </div>
+      <i *ngIf="loadingLogs" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+      <span *ngIf="loadingLogs" class="sr-only">Loading...</span>
+      <table class="table center-table" *ngIf="service['logs']">
+        <thead class="thead-default">
+          <tr>
+            <th class="w-25">Timestamp</th>
+            <th class="w-75">Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let e of service.logs.logEvents">
+            <td>{{e.timestamp}}</td>
+            <td>{{e.message}}</td>
+          </tr>
+          <tr *ngIf="service.logs.count == 0">
+            <td>&nbsp;</td>
+            <td>No messages to show</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>

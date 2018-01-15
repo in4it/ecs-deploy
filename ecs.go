@@ -40,7 +40,8 @@ type TaskDefinition struct {
 	ContainerDefinitions []ContainerDefinition `json:"containerDefinitions"`
 }
 type ContainerDefinition struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Essential bool   `json:"essential"`
 }
 
 // create cluster
@@ -839,12 +840,12 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string, showE
 				}
 			}
 			if showTasks {
-				taskArns, err := e.listTasks(clusterName, *service.ServiceName, "RUNNING")
+				taskArns, err := e.listTasks(clusterName, *service.ServiceName, "RUNNING", "service")
 				if err != nil {
 					return rss, err
 				}
 				if showStoppedTasks {
-					taskArnsStopped, err := e.listTasks(clusterName, *service.ServiceName, "STOPPED")
+					taskArnsStopped, err := e.listTasks(clusterName, *service.ServiceName, "STOPPED", "service")
 					if err != nil {
 						return rss, err
 					}
@@ -863,13 +864,19 @@ func (e *ECS) describeServices(clusterName string, serviceNames []*string, showE
 }
 
 // list tasks
-func (e *ECS) listTasks(clusterName, serviceName, desiredStatus string) ([]*string, error) {
+func (e *ECS) listTasks(clusterName, name, desiredStatus, filterBy string) ([]*string, error) {
 	svc := ecs.New(session.New())
 	var tasks []*string
 
 	input := &ecs.ListTasksInput{
-		Cluster:     aws.String(clusterName),
-		ServiceName: aws.String(serviceName),
+		Cluster: aws.String(clusterName),
+	}
+	if filterBy == "service" {
+		input.SetServiceName(name)
+	} else if filterBy == "family" {
+		input.SetFamily(name)
+	} else {
+		return tasks, errors.New("Invalid filterBy")
 	}
 	if desiredStatus == "STOPPED" {
 		input.SetDesiredStatus(desiredStatus)
@@ -1027,14 +1034,13 @@ func (e *ECS) manualScaleService(clusterName, serviceName string, desiredCount i
 }
 
 // run one-off task
-func (e *ECS) runTask(clusterName, taskDefinition string, containerInstances []string, runTask RunTask) (string, error) {
+func (e *ECS) runTask(clusterName, taskDefinition string, runTask RunTask) (string, error) {
 	var taskArn string
 	svc := ecs.New(session.New())
-	input := &ecs.StartTaskInput{
-		Cluster:            aws.String(clusterName),
-		TaskDefinition:     aws.String(taskDefinition),
-		ContainerInstances: aws.StringSlice(containerInstances),
-		StartedBy:          aws.String(runTask.StartedBy),
+	input := &ecs.RunTaskInput{
+		Cluster:        aws.String(clusterName),
+		TaskDefinition: aws.String(taskDefinition),
+		StartedBy:      aws.String(runTask.StartedBy),
 	}
 
 	taskOverride := &ecs.TaskOverride{}
@@ -1042,15 +1048,15 @@ func (e *ECS) runTask(clusterName, taskDefinition string, containerInstances []s
 	for _, co := range runTask.ContainerOverrides {
 		containerOverrides = append(containerOverrides, &ecs.ContainerOverride{
 			Command: aws.StringSlice(co.Command),
-			Name:    aws.String(co.ContainerName),
+			Name:    aws.String(co.Name),
 		})
 	}
 	taskOverride.SetContainerOverrides(containerOverrides)
 	input.SetOverrides(taskOverride)
 
-	ecsLogger.Debugf("Running ad-hoc task using taskdef %s", taskDefinition)
+	ecsLogger.Debugf("Running ad-hoc task using taskdef %s and taskoverride: %+v", taskDefinition, taskOverride)
 
-	result, err := svc.StartTask(input)
+	result, err := svc.RunTask(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			ecsLogger.Errorf(aerr.Error())
@@ -1101,6 +1107,7 @@ func (e *ECS) describeTaskDefinition(taskDefinitionNameOrArn string) (TaskDefini
 	for _, cd := range result.TaskDefinition.ContainerDefinitions {
 		var containerDefinition ContainerDefinition
 		containerDefinition.Name = aws.StringValue(cd.Name)
+		containerDefinition.Essential = aws.BoolValue(cd.Essential)
 		containerDefinitions = append(containerDefinitions, containerDefinition)
 	}
 	taskDefinition.ContainerDefinitions = containerDefinitions
