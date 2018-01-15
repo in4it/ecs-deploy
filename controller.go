@@ -498,3 +498,42 @@ func (c *Controller) setDeployDefaults(d *Deploy) {
 	d.DeregistrationDelay = -1
 	d.Stickiness.Duration = -1
 }
+
+func (c *Controller) runTask(serviceName string, runTask RunTask) error {
+	service := newService()
+	service.serviceName = serviceName
+	clusterName, err := service.getClusterName()
+	if err != nil {
+		return err
+	}
+	ecs := ECS{}
+	containerInstances, err := ecs.listContainerInstances(clusterName)
+	if err != nil {
+		return err
+	}
+	taskDefinition, err := ecs.getTaskDefinition(clusterName, serviceName)
+	if err != nil {
+		return err
+	}
+	ecs.runTask(clusterName, taskDefinition, containerInstances, runTask)
+	return nil
+}
+func (c *Controller) describeTaskDefinition(serviceName string) (TaskDefinition, error) {
+	var taskDefinition TaskDefinition
+	service := newService()
+	service.serviceName = serviceName
+	clusterName, err := service.getClusterName()
+	if err != nil {
+		return taskDefinition, err
+	}
+	ecs := ECS{}
+	taskDefinitionName, err := ecs.getTaskDefinition(clusterName, serviceName)
+	if err != nil {
+		return taskDefinition, err
+	}
+	taskDefinition, err = ecs.describeTaskDefinition(taskDefinitionName)
+	if err != nil {
+		return taskDefinition, err
+	}
+	return taskDefinition, nil
+}

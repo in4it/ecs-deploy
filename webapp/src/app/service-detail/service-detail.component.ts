@@ -79,6 +79,9 @@ export class ServiceDetailComponent implements OnInit {
   onClickScaling() {
     this.tab = "scaling"
   }
+  onClickRunTask() {
+    this.tab = "runTask"
+  }
   refresh() {
     this.loading = true
     this.sds.getService(this.service.serviceName).subscribe(data => {

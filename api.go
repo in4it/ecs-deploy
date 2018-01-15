@@ -164,6 +164,16 @@ type RunningTaskContainer struct {
 	Reason       string `json:"reason"`
 }
 
+// "Run ad-hoc task" type
+type RunTask struct {
+	StartedBy          string                     `json:"startedBy"`
+	ContainerOverrides []RunTaskContainerOverride `json:"containerOverrides"`
+}
+type RunTaskContainerOverride struct {
+	ContainerName string   `json:"containerName"`
+	Command       []string `json:"command"`
+}
+
 // SNS payload
 type SNSPayload struct {
 	Message          string `json:"Message"`
@@ -284,12 +294,15 @@ func (a *API) createRoutes() {
 		auth.GET("/service/describe/:service/versions", a.describeServiceVersionsHandler)
 		// scale service
 		auth.POST("/service/scale/:service/:count", a.scaleServiceHandler)
+		// run task
+		auth.POST("/service/runtask/:service", a.runTaskHandler)
+		// get taskdefinition
+		auth.GET("/service/describe/:service/taskdefinition", a.describeServiceTaskdefinitionHandler)
 
 		// parameter store
-		auth.GET("/service/parameter/:service/list", a.listServiceParameters)
-		auth.POST("/service/parameter/:service/put", a.putServiceParameter)
-		auth.POST("/service/parameter/:service/delete/:parameter", a.deleteServiceParameter)
-
+		auth.GET("/service/parameter/:service/list", a.listServiceParametersHandler)
+		auth.POST("/service/parameter/:service/put", a.putServiceParameterHandler)
+		auth.POST("/service/parameter/:service/delete/:parameter", a.deleteServiceParameterHandler)
 	}
 
 	// run API
@@ -641,7 +654,7 @@ func (a *API) redirectFrontendHandler(c *gin.Context) {
 	c.Redirect(http.StatusMovedPermanently, getEnv("URL_PREFIX", "")+"/webapp/")
 }
 
-func (a *API) listServiceParameters(c *gin.Context) {
+func (a *API) listServiceParametersHandler(c *gin.Context) {
 	var creds string
 	claims := jwt.ExtractClaims(c)
 	controller := Controller{}
@@ -662,7 +675,7 @@ func (a *API) listServiceParameters(c *gin.Context) {
 		})
 	}
 }
-func (a *API) putServiceParameter(c *gin.Context) {
+func (a *API) putServiceParameterHandler(c *gin.Context) {
 	var json DeployServiceParameter
 	var creds string
 	claims := jwt.ExtractClaims(c)
@@ -690,7 +703,7 @@ func (a *API) putServiceParameter(c *gin.Context) {
 		})
 	}
 }
-func (a *API) deleteServiceParameter(c *gin.Context) {
+func (a *API) deleteServiceParameterHandler(c *gin.Context) {
 	var creds string
 	claims := jwt.ExtractClaims(c)
 	controller := Controller{}
@@ -755,6 +768,39 @@ func (a *API) webhookHandler(c *gin.Context) {
 	if err == nil {
 		c.JSON(200, gin.H{
 			"message": "OK",
+		})
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) runTaskHandler(c *gin.Context) {
+	var json RunTask
+	controller := Controller{}
+	if err := c.ShouldBindJSON(&json); err == nil {
+		controller.runTask(c.Param("service"), json)
+		if err == nil {
+			c.JSON(200, gin.H{
+				"message": "OK",
+			})
+		} else {
+			c.JSON(200, gin.H{
+				"error": err.Error(),
+			})
+		}
+	} else {
+		c.JSON(200, gin.H{
+			"error": err.Error(),
+		})
+	}
+}
+func (a *API) describeServiceTaskdefinitionHandler(c *gin.Context) {
+	controller := Controller{}
+	taskDefinition, err := controller.describeTaskDefinition(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"taskDefinition": taskDefinition,
 		})
 	} else {
 		c.JSON(200, gin.H{
