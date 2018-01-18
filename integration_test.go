@@ -229,6 +229,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 		}
 		if err != nil {
 			t.Errorf("Fatal Error: %v\n", err)
+			panic(err)
 		}
 	}
 
