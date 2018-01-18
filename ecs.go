@@ -728,6 +728,15 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 		}
 		return nil
 	}
+	if len(runningService.Tasks) == 0 {
+		ecsLogger.Debugf("Deployment failed: no tasks running")
+		service.setDeploymentStatus(dd, "failed")
+		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	for _, t := range runningService.Tasks {
 		if t.TaskDefinitionArn == *dd.TaskDefinitionArn && t.LastStatus != "RUNNING" {
 			ecsLogger.Debugf("Deployment failed: found task with taskdefinition %v and status %v (expected RUNNING)", t.TaskDefinitionArn, t.LastStatus)
