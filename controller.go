@@ -395,6 +395,7 @@ func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResul
 		ServiceName:       serviceName,
 		DeploymentTime:    dd.Time,
 		Status:            dd.Status,
+		DeployError:       dd.DeployError,
 		TaskDefinitionArn: *dd.TaskDefinitionArn,
 	}
 	return ret, nil

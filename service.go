@@ -30,6 +30,7 @@ type DynamoDeployment struct {
 	Day               string    `index:"DayIndex,hash"`
 	Month             string    `index:"MonthIndex,hash"`
 	Status            string
+	DeployError       string
 	Tag               string
 	Scaling           DynamoDeploymentScaling
 	ManualTasksArns   []string
@@ -265,6 +266,19 @@ func (s *Service) setDeploymentStatus(d *DynamoDeployment, status string) error 
 
 	serviceLogger.Debugf("Setting status of service %v_%v to %v", d.ServiceName, d.Time.Format("2006-01-02T15:04:05-0700"), status)
 	d.Status = status
+	err := s.table.Put(d).Run()
+
+	if err != nil {
+		serviceLogger.Errorf("Error during put: %v", err.Error())
+		return err
+	}
+	return nil
+}
+func (s *Service) setDeploymentStatusWithReason(d *DynamoDeployment, status, reason string) error {
+
+	serviceLogger.Debugf("Setting status of service %v_%v to %v", d.ServiceName, d.Time.Format("2006-01-02T15:04:05-0700"), status)
+	d.Status = status
+	d.DeployError = reason
 	err := s.table.Put(d).Run()
 
 	if err != nil {

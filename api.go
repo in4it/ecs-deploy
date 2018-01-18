@@ -96,6 +96,7 @@ type DeployResult struct {
 	ClusterName       string    `json:"clusterName"`
 	TaskDefinitionArn string    `json:"taskDefinitionArn"`
 	Status            string    `json:"status"`
+	DeployError       string    `json:"deployError"`
 	DeploymentTime    time.Time `json:"deploymentTime"`
 }
 type DeployServiceParameter struct {
