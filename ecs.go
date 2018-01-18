@@ -14,6 +14,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -697,13 +698,14 @@ func (e *ECS) waitUntilServicesStable(serviceName string) error {
 	return nil
 }
 func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
+	var failed bool
 	service := newService()
 	// check whether service exists, otherwise wait might give error
 	err := e.waitUntilServicesStable(dd.ServiceName)
 	ecsLogger.Debugf("Waiting for service %v to become stable finished", dd.ServiceName)
 	if err != nil {
 		ecsLogger.Debugf("waitUntilServiceStable didn't succeed: %v", err)
-		service.setDeploymentStatus(dd, "failed")
+		failed = true
 	}
 	// check whether deployment has latest task definition
 	runningService, err := e.describeService(dd.DeployData.Cluster, dd.ServiceName, false, true, true)
@@ -711,8 +713,9 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 		return err
 	}
 	if len(runningService.Deployments) != 1 {
-		ecsLogger.Debugf("Deployment failed: deployment still running")
-		service.setDeploymentStatus(dd, "failed")
+		reason := "Deployment failed: deployment was still running after 10 minutes"
+		ecsLogger.Debugf(reason)
+		service.setDeploymentStatusWithReason(dd, "failed", reason)
 		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
@@ -720,8 +723,9 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 		return nil
 	}
 	if runningService.Deployments[0].TaskDefinition != *dd.TaskDefinitionArn {
-		ecsLogger.Debugf("Deployment failed: Still running old task definition")
-		service.setDeploymentStatus(dd, "failed")
+		reason := "Deployment failed: Still running old task definition"
+		ecsLogger.Debugf(reason)
+		service.setDeploymentStatusWithReason(dd, "failed", reason)
 		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
@@ -729,8 +733,9 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 		return nil
 	}
 	if len(runningService.Tasks) == 0 {
-		ecsLogger.Debugf("Deployment failed: no tasks running")
-		service.setDeploymentStatus(dd, "failed")
+		reason := "Deployment failed: no tasks running"
+		ecsLogger.Debugf(reason)
+		service.setDeploymentStatusWithReason(dd, "failed", reason)
 		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
@@ -739,8 +744,9 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	}
 	for _, t := range runningService.Tasks {
 		if t.TaskDefinitionArn == *dd.TaskDefinitionArn && t.LastStatus != "RUNNING" {
-			ecsLogger.Debugf("Deployment failed: found task with taskdefinition %v and status %v (expected RUNNING)", t.TaskDefinitionArn, t.LastStatus)
-			service.setDeploymentStatus(dd, "failed")
+			reason := fmt.Sprintf("Deployment failed: found task with taskdefinition %v and status %v (expected RUNNING)", t.TaskDefinitionArn, t.LastStatus)
+			ecsLogger.Debugf(reason)
+			service.setDeploymentStatusWithReason(dd, "failed", reason)
 			err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 			if err != nil {
 				return err
@@ -749,7 +755,10 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 		}
 		ecsLogger.Debugf("Found task with taskdefinition %v and status %v", t.TaskDefinitionArn, t.LastStatus)
 	}
-
+	if failed {
+		service.setDeploymentStatusWithReason(dd, "failed", "Deployment timed out")
+		return nil
+	}
 	// set success
 	service.setDeploymentStatus(dd, "success")
 	return nil
