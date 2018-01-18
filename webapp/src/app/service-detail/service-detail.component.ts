@@ -106,6 +106,17 @@ export class ServiceDetailComponent implements OnInit {
   onClickLogs(loading) {
     this.tab = "logs"
     this.loading = loading
+    // default timeranges
+    this.logsInput["timerange"] = [
+      { id: "last-24h", name: "Last 24 hours" },
+      { id: "last-7d", name: "Last 7 days" },
+      { id: "last-14d", name: "Last 14 days" },
+      { id: "last-30d", name: "Last 30 days" },
+      { id: "last-1y", name: "Last 1 year" },
+    ]
+    if(!("selectedTimerange" in this.logsInput)) {
+      this.logsInput.selectedTimerange = this.logsInput["timerange"][0]
+    }
     this.sds.getTaskDefinition().subscribe(taskData => {
       if("taskDefinition" in taskData) {
         this.service["taskDefinition"] = taskData["taskDefinition"]
@@ -142,10 +153,6 @@ export class ServiceDetailComponent implements OnInit {
               "name": n,
             }
           )
-          // check whether there's already a taskArn selected, which matches the id
-          //if("selectedTaskArn" in this.logsInput && this.logsInput["selectedTaskArn"] == s[1]) {
-          //  this.logsInput["selectedTaskArn"] = this.logsInput["taskArns"][this.logsInput["taskArns"].length-1]
-          //}
         })
         if(!("selectedTaskArn" in this.logsInput)) {
           this.logsInput["selectedTaskArn"] = this.logsInput["taskArns"][0]
@@ -366,13 +373,31 @@ export class ServiceDetailComponent implements OnInit {
     }
   }
   updateLogs(): void {
-    if(this.logsInput["selectedContainer"]["id"] == "" || this.logsInput["selectedTaskArn"]["id"] == "") {
+    if(this.logsInput["selectedContainer"]["id"] == "" || this.logsInput["selectedTaskArn"]["id"] == "" || this.logsInput["selectedTimerange"]["id"] == "") {
       return
+    }
+    let start
+    switch(this.logsInput["selectedTimerange"]["id"]) {
+      case "last-7d": {
+        start = moment().subtract(7, 'days').toISOString()
+      }
+      case "last-14d": {
+        start = moment().subtract(14, 'days').toISOString()
+      }
+      case "last-30d": {
+        start = moment().subtract(30, 'days').toISOString()
+      }
+      case "last-1y": {
+        start = moment().subtract(1, 'year').toISOString()
+      }
+      default: {
+        start = moment().subtract(1, 'day').toISOString()
+      }
     }
     let params = {
       "containerName": this.logsInput["selectedContainer"]["id"],
       "taskArn": this.logsInput["selectedTaskArn"]["id"],
-      "start": moment().subtract(1, 'day').toISOString(),
+      "start": start,
       "end": moment().toISOString(),
     }
     this.loadingLogs = true
