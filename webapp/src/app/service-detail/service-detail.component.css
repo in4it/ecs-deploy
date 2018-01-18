@@ -31,3 +31,7 @@ div.bottom-buttons {
 table.run-task {
   margin-bottom: 30px;
 }
+div.logs {
+    max-height: 500px;
+    overflow-y: auto; 
+}

@@ -338,6 +338,13 @@
           </select>
         </div>
       </div>
+      <div class="form-group row">
+        <div class="offset-md-8 col-md-4">
+          <select class="form-control" [(ngModel)]="logsInput.selectedTimerange" (ngModelChange)="updateLogs()">
+            <option *ngFor="let t of logsInput['timerange']" [ngValue]="t">{{t.name}}</option>
+          </select>
+        </div>
+      </div>
       <div class="right-buttons">
         <ul class="list-inline">
           <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
@@ -345,24 +352,31 @@
       </div>
       <i *ngIf="loadingLogs" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
       <span *ngIf="loadingLogs" class="sr-only">Loading...</span>
-      <table class="table center-table" *ngIf="service['logs']">
-        <thead class="thead-default">
-          <tr>
-            <th class="w-25">Timestamp</th>
-            <th class="w-75">Message</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let e of service.logs.logEvents">
-            <td>{{e.timestamp}}</td>
-            <td>{{e.message}}</td>
-          </tr>
-          <tr *ngIf="service.logs.count == 0">
-            <td>&nbsp;</td>
-            <td>No messages to show</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-responsive logs">
+        <table class="table center-table" *ngIf="service['logs']">
+          <thead class="thead-default">
+            <tr>
+              <th class="w-30">Timestamp</th>
+              <th class="w-70">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of service.logs.logEvents">
+              <td>{{e.timestamp}}</td>
+              <td>{{e.message}}</td>
+            </tr>
+            <tr *ngIf="service.logs.count == 0">
+              <td>&nbsp;</td>
+              <td>No messages to show</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="right-buttons" *ngIf="service['logs'] &amp;&amp; service.logs.count > 10">
+        <ul class="list-inline">
+          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+        </ul>
+      </div>
     </div>
   </div>
 </div>
