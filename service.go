@@ -171,7 +171,7 @@ func (s *Service) createService() error {
 	return nil
 }
 func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDeployment, error) {
-	day := time.Now().Format("2006-01-01")
+	day := time.Now().Format("2006-01-02")
 	month := time.Now().Format("2006-01")
 	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running", Version: 1}
 
