@@ -223,7 +223,7 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	serviceLogger.Debugf("Retrieved last deployment %v at %v", dd.ServiceName, dd.Time)
 	return &dd, nil
 }
-func (s *Service) getDeploys(action string, limit int) ([]DynamoDeployment, error) {
+func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
 	// add date to table
 	var dd []DynamoDeployment
@@ -231,12 +231,24 @@ func (s *Service) getDeploys(action string, limit int) ([]DynamoDeployment, erro
 	case action == "byMonth":
 		for i := 0; i < 3; i++ {
 			serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, i*-1, 0).Format("2006-01"))
-			err := s.table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dd)
+			err := s.table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(limit).All(&dd)
 			dds = append(dds, dd...)
 			if err != nil {
 				return dds, err
 			}
-			if len(dds) >= limit {
+			if int64(len(dds)) >= limit {
+				return dds[0:limit], nil
+			}
+		}
+	case action == "byDay":
+		for i := 0; i < 3; i++ {
+			serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02"))
+			err := s.table.Get("Day", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02")).Index("DayIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(limit).All(&dd)
+			dds = append(dds, dd...)
+			if err != nil {
+				return dds, err
+			}
+			if int64(len(dds)) >= limit {
 				return dds[0:limit], nil
 			}
 		}
@@ -262,11 +274,19 @@ func (s *Service) getDeploysForService(serviceName string) ([]DynamoDeployment, 
 	return dds, err
 }
 
-func (s *Service) setDeploymentStatus(d *DynamoDeployment, status string) error {
+func (s *Service) setDeploymentStatus(dd *DynamoDeployment, status string) error {
+	var err error
+	dd.Version = dd.Version + 1
+	dd.Status = status
 
-	serviceLogger.Debugf("Setting status of service %v_%v to %v", d.ServiceName, d.Time.Format("2006-01-02T15:04:05-0700"), status)
-	d.Status = status
-	err := s.table.Put(d).Run()
+	serviceLogger.Debugf("Setting status of service %v_%v to %v", dd.ServiceName, dd.Time.Format("2006-01-02T15:04:05-0700"), status)
+
+	if dd.Version > 1 {
+		err = s.table.Put(dd).If("$ = ?", "Version", (dd.Version - 1)).Run()
+	} else {
+		// version was not set, don't use version conditional
+		err = s.table.Put(dd).Run()
+	}
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
@@ -274,12 +294,20 @@ func (s *Service) setDeploymentStatus(d *DynamoDeployment, status string) error 
 	}
 	return nil
 }
-func (s *Service) setDeploymentStatusWithReason(d *DynamoDeployment, status, reason string) error {
+func (s *Service) setDeploymentStatusWithReason(dd *DynamoDeployment, status, reason string) error {
+	var err error
+	dd.Version = dd.Version + 1
+	dd.Status = status
+	dd.DeployError = reason
 
-	serviceLogger.Debugf("Setting status of service %v_%v to %v", d.ServiceName, d.Time.Format("2006-01-02T15:04:05-0700"), status)
-	d.Status = status
-	d.DeployError = reason
-	err := s.table.Put(d).Run()
+	serviceLogger.Debugf("Setting status of service %v_%v to %v", dd.ServiceName, dd.Time.Format("2006-01-02T15:04:05-0700"), status)
+
+	if dd.Version > 1 {
+		err = s.table.Put(dd).If("$ = ?", "Version", (dd.Version - 1)).Run()
+	} else {
+		// version was not set, don't use version conditional
+		err = s.table.Put(dd).Run()
+	}
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())
