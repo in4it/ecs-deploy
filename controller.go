@@ -573,3 +573,21 @@ func (c *Controller) getServiceLogs(serviceName, taskArn, containerName string, 
 	cloudwatch := CloudWatch{}
 	return cloudwatch.getLogEventsByTime(getEnv("CLOUDWATCH_LOGS_PREFIX", "")+"-"+getEnv("AWS_ACCOUNT_ENV", ""), containerName+"/"+containerName+"/"+taskArn, start, end, "")
 }
+
+func (c *Controller) resume() error {
+	service := newService()
+	ecs := ECS{}
+	dds, err := service.getDeploys("byDay", 20)
+	if err != nil {
+		return err
+	}
+	for _, dd := range dds {
+		if dd.Status == "running" {
+			// run goroutine to update status of service
+			controllerLogger.Infof("Starting waitUntilServiceStable for %v", dd.ServiceName)
+			go ecs.launchWaitUntilServicesStable(&dd)
+		}
+	}
+	controllerLogger.Debugf("Finished controller resume. Checked %d services", len(dds))
+	return err
+}

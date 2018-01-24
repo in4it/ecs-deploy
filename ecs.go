@@ -3,12 +3,14 @@ package main
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/juju/loggo"
 
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -677,8 +679,9 @@ func (e *ECS) waitUntilServicesInactive(clusterName, serviceName string) error {
 }
 
 // wait until service is stable
-func (e *ECS) waitUntilServicesStable(serviceName string) error {
+func (e *ECS) waitUntilServicesStable(serviceName string, maxWaitMinutes int) error {
 	svc := ecs.New(session.New())
+	maxAttempts := maxWaitMinutes * 4
 	input := &ecs.DescribeServicesInput{
 		Cluster:  aws.String(e.clusterName),
 		Services: []*string{aws.String(serviceName)},
@@ -686,7 +689,7 @@ func (e *ECS) waitUntilServicesStable(serviceName string) error {
 
 	ecsLogger.Debugf("Waiting for service %v on %v to become stable", serviceName, e.clusterName)
 
-	err := svc.WaitUntilServicesStable(input)
+	err := svc.WaitUntilServicesStableWithContext(context.Background(), input, request.WithWaiterMaxAttempts(maxAttempts))
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			ecsLogger.Errorf(aerr.Error())
@@ -699,10 +702,15 @@ func (e *ECS) waitUntilServicesStable(serviceName string) error {
 }
 func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	var failed bool
+	var maxWaitMinutes int
 	service := newService()
 	// check whether service exists, otherwise wait might give error
-	err := e.waitUntilServicesStable(dd.ServiceName)
-	ecsLogger.Debugf("Waiting for service %v to become stable finished", dd.ServiceName)
+	if dd.DeployData.HealthCheck.GracePeriodSeconds > 0 {
+		maxWaitMinutes = (1 + int(math.Ceil(float64(dd.DeployData.HealthCheck.GracePeriodSeconds)/60/10))) * 10
+	} else {
+		maxWaitMinutes = 15
+	}
+	err := e.waitUntilServicesStable(dd.ServiceName, maxWaitMinutes)
 	if err != nil {
 		ecsLogger.Debugf("waitUntilServiceStable didn't succeed: %v", err)
 		failed = true
@@ -715,8 +723,11 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	if len(runningService.Deployments) != 1 {
 		reason := "Deployment failed: deployment was still running after 10 minutes"
 		ecsLogger.Debugf(reason)
-		service.setDeploymentStatusWithReason(dd, "failed", reason)
-		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+		err := service.setDeploymentStatusWithReason(dd, "failed", reason)
+		if err != nil {
+			return err
+		}
+		err = e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
 		}
@@ -725,8 +736,11 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	if runningService.Deployments[0].TaskDefinition != *dd.TaskDefinitionArn {
 		reason := "Deployment failed: Still running old task definition"
 		ecsLogger.Debugf(reason)
-		service.setDeploymentStatusWithReason(dd, "failed", reason)
-		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+		err := service.setDeploymentStatusWithReason(dd, "failed", reason)
+		if err != nil {
+			return err
+		}
+		err = e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
 		}
@@ -735,8 +749,11 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	if len(runningService.Tasks) == 0 {
 		reason := "Deployment failed: no tasks running"
 		ecsLogger.Debugf(reason)
-		service.setDeploymentStatusWithReason(dd, "failed", reason)
-		err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+		err := service.setDeploymentStatusWithReason(dd, "failed", reason)
+		if err != nil {
+			return err
+		}
+		err = e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
 		}
@@ -746,8 +763,11 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 		if t.TaskDefinitionArn == *dd.TaskDefinitionArn && t.LastStatus != "RUNNING" {
 			reason := fmt.Sprintf("Deployment failed: found task with taskdefinition %v and status %v (expected RUNNING)", t.TaskDefinitionArn, t.LastStatus)
 			ecsLogger.Debugf(reason)
-			service.setDeploymentStatusWithReason(dd, "failed", reason)
-			err := e.rollback(dd.DeployData.Cluster, dd.ServiceName)
+			err := service.setDeploymentStatusWithReason(dd, "failed", reason)
+			if err != nil {
+				return err
+			}
+			err = e.rollback(dd.DeployData.Cluster, dd.ServiceName)
 			if err != nil {
 				return err
 			}

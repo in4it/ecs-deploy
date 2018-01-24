@@ -31,7 +31,7 @@ func TestGetDeploymentByMonth(t *testing.T) {
 	}
 	limit := 20
 	service := newService()
-	dds, err := service.getDeploys("byMonth", limit)
+	dds, err := service.getDeploys("byMonth", int64(limit))
 	if err != nil {
 		t.Errorf("getDeploys byMonth: %v", err)
 	}
@@ -39,6 +39,21 @@ func TestGetDeploymentByMonth(t *testing.T) {
 		t.Errorf("getDeploys byMonth: result higher than limit")
 	}
 	fmt.Printf("getDeploys byMonth: retrieved %d records\n", len(dds))
+}
+func TestGetDeploymentByDay(t *testing.T) {
+	if accountId == nil {
+		t.Skip(noAWSMsg)
+	}
+	limit := 20
+	service := newService()
+	dds, err := service.getDeploys("byDay", int64(limit))
+	if err != nil {
+		t.Errorf("getDeploys byDay: %v", err)
+	}
+	if len(dds) > limit {
+		t.Errorf("getDeploys byDay: result higher than limit")
+	}
+	fmt.Printf("getDeploys byDay: retrieved %d records\n", len(dds))
 }
 func TestGetDeploymentSecondToLast(t *testing.T) {
 	if accountId == nil {

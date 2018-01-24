@@ -31,6 +31,13 @@ func startup_checks() {
 			os.Exit(1)
 		}
 	}
+	// pick up any remaining work
+	controller := Controller{}
+	err := controller.resume()
+	if err != nil {
+		fmt.Printf("Couldn't start controller: %v\n", err.Error())
+		os.Exit(1)
+	}
 }
 
 // @title ecs-deploy
