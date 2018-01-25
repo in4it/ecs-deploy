@@ -613,3 +613,132 @@ func (c *Controller) resume() error {
 	controllerLogger.Debugf("Finished controller resume. Checked %d services", len(dds))
 	return err
 }
+
+// Process ECS event message and determine to scale or not
+func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
+	apiLogger.Debugf("found ecs notification")
+	service := newService()
+	ecs := ECS{}
+	// determine cluster name
+	s := strings.Split(message.Detail.ClusterArn, "/")
+	if len(s) != 2 {
+		return errors.New("Could not determine cluster name from message (arn: " + message.Detail.ClusterArn + ")")
+	}
+	clusterName := s[1]
+	// determine max reservation
+	dss, _ := c.getServices()
+	memoryNeeded := make(map[string]int64)
+	cpuNeeded := make(map[string]int64)
+	for _, ds := range dss {
+		if val, ok := memoryNeeded[ds.C]; ok {
+			if ds.MemoryReservation > val {
+				memoryNeeded[ds.C] = ds.MemoryReservation
+			}
+		} else {
+			memoryNeeded[ds.C] = ds.MemoryReservation
+		}
+		if val, ok := cpuNeeded[ds.C]; ok {
+			if ds.CpuReservation > val {
+				cpuNeeded[ds.C] = ds.CpuReservation
+			}
+		} else {
+			cpuNeeded[ds.C] = ds.CpuReservation
+		}
+	}
+	if _, ok := memoryNeeded[clusterName]; !ok {
+		return errors.New("Minimal Memory needed for clusterName " + clusterName + " not found")
+	}
+	if _, ok := cpuNeeded[clusterName]; !ok {
+		return errors.New("Minimal CPU needed for clusterName " + clusterName + " not found")
+	}
+	// determine minimum reservations
+	dc, err := service.getClusterInfo()
+	if err != nil {
+		return err
+	}
+	if dc == nil || dc.Time.Before(time.Now().Add(-4*time.Minute /* 4 minutes cache */)) {
+		// no cache, need to retrieve everything
+		controllerLogger.Debugf("No cache found, need to retrieve using API calls")
+		dc = &DynamoCluster{}
+		for k, _ := range memoryNeeded {
+			firs, err := ecs.getFreeResources(k)
+			if err != nil {
+				return err
+			}
+			for _, f := range firs {
+				var dcci DynamoClusterContainerInstance
+				dcci.ClusterName = k
+				dcci.ContainerInstanceId = f.InstanceId
+				dcci.FreeMemory = f.FreeMemory
+				dcci.FreeCpu = f.FreeCpu
+				dc.ContainerInstances = append(dc.ContainerInstances, dcci)
+			}
+		}
+	}
+	var found bool
+	for k, v := range dc.ContainerInstances {
+		if v.ContainerInstanceId == message.Detail.Ec2InstanceId {
+			found = true
+			dc.ContainerInstances[k].ClusterName = clusterName
+			f, err := ecs.convertResourceToFir(message.Detail.RemainingResources)
+			if err != nil {
+				return err
+			}
+			dc.ContainerInstances[k].FreeMemory = f.FreeMemory
+			dc.ContainerInstances[k].FreeCpu = f.FreeCpu
+		}
+	}
+	if !found {
+		// add element
+		var dcci DynamoClusterContainerInstance
+		dcci.ClusterName = clusterName
+		dcci.ContainerInstanceId = message.Detail.Ec2InstanceId
+		f, err := ecs.convertResourceToFir(message.Detail.RemainingResources)
+		if err != nil {
+			return err
+		}
+		dcci.FreeMemory = f.FreeMemory
+		dcci.FreeCpu = f.FreeCpu
+		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
+	}
+	// make scaling decision
+	var resourcesFit bool
+	for _, dcci := range dc.ContainerInstances {
+		if dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
+			resourcesFit = true
+			controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v with %v cpu and %v memory",
+				clusterName,
+				cpuNeeded[clusterName],
+				memoryNeeded[clusterName],
+				dcci.ContainerInstanceId,
+				dcci.FreeCpu,
+				dcci.FreeMemory,
+			)
+		}
+	}
+	var scalingOp = "no"
+	if !resourcesFit {
+		controllerLogger.Debugf("No instance found with %v cpu and %v memory free", cpuNeeded[clusterName], memoryNeeded[clusterName])
+
+		startTime := time.Now().Add(-5 * time.Minute)
+		lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
+		if err != nil {
+			return err
+		}
+		if lastScalingOp == "no" {
+			controllerLogger.Infof("Initiating scaling activity")
+			scalingOp = "up"
+			autoScalingGroupName, err := ecs.getAutoScalingGroupByTag(clusterName)
+			if err != nil {
+				return err
+			}
+			err = ecs.scaleClusterNodes(autoScalingGroupName, 1)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// write object
+	service.putClusterInfo(*dc, clusterName, scalingOp)
+	return nil
+}

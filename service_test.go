@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetLastDeploy(t *testing.T) {
@@ -83,5 +84,39 @@ func TestGetServices(t *testing.T) {
 	err := service.getServices(&ds)
 	if err != nil {
 		t.Errorf("Couldn't retrieve services from dynamodb: %v\n", err.Error())
+	}
+}
+func TestGetClusterInfo(t *testing.T) {
+	if accountId == nil {
+		t.Skip(noAWSMsg)
+	}
+	service := newService()
+	dc, err := service.getClusterInfo()
+	if err != nil {
+		t.Errorf("ClusterInfo: %v", err)
+	}
+	if dc != nil {
+		fmt.Printf("ClusterInfo: Retrieved last record: %v\n", dc.Time)
+	} else {
+		fmt.Println("ClusterInfo: No items found")
+	}
+}
+func TestGetScalingActivity(t *testing.T) {
+	if accountId == nil {
+		t.Skip(noAWSMsg)
+	}
+	service := newService()
+
+	clusterName := getEnv("TEST_CLUSTERNAME", "testcluster")
+	startTime := time.Now().Add(-5 * time.Minute)
+
+	result, err := service.getScalingActivity(clusterName, startTime)
+	if err != nil {
+		t.Errorf("ScalingActivity: %v", err)
+	}
+	if result != "" {
+		fmt.Printf("Scaling action within last 5 min: %v\n", result)
+	} else {
+		fmt.Println("No scaling actions within last 5 min")
 	}
 }

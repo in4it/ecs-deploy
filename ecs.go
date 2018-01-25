@@ -47,6 +47,40 @@ type ContainerDefinition struct {
 	Essential bool   `json:"essential"`
 }
 
+// containerInstance
+type ContainerInstance struct {
+	ContainerInstanceArn string
+	Ec2InstanceId        string
+	PendingTasksCount    int64
+	RegisteredAt         time.Time
+	RegisteredResources  []ContainerInstanceResource
+	RemainingResources   []ContainerInstanceResource
+	RunningTasksCount    int64
+	Status               string
+	Version              int64
+}
+type ContainerInstanceResource struct {
+	DoubleValue    float64  `json:"doubleValue"`
+	IntegerValue   int64    `json:"integerValue"`
+	Name           string   `json:"name"`
+	StringSetValue []string `json:"stringSetValue"`
+	Type           string   `json:"type"`
+}
+
+// free instance resource
+type FreeInstanceResource struct {
+	InstanceId string
+	FreeMemory int64
+	FreeCpu    int64
+}
+
+// version info
+type EcsVersionInfo struct {
+	AgentHash     string `json:"agentHash"`
+	AgentVersion  string `json:"agentVersion"`
+	DockerVersion string `json:"dockerVersion"`
+}
+
 // create cluster
 func (e *ECS) createCluster(clusterName string) (*string, error) {
 	svc := ecs.New(session.New())
@@ -1051,6 +1085,73 @@ func (e *ECS) listContainerInstances(clusterName string) ([]string, error) {
 	return aws.StringValueSlice(instanceArns), nil
 }
 
+// describe container instances
+func (e *ECS) describeContainerInstances(clusterName string, containerInstances []string) ([]ContainerInstance, error) {
+	var cis []ContainerInstance
+	svc := ecs.New(session.New())
+	input := &ecs.DescribeContainerInstancesInput{
+		Cluster:            aws.String(clusterName),
+		ContainerInstances: aws.StringSlice(containerInstances),
+	}
+
+	result, err := svc.DescribeContainerInstances(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+		return cis, err
+	}
+	if len(result.ContainerInstances) == 0 {
+		return cis, errors.New("No container instances returned")
+	}
+	for _, ci := range result.ContainerInstances {
+		var c ContainerInstance
+		c.ContainerInstanceArn = aws.StringValue(ci.ContainerInstanceArn)
+		c.Ec2InstanceId = aws.StringValue(ci.Ec2InstanceId)
+		c.PendingTasksCount = aws.Int64Value(ci.PendingTasksCount)
+		c.RegisteredAt = aws.TimeValue(ci.RegisteredAt)
+		c.RunningTasksCount = aws.Int64Value(ci.RunningTasksCount)
+		c.Status = aws.StringValue(ci.Status)
+		c.Version = aws.Int64Value(ci.Version)
+		for _, v := range ci.RegisteredResources {
+			var vv ContainerInstanceResource
+			switch aws.StringValue(v.Type) {
+			case "INTEGER":
+				vv.IntegerValue = aws.Int64Value(v.IntegerValue)
+			case "DOUBLE":
+				vv.DoubleValue = aws.Float64Value(v.DoubleValue)
+			case "LONG":
+				vv.IntegerValue = aws.Int64Value(v.IntegerValue)
+			case "STRINGSET":
+				vv.StringSetValue = aws.StringValueSlice(v.StringSetValue)
+			}
+			vv.Name = aws.StringValue(v.Name)
+			vv.Type = aws.StringValue(v.Type)
+			c.RegisteredResources = append(c.RegisteredResources, vv)
+		}
+		for _, v := range ci.RemainingResources {
+			var vv ContainerInstanceResource
+			switch aws.StringValue(v.Type) {
+			case "INTEGER":
+				vv.IntegerValue = aws.Int64Value(v.IntegerValue)
+			case "DOUBLE":
+				vv.DoubleValue = aws.Float64Value(v.DoubleValue)
+			case "LONG":
+				vv.IntegerValue = aws.Int64Value(v.IntegerValue)
+			case "STRINGSET":
+				vv.StringSetValue = aws.StringValueSlice(v.StringSetValue)
+			}
+			vv.Name = aws.StringValue(v.Name)
+			vv.Type = aws.StringValue(v.Type)
+			c.RemainingResources = append(c.RemainingResources, vv)
+		}
+		cis = append(cis, c)
+	}
+	return cis, nil
+}
+
 // manual scale ECS service
 func (e *ECS) manualScaleService(clusterName, serviceName string, desiredCount int64) error {
 	svc := ecs.New(session.New())
@@ -1184,4 +1285,124 @@ func (e *ECS) isEqualContainerLimits(d1 Deploy, d2 Deploy) bool {
 	} else {
 		return false
 	}
+}
+
+func (e *ECS) getFreeResources(clusterName string) ([]FreeInstanceResource, error) {
+	var firs []FreeInstanceResource
+	ciArns, err := e.listContainerInstances(clusterName)
+	if err != nil {
+		return firs, err
+	}
+	cis, err := e.describeContainerInstances(clusterName, ciArns)
+	if err != nil {
+		return firs, err
+	}
+	for _, ci := range cis {
+		fir, err := e.convertResourceToFir(ci.RemainingResources)
+		if err != nil {
+			return firs, err
+		}
+		fir.InstanceId = ci.Ec2InstanceId
+		firs = append(firs, fir)
+	}
+	return firs, nil
+}
+func (e *ECS) convertResourceToFir(cir []ContainerInstanceResource) (FreeInstanceResource, error) {
+	var fir FreeInstanceResource
+	for _, v := range cir {
+		if v.Name == "MEMORY" {
+			if v.Type != "INTEGER" && v.Type != "LONG" {
+				return fir, errors.New("Memory return wrong type (" + v.Type + ")")
+			}
+			fir.FreeMemory = v.IntegerValue
+		}
+		if v.Name == "CPU" {
+			if v.Type != "INTEGER" && v.Type != "LONG" {
+				return fir, errors.New("CPU return wrong type (" + v.Type + ")")
+			}
+			fir.FreeCpu = v.IntegerValue
+		}
+	}
+	return fir, nil
+}
+func (e *ECS) scaleClusterNodes(autoScalingGroupName string, change int64) error {
+	minSize, desiredCapacity, maxSize, err := e.getClusterNodeDesiredCount(autoScalingGroupName)
+	if err != nil {
+		return err
+	}
+	if change > 0 && desiredCapacity == maxSize {
+		return errors.New("Cluster is at maximum capacity")
+	}
+	if change < 0 && desiredCapacity == minSize {
+		return errors.New("Cluster is at minimum capacity")
+	}
+
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.UpdateAutoScalingGroupInput{
+		AutoScalingGroupName: aws.String(autoScalingGroupName),
+		DesiredCapacity:      aws.Int64(desiredCapacity + change),
+	}
+	_, err = svc.UpdateAutoScalingGroup(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (e *ECS) getClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error) {
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []*string{aws.String(autoScalingGroupName)},
+	}
+	result, err := svc.DescribeAutoScalingGroups(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return 0, 0, 0, err
+	}
+	if len(result.AutoScalingGroups) == 0 {
+		return 0, 0, 0, errors.New("No autoscaling groups returned")
+	}
+
+	return aws.Int64Value(result.AutoScalingGroups[0].MinSize),
+		aws.Int64Value(result.AutoScalingGroups[0].DesiredCapacity),
+		aws.Int64Value(result.AutoScalingGroups[0].MaxSize),
+		nil
+}
+func (e *ECS) getAutoScalingGroupByTag(clusterName string) (string, error) {
+	var result string
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DescribeAutoScalingGroupsInput{}
+	pageNum := 0
+	err := svc.DescribeAutoScalingGroupsPages(input,
+		func(page *autoscaling.DescribeAutoScalingGroupsOutput, lastPage bool) bool {
+			pageNum++
+			for _, v := range page.AutoScalingGroups {
+				for _, tag := range v.Tags {
+					if aws.StringValue(tag.Key) == "Cluster" && aws.StringValue(tag.Value) == clusterName {
+						result = aws.StringValue(v.AutoScalingGroupName)
+					}
+				}
+			}
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+	}
+	if result == "" {
+		return result, errors.New("Could not find cluster by tag key=Cluster,Value=" + clusterName)
+	}
+	return result, nil
 }
