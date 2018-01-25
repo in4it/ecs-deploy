@@ -61,6 +61,24 @@ type DynamoServicesElement struct {
 	L                 []string
 }
 
+// dynamo cluster struct
+type DynamoCluster struct {
+	Identifier         string    `dynamo:"ServiceName,hash"`
+	Time               time.Time `dynamo:"Time,range"`
+	ContainerInstances []DynamoClusterContainerInstance
+	ScalingOperation   DynamoClusterScalingOperation
+}
+type DynamoClusterScalingOperation struct {
+	ClusterName string
+	Action      string
+}
+type DynamoClusterContainerInstance struct {
+	ClusterName         string
+	ContainerInstanceId string
+	FreeMemory          int64
+	FreeCpu             int64
+}
+
 func newService() *Service {
 	s := Service{}
 	s.db = dynamo.New(session.New(), &aws.Config{})
@@ -471,4 +489,61 @@ func (s *Service) setApiVersion(apiVersion string) error {
 	dss.Version = dss.Version + 1
 	dss.ApiVersion = apiVersion
 	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
+}
+
+func (s *Service) getClusterInfo() (*DynamoCluster, error) {
+	var dc DynamoCluster
+	err := s.table.Get("ServiceName", "__CLUSTERS").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dc)
+	if err != nil {
+		if err.Error() == "dynamo: no item found" {
+			return nil, nil
+		}
+		if aerr, ok := err.(awserr.Error); ok {
+			serviceLogger.Errorf(aerr.Error())
+		} else {
+			serviceLogger.Errorf(err.Error())
+		}
+		return nil, err
+	}
+	return &dc, nil
+}
+func (s *Service) putClusterInfo(dc DynamoCluster, clusterName string, action string) (*DynamoCluster, error) {
+	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action}
+	dc.Identifier = "__CLUSTERS"
+	dc.Time = time.Now()
+	err := s.table.Put(dc).Run()
+	if err != nil {
+		if err.Error() == "dynamo: no item found" {
+			return nil, nil
+		}
+		if aerr, ok := err.(awserr.Error); ok {
+			serviceLogger.Errorf(aerr.Error())
+		} else {
+			serviceLogger.Errorf(err.Error())
+		}
+		return nil, err
+	}
+	return &dc, nil
+}
+func (s *Service) getScalingActivity(clusterName string, startTime time.Time) (string, error) {
+	var dcs []DynamoCluster
+	err := s.table.Get("ServiceName", "__CLUSTERS").Range("Time", dynamo.GreaterOrEqual, startTime).All(&dcs)
+	if err != nil {
+		if err.Error() == "dynamo: no item found" {
+			return "", nil
+		}
+		if aerr, ok := err.(awserr.Error); ok {
+			serviceLogger.Errorf(aerr.Error())
+		} else {
+			serviceLogger.Errorf(err.Error())
+		}
+		return "", err
+	}
+	for _, dc := range dcs {
+		if dc.ScalingOperation.ClusterName == clusterName && dc.ScalingOperation.Action != "no" {
+			serviceLogger.Debugf("Found a previous scaling operation (action %v, start time: %v)", dc.ScalingOperation.Action, startTime.UTC().Format("2006-01-02T15:04:05-0700"))
+			return dc.ScalingOperation.Action, nil
+		}
+	}
+	return "no", nil
 }

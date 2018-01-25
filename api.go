@@ -13,6 +13,7 @@ import (
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -193,6 +194,31 @@ type SNSPayload struct {
 	TopicArn         string `json:"TopicArn"`
 	Type             string `json:"Type" binding:"required"`
 	UnsubscribeURL   string `json:"UnsubscribeURL"`
+}
+
+// ECS SNS Event
+type SNSPayloadEcs struct {
+	Version    string              `json:"version"`
+	Id         string              `json:"id"`
+	DetailType string              `json:"detail-type" binding:"required"`
+	Source     string              `json:"source"`
+	Account    string              `json:"account"`
+	Time       string              `json:"time"`
+	Region     string              `json:"region"`
+	Resources  []string            `json:"resources"`
+	Detail     SNSPayloadEcsDetail `json:"detail"`
+}
+type SNSPayloadEcsDetail struct {
+	ClusterArn           string                      `json:"clusterArn"`
+	ContainerInstanceArn string                      `json:"containerInstanceArn"`
+	Ec2InstanceId        string                      `json:"ec2InstanceId"`
+	RegisteredResources  []ContainerInstanceResource `json:"registeredResources"`
+	RemainingResources   []ContainerInstanceResource `json:"remainingResources"`
+	Status               string                      `json:"status"`
+	Version              int64                       `json:"version"`
+	VersionInfo          EcsVersionInfo              `json:"versionInfo"`
+	UpdatedAt            string                      `json:"updatedAt"`
+	RegisteredAt         string                      `json:"registeredAt"`
 }
 
 func (a *API) launch() error {
@@ -756,26 +782,32 @@ func (a *API) scaleServiceHandler(c *gin.Context) {
 }
 
 func (a *API) webhookHandler(c *gin.Context) {
+	controller := Controller{}
 	var err error
 
 	snsMessageType := c.GetHeader("x-amz-sns-message-type")
 	apiLogger.Debugf("Checking message type: %v", snsMessageType)
-	if snsMessageType == "SubscriptionConfirmation" {
-		var snsPayload sns.Payload
-		if err = c.ShouldBindJSON(&snsPayload); err == nil {
-			err = snsPayload.VerifyPayload()
-			if err == nil {
-				apiLogger.Debugf("Verified Payload. Subscribing...")
+	var snsPayload sns.Payload
+	if err = c.ShouldBindJSON(&snsPayload); err == nil {
+		err = snsPayload.VerifyPayload()
+		if err == nil {
+			apiLogger.Debugf("Verified Payload.")
+			if snsMessageType == "SubscriptionConfirmation" {
+				apiLogger.Debugf("Subscribing...")
 				_, err = snsPayload.Subscribe()
+			} else if snsMessageType == "Notification" {
+				apiLogger.Debugf("Incoming Notification")
+				var ecsMessage SNSPayloadEcs
+				if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
+					if ecsMessage.DetailType == "ECS Container Instance State Change" {
+						apiLogger.Debugf("ECS Message: %v", snsPayload.Message)
+						err = controller.processEcsMessage(ecsMessage)
+					}
+				}
+			} else {
+				err = errors.New("MessageType not recognized")
 			}
 		}
-	} else if snsMessageType == "Notification" {
-		var snsPayload SNSPayload
-		if err := c.ShouldBindJSON(&snsPayload); err == nil {
-			apiLogger.Errorf("To be handled: got notification: %+v", snsPayload)
-		}
-	} else {
-		err = errors.New("MessageType not recognized")
 	}
 	if err == nil {
 		c.JSON(200, gin.H{
