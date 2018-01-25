@@ -49,11 +49,16 @@ type DynamoServices struct {
 	Services    []*DynamoServicesElement
 	Time        string `dynamo:"Time,range"`
 	Version     int64
+	ApiVersion  string
 }
 type DynamoServicesElement struct {
-	C string
-	S string
-	L []string
+	C                 string
+	S                 string
+	MemoryLimit       int64 `dynamo:"ML"`
+	MemoryReservation int64 `dynamo:"MR"`
+	CpuLimit          int64 `dynamo:"CL"`
+	CpuReservation    int64 `dynamo:"CR"`
+	L                 []string
 }
 
 func newService() *Service {
@@ -100,7 +105,7 @@ func (s *Service) getServices(ds *DynamoServices) error {
 	}
 	return nil
 }
-func (s *Service) createService() error {
+func (s *Service) createService(dsElement *DynamoServicesElement) error {
 	// check input
 	if (s.serviceName == "") || (s.clusterName == "") || (len(s.listeners) == 0) {
 		serviceLogger.Errorf("Couldn't add %v (cluster = %v, listener # = %d)", s.serviceName, s.clusterName, len(s.listeners))
@@ -108,8 +113,6 @@ func (s *Service) createService() error {
 	}
 
 	var ds DynamoServices
-	dsElement := &DynamoServicesElement{S: s.serviceName, C: s.clusterName, L: s.listeners}
-
 	err := s.getServices(&ds)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
@@ -428,4 +431,44 @@ func (s *Service) setManualTasksArn(manualTaskArn string) error {
 		return err
 	}
 	return nil
+}
+func (s *Service) updateServiceLimits(clusterName, serviceName string, cpuReservation, cpuLimit, memoryReservation, memoryLimit int64) error {
+	var dss DynamoServices
+	var found bool
+	err := s.getServices(&dss)
+	if err != nil {
+		return err
+	}
+	for i, ds := range dss.Services {
+		if ds.C == clusterName && ds.S == serviceName {
+			found = true
+			dss.Services[i].CpuReservation = cpuReservation
+			dss.Services[i].CpuLimit = cpuLimit
+			dss.Services[i].MemoryReservation = memoryReservation
+			dss.Services[i].MemoryLimit = memoryLimit
+		}
+	}
+	if !found {
+		return errors.New("Couldn't update service limits: Service not found")
+	}
+	dss.Version = dss.Version + 1
+	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
+}
+func (s *Service) getApiVersion() (string, error) {
+	var dss DynamoServices
+	err := s.getServices(&dss)
+	if err != nil {
+		return "", err
+	}
+	return dss.ApiVersion, nil
+}
+func (s *Service) setApiVersion(apiVersion string) error {
+	var dss DynamoServices
+	err := s.getServices(&dss)
+	if err != nil {
+		return err
+	}
+	dss.Version = dss.Version + 1
+	dss.ApiVersion = apiVersion
+	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
 }

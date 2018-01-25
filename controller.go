@@ -112,6 +112,11 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 				return nil, err
 			}
 		}
+		// update memory limits if changed
+		if !ecs.isEqualContainerLimits(d, *ddLast.DeployData) {
+			cpuReservation, cpuLimit, memoryReservation, memoryLimit := ecs.getContainerLimits(d)
+			service.updateServiceLimits(service.clusterName, service.serviceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
+		}
 		// update service
 		_, err = ecs.updateService(serviceName, taskDefArn, d)
 		controllerLogger.Debugf("Updating ecs service: %v", serviceName)
@@ -226,7 +231,10 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	service.clusterName = d.Cluster
 	service.listeners = listeners
 
-	err = service.createService()
+	dsEl := &DynamoServicesElement{S: service.serviceName, C: service.clusterName, L: service.listeners}
+	dsEl.CpuReservation, dsEl.CpuLimit, dsEl.MemoryReservation, dsEl.MemoryLimit = ecs.getContainerLimits(d)
+
+	err = service.createService(dsEl)
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
 		return err
@@ -576,6 +584,20 @@ func (c *Controller) getServiceLogs(serviceName, taskArn, containerName string, 
 
 func (c *Controller) resume() error {
 	service := newService()
+	// check api version of database
+	dbApiVersion, err := service.getApiVersion()
+	if err != nil {
+		return err
+	}
+	if dbApiVersion != getApiVersion() {
+		migration := Migration{}
+		err := migration.run(dbApiVersion)
+		if err != nil {
+			return err
+		}
+	}
+
+	// check whether anything needs to be resumed
 	ecs := ECS{}
 	dds, err := service.getDeploys("byDay", 20)
 	if err != nil {
