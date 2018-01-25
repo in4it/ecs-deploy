@@ -23,6 +23,9 @@ import (
 // logging
 var apiLogger = loggo.GetLogger("api")
 
+// version
+var apiVersion = "1.2"
+
 // API struct
 type API struct {
 	authMiddleware *jwt.GinJWTMiddleware

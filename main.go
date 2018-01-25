@@ -31,7 +31,7 @@ func startup_checks() {
 			os.Exit(1)
 		}
 	}
-	// pick up any remaining work
+	// start controller, check database and pick up any remaining work
 	controller := Controller{}
 	err := controller.resume()
 	if err != nil {
@@ -51,6 +51,8 @@ func main() {
 	// set logging to debug
 	if getEnv("DEBUG", "") == "true" {
 		loggo.ConfigureLoggers(`<root>=DEBUG`)
+	} else {
+		loggo.ConfigureLoggers(`<root>=INFO`)
 	}
 
 	// startup checks
@@ -78,4 +80,8 @@ func Max(x, y int64) int64 {
 		return x
 	}
 	return y
+}
+
+func getApiVersion() string {
+	return apiVersion
 }

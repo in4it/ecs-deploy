@@ -389,6 +389,9 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 		if container.MemoryReservation > 0 {
 			containerDefinition.MemoryReservation = aws.Int64(container.MemoryReservation)
 		}
+		if container.CPU > 0 {
+			containerDefinition.Cpu = aws.Int64(container.CPU)
+		}
 
 		if container.Essential {
 			containerDefinition.Essential = aws.Bool(container.Essential)
@@ -1151,4 +1154,34 @@ func (e *ECS) describeTaskDefinition(taskDefinitionNameOrArn string) (TaskDefini
 	taskDefinition.ContainerDefinitions = containerDefinitions
 
 	return taskDefinition, nil
+}
+
+func (e *ECS) getContainerLimits(d Deploy) (int64, int64, int64, int64) {
+	var cpuReservation, cpuLimit, memoryReservation, memoryLimit int64
+	for _, c := range d.Containers {
+		if c.MemoryReservation == 0 {
+			memoryReservation += c.Memory
+			memoryLimit += c.Memory
+		} else {
+			memoryReservation += c.MemoryReservation
+			memoryLimit += c.Memory
+		}
+		if c.CPUReservation == 0 {
+			cpuReservation += c.CPU
+			cpuLimit += c.CPU
+		} else {
+			cpuReservation += c.CPUReservation
+			cpuLimit += c.CPU
+		}
+	}
+	return cpuReservation, cpuLimit, memoryReservation, memoryLimit
+}
+func (e *ECS) isEqualContainerLimits(d1 Deploy, d2 Deploy) bool {
+	cpuReservation1, cpuLimit1, memoryReservation1, memoryLimit1 := e.getContainerLimits(d1)
+	cpuReservation2, cpuLimit2, memoryReservation2, memoryLimit2 := e.getContainerLimits(d2)
+	if cpuReservation1 == cpuReservation2 && cpuLimit1 == cpuLimit2 && memoryReservation1 == memoryReservation2 && memoryLimit1 == memoryLimit2 {
+		return true
+	} else {
+		return false
+	}
 }

@@ -4,7 +4,7 @@ GOARCH = amd64
 all: deps build
 
 deps:
-	go get -d -v ./...
+	dep ensure
 
 build:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} . ; 
