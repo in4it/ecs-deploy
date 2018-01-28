@@ -67,6 +67,7 @@ type DynamoCluster struct {
 	Time               time.Time `dynamo:"Time,range"`
 	ContainerInstances []DynamoClusterContainerInstance
 	ScalingOperation   DynamoClusterScalingOperation
+	ExpirationTime     time.Time
 }
 type DynamoClusterScalingOperation struct {
 	ClusterName string
@@ -77,6 +78,7 @@ type DynamoClusterContainerInstance struct {
 	ContainerInstanceId string
 	FreeMemory          int64
 	FreeCpu             int64
+	Status              string
 }
 
 func newService() *Service {
@@ -247,10 +249,10 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
 	// add date to table
-	var dd []DynamoDeployment
 	switch {
 	case action == "byMonth":
 		for i := 0; i < 3; i++ {
+			var dd []DynamoDeployment
 			serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, i*-1, 0).Format("2006-01"))
 			err := s.table.Get("Month", time.Now().AddDate(0, i*-1, 0).Format("2006-01")).Index("MonthIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(limit).All(&dd)
 			dds = append(dds, dd...)
@@ -263,6 +265,7 @@ func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, er
 		}
 	case action == "byDay":
 		for i := 0; i < 3; i++ {
+			var dd []DynamoDeployment
 			serviceLogger.Debugf("Retrieving records from: %v", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02"))
 			err := s.table.Get("Day", time.Now().AddDate(0, 0, i*-1).Format("2006-01-02")).Index("DayIndex").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(limit).All(&dd)
 			dds = append(dds, dd...)
@@ -274,6 +277,7 @@ func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, er
 			}
 		}
 	case action == "secondToLast":
+		var dd []DynamoDeployment
 		serviceLogger.Debugf("Retrieving second last deploy")
 		err := s.table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(2).All(&dd)
 		if err != nil {
@@ -511,6 +515,7 @@ func (s *Service) putClusterInfo(dc DynamoCluster, clusterName string, action st
 	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action}
 	dc.Identifier = "__CLUSTERS"
 	dc.Time = time.Now()
+	dc.ExpirationTime = time.Now().AddDate(0, 0, 30)
 	err := s.table.Put(dc).Run()
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {

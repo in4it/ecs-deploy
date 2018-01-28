@@ -196,6 +196,13 @@ type SNSPayload struct {
 	UnsubscribeURL   string `json:"UnsubscribeURL"`
 }
 
+// generic payload (to check detail type)
+type SNSPayloadGeneric struct {
+	Version    string `json:"version"`
+	Id         string `json:"id"`
+	DetailType string `json:"detail-type" binding:"required"`
+}
+
 // ECS SNS Event
 type SNSPayloadEcs struct {
 	Version    string              `json:"version"`
@@ -219,6 +226,26 @@ type SNSPayloadEcsDetail struct {
 	VersionInfo          EcsVersionInfo              `json:"versionInfo"`
 	UpdatedAt            string                      `json:"updatedAt"`
 	RegisteredAt         string                      `json:"registeredAt"`
+}
+
+// lifecycle event
+type SNSPayloadLifecycle struct {
+	Version    string                    `json:"version"`
+	Id         string                    `json:"id"`
+	DetailType string                    `json:"detail-type" binding:"required"`
+	Source     string                    `json:"source"`
+	Account    string                    `json:"account"`
+	Time       string                    `json:"time"`
+	Region     string                    `json:"region"`
+	Resources  []string                  `json:"resources"`
+	Detail     SNSPayloadLifecycleDetail `json:"detail"`
+}
+type SNSPayloadLifecycleDetail struct {
+	LifecycleActionToken string `json:"LifecycleActionToken"`
+	AutoScalingGroupName string `json:"AutoScalingGroupName"`
+	LifecycleHookName    string `json:"LifecycleHookName"`
+	EC2InstanceId        string `json:"EC2InstanceId"`
+	LifecycleTransition  string `json:"LifecycleTransition"`
 }
 
 func (a *API) launch() error {
@@ -797,11 +824,21 @@ func (a *API) webhookHandler(c *gin.Context) {
 				_, err = snsPayload.Subscribe()
 			} else if snsMessageType == "Notification" {
 				apiLogger.Debugf("Incoming Notification")
-				var ecsMessage SNSPayloadEcs
-				if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
-					if ecsMessage.DetailType == "ECS Container Instance State Change" {
-						apiLogger.Debugf("ECS Message: %v", snsPayload.Message)
-						err = controller.processEcsMessage(ecsMessage)
+				var genericMessage SNSPayloadGeneric
+				if err = json.Unmarshal([]byte(snsPayload.Message), &genericMessage); err == nil {
+					apiLogger.Debugf("Message detail type: %v", genericMessage.DetailType)
+					if genericMessage.DetailType == "ECS Container Instance State Change" {
+						var ecsMessage SNSPayloadEcs
+						if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
+							apiLogger.Debugf("ECS Message: %v", snsPayload.Message)
+							err = controller.processEcsMessage(ecsMessage)
+						}
+					} else if genericMessage.DetailType == "EC2 Instance-terminate Lifecycle Action" {
+						var lifecycleMessage SNSPayloadLifecycle
+						if err = json.Unmarshal([]byte(snsPayload.Message), &lifecycleMessage); err == nil {
+							apiLogger.Debugf("Lifecycle Message: %v", snsPayload.Message)
+							err = controller.processLifecycleMessage(lifecycleMessage)
+						}
 					}
 				}
 			} else {
