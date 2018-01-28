@@ -5,7 +5,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/juju/loggo"
@@ -70,8 +69,16 @@ type ContainerInstanceResource struct {
 // free instance resource
 type FreeInstanceResource struct {
 	InstanceId string
+	Status     string
 	FreeMemory int64
 	FreeCpu    int64
+}
+
+// registered instance resource
+type RegisteredInstanceResource struct {
+	InstanceId       string
+	RegisteredMemory int64
+	RegisteredCpu    int64
 }
 
 // version info
@@ -178,129 +185,6 @@ func (e *ECS) deleteKeyPair(keyName string) error {
 		KeyName: aws.String(keyName),
 	}
 	_, err := svc.DeleteKeyPair(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
-		} else {
-			ecsLogger.Errorf("%v", err.Error())
-		}
-		return err
-	}
-	return nil
-}
-func (e *ECS) createLaunchConfiguration(clusterName string, keyName string, instanceType string, instanceProfile string, securitygroups []string) error {
-	svc := autoscaling.New(session.New())
-	amiId, err := e.getECSAMI()
-	if err != nil {
-		return err
-	}
-	input := &autoscaling.CreateLaunchConfigurationInput{
-		IamInstanceProfile:      aws.String(instanceProfile),
-		ImageId:                 aws.String(amiId),
-		InstanceType:            aws.String(instanceType),
-		KeyName:                 aws.String(keyName),
-		LaunchConfigurationName: aws.String(clusterName),
-		SecurityGroups:          aws.StringSlice(securitygroups),
-		UserData:                aws.String(base64.StdEncoding.EncodeToString([]byte("#!/bin/bash\necho 'ECS_CLUSTER=" + clusterName + "'  > /etc/ecs/ecs.config\nstart ecs\n"))),
-	}
-	ecsLogger.Debugf("createLaunchConfiguration with: %+v", input)
-	_, err = svc.CreateLaunchConfiguration(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
-			if strings.Contains(aerr.Message(), "Invalid IamInstanceProfile") {
-				ecsLogger.Errorf("Caught RetryableError: %v", aerr.Message())
-				return errors.New("RetryableError: Invalid IamInstanceProfile")
-			}
-		} else {
-			ecsLogger.Errorf("%v", err.Error())
-		}
-		return err
-	}
-	return nil
-}
-func (e *ECS) deleteLaunchConfiguration(clusterName string) error {
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.DeleteLaunchConfigurationInput{
-		LaunchConfigurationName: aws.String(clusterName),
-	}
-	_, err := svc.DeleteLaunchConfiguration(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
-		} else {
-			ecsLogger.Errorf("%v", err.Error())
-		}
-		return err
-	}
-	return nil
-}
-func (e *ECS) createAutoScalingGroup(clusterName string, desiredCapacity int64, maxSize int64, minSize int64, subnets []string) error {
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.CreateAutoScalingGroupInput{
-		AutoScalingGroupName:    aws.String(clusterName),
-		DesiredCapacity:         aws.Int64(desiredCapacity),
-		HealthCheckType:         aws.String("EC2"),
-		LaunchConfigurationName: aws.String(clusterName),
-		MaxSize:                 aws.Int64(maxSize),
-		MinSize:                 aws.Int64(minSize),
-		Tags: []*autoscaling.Tag{
-			{Key: aws.String("Name"), Value: aws.String("ecs-" + clusterName), PropagateAtLaunch: aws.Bool(true)},
-			{Key: aws.String("Cluster"), Value: aws.String(clusterName), PropagateAtLaunch: aws.Bool(true)},
-		},
-		TerminationPolicies: []*string{aws.String("OldestLaunchConfiguration"), aws.String("Default")},
-		VPCZoneIdentifier:   aws.String(strings.Join(subnets, ",")),
-	}
-	_, err := svc.CreateAutoScalingGroup(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
-		} else {
-			ecsLogger.Errorf("%v", err.Error())
-		}
-		return err
-	}
-	return nil
-}
-func (e *ECS) waitForAutoScalingGroupInService(clusterName string) error {
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: []*string{aws.String(clusterName)},
-	}
-	err := svc.WaitUntilGroupInService(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
-		} else {
-			ecsLogger.Errorf("%v", err.Error())
-		}
-		return err
-	}
-	return nil
-}
-func (e *ECS) waitForAutoScalingGroupNotExists(clusterName string) error {
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: []*string{aws.String(clusterName)},
-	}
-	err := svc.WaitUntilGroupNotExists(input)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
-		} else {
-			ecsLogger.Errorf("%v", err.Error())
-		}
-		return err
-	}
-	return nil
-}
-func (e *ECS) deleteAutoScalingGroup(clusterName string, forceDelete bool) error {
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.DeleteAutoScalingGroupInput{
-		AutoScalingGroupName: aws.String(clusterName),
-		ForceDelete:          aws.Bool(forceDelete),
-	}
-	_, err := svc.DeleteAutoScalingGroup(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			ecsLogger.Errorf("%v", aerr.Error())
@@ -716,15 +600,15 @@ func (e *ECS) waitUntilServicesInactive(clusterName, serviceName string) error {
 }
 
 // wait until service is stable
-func (e *ECS) waitUntilServicesStable(serviceName string, maxWaitMinutes int) error {
+func (e *ECS) waitUntilServicesStable(clusterName, serviceName string, maxWaitMinutes int) error {
 	svc := ecs.New(session.New())
 	maxAttempts := maxWaitMinutes * 4
 	input := &ecs.DescribeServicesInput{
-		Cluster:  aws.String(e.clusterName),
+		Cluster:  aws.String(clusterName),
 		Services: []*string{aws.String(serviceName)},
 	}
 
-	ecsLogger.Debugf("Waiting for service %v on %v to become stable", serviceName, e.clusterName)
+	ecsLogger.Debugf("Waiting for service %v on %v to become stable", serviceName, clusterName)
 
 	err := svc.WaitUntilServicesStableWithContext(context.Background(), input, request.WithWaiterMaxAttempts(maxAttempts))
 	if err != nil {
@@ -747,7 +631,7 @@ func (e *ECS) launchWaitUntilServicesStable(dd *DynamoDeployment) error {
 	} else {
 		maxWaitMinutes = 15
 	}
-	err := e.waitUntilServicesStable(dd.ServiceName, maxWaitMinutes)
+	err := e.waitUntilServicesStable(dd.DeployData.Cluster, dd.ServiceName, maxWaitMinutes)
 	if err != nil {
 		ecsLogger.Debugf("waitUntilServiceStable didn't succeed: %v", err)
 		failed = true
@@ -1303,6 +1187,7 @@ func (e *ECS) getFreeResources(clusterName string) ([]FreeInstanceResource, erro
 			return firs, err
 		}
 		fir.InstanceId = ci.Ec2InstanceId
+		fir.Status = ci.Status
 		firs = append(firs, fir)
 	}
 	return firs, nil
@@ -1325,24 +1210,33 @@ func (e *ECS) convertResourceToFir(cir []ContainerInstanceResource) (FreeInstanc
 	}
 	return fir, nil
 }
-func (e *ECS) scaleClusterNodes(autoScalingGroupName string, change int64) error {
-	minSize, desiredCapacity, maxSize, err := e.getClusterNodeDesiredCount(autoScalingGroupName)
-	if err != nil {
-		return err
+func (e *ECS) convertResourceToRir(cir []ContainerInstanceResource) (RegisteredInstanceResource, error) {
+	var rir RegisteredInstanceResource
+	for _, v := range cir {
+		if v.Name == "MEMORY" {
+			if v.Type != "INTEGER" && v.Type != "LONG" {
+				return rir, errors.New("Memory return wrong type (" + v.Type + ")")
+			}
+			rir.RegisteredMemory = v.IntegerValue
+		}
+		if v.Name == "CPU" {
+			if v.Type != "INTEGER" && v.Type != "LONG" {
+				return rir, errors.New("CPU return wrong type (" + v.Type + ")")
+			}
+			rir.RegisteredCpu = v.IntegerValue
+		}
 	}
-	if change > 0 && desiredCapacity == maxSize {
-		return errors.New("Cluster is at maximum capacity")
-	}
-	if change < 0 && desiredCapacity == minSize {
-		return errors.New("Cluster is at minimum capacity")
-	}
+	return rir, nil
+}
 
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.UpdateAutoScalingGroupInput{
-		AutoScalingGroupName: aws.String(autoScalingGroupName),
-		DesiredCapacity:      aws.Int64(desiredCapacity + change),
+func (e *ECS) drainNode(clusterName, instance string) error {
+	svc := ecs.New(session.New())
+	input := &ecs.UpdateContainerInstancesStateInput{
+		Cluster:            aws.String(clusterName),
+		ContainerInstances: aws.StringSlice([]string{instance}),
+		Status:             aws.String("DRAINING"),
 	}
-	_, err = svc.UpdateAutoScalingGroup(input)
+	_, err := svc.UpdateContainerInstancesState(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			ecsLogger.Errorf("%v", aerr.Error())
@@ -1353,56 +1247,85 @@ func (e *ECS) scaleClusterNodes(autoScalingGroupName string, change int64) error
 	}
 	return nil
 }
-func (e *ECS) getClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error) {
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: []*string{aws.String(autoScalingGroupName)},
+func (e *ECS) getClusterNameByInstanceId(instance string) (string, error) {
+	var clusterName string
+	svc := ec2.New(session.New())
+	input := &ec2.DescribeTagsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("resource-id"),
+				Values: []*string{
+					aws.String(instance),
+				},
+			},
+		},
 	}
-	result, err := svc.DescribeAutoScalingGroups(input)
+
+	result, err := svc.DescribeTags(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			ecsLogger.Errorf("%v", aerr.Error())
 		} else {
 			ecsLogger.Errorf("%v", err.Error())
 		}
-		return 0, 0, 0, err
+		return clusterName, err
 	}
-	if len(result.AutoScalingGroups) == 0 {
-		return 0, 0, 0, errors.New("No autoscaling groups returned")
-	}
-
-	return aws.Int64Value(result.AutoScalingGroups[0].MinSize),
-		aws.Int64Value(result.AutoScalingGroups[0].DesiredCapacity),
-		aws.Int64Value(result.AutoScalingGroups[0].MaxSize),
-		nil
-}
-func (e *ECS) getAutoScalingGroupByTag(clusterName string) (string, error) {
-	var result string
-	svc := autoscaling.New(session.New())
-	input := &autoscaling.DescribeAutoScalingGroupsInput{}
-	pageNum := 0
-	err := svc.DescribeAutoScalingGroupsPages(input,
-		func(page *autoscaling.DescribeAutoScalingGroupsOutput, lastPage bool) bool {
-			pageNum++
-			for _, v := range page.AutoScalingGroups {
-				for _, tag := range v.Tags {
-					if aws.StringValue(tag.Key) == "Cluster" && aws.StringValue(tag.Value) == clusterName {
-						result = aws.StringValue(v.AutoScalingGroupName)
-					}
-				}
-			}
-			return pageNum <= 100
-		})
-
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf(aerr.Error())
-		} else {
-			ecsLogger.Errorf(err.Error())
+	for _, v := range result.Tags {
+		if aws.StringValue(v.Key) == "Cluster" {
+			return aws.StringValue(v.Value), nil
 		}
 	}
-	if result == "" {
-		return result, errors.New("Could not find cluster by tag key=Cluster,Value=" + clusterName)
+	return clusterName, errors.New("Could not determine clusterName. Is the EC2 instance tagged?")
+}
+func (e *ECS) getContainerInstanceArnByInstanceId(clusterName, instanceId string) (string, error) {
+	ciArns, err := e.listContainerInstances(clusterName)
+	if err != nil {
+		return "", err
 	}
-	return result, nil
+	cis, err := e.describeContainerInstances(clusterName, ciArns)
+	if err != nil {
+		return "", err
+	}
+	for _, ci := range cis {
+		if ci.Ec2InstanceId == instanceId {
+			return ci.ContainerInstanceArn, nil
+		}
+	}
+	return "", errors.New("Couldn't find container instance Arn (instanceId=" + instanceId + ")")
+}
+func (e *ECS) launchWaitForDrainedNode(clusterName, containerInstanceArn, instanceId, autoScalingGroupName, lifecycleHookName, lifecycleHookToken string) error {
+	var tasksDrained bool
+	var err error
+	for i := 0; i < 80 && !tasksDrained; i++ {
+		cis, err := e.describeContainerInstances(clusterName, []string{containerInstanceArn})
+		if err != nil || len(cis) == 0 {
+			ecsLogger.Errorf("launchWaitForDrainedNode: %v", err.Error())
+			return err
+		}
+		ci := cis[0]
+		if ci.RunningTasksCount == 0 {
+			tasksDrained = true
+		} else {
+			ecsLogger.Infof("launchWaitForDrainedNode: still %d tasks running", ci.RunningTasksCount)
+		}
+		time.Sleep(15 * time.Second)
+	}
+	if !tasksDrained {
+		ecsLogger.Errorf("launchWaitForDrainedNode: Not able to drain tasks: timeout of 20m reached")
+	}
+	// CompleteLifeCycleAction
+	autoscaling := AutoScaling{}
+	if lifecycleHookToken == "" {
+		ecsLogger.Debugf("Running completePendingLifecycleAction")
+		err = autoscaling.completePendingLifecycleAction(autoScalingGroupName, instanceId, "CONTINUE", lifecycleHookName)
+	} else {
+		ecsLogger.Debugf("Running completeLifecycleAction")
+		err = autoscaling.completeLifecycleAction(autoScalingGroupName, instanceId, "CONTINUE", lifecycleHookName, lifecycleHookToken)
+	}
+	if err != nil {
+		ecsLogger.Errorf("launchWaitForDrainedNode: Could not complete life cycle action: %v", err.Error())
+		return err
+	}
+	ecsLogger.Infof("launchWaitForDrainedNode: Node drained, completed lifecycle action")
+	return nil
 }

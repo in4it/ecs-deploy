@@ -154,6 +154,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	service := newService()
 	controller := Controller{}
 	cloudwatch := CloudWatch{}
+	autoscaling := AutoScaling{}
 	roleName := "ecs-" + clusterName
 
 	// set deploy default
@@ -218,13 +219,13 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	// create launch configuration
 	instanceProfile := roleName
 	keyName := clusterName
-	err = ecs.createLaunchConfiguration(clusterName, keyName, instanceType, instanceProfile, strings.Split(ecsSecurityGroups, ","))
+	err = autoscaling.createLaunchConfiguration(clusterName, keyName, instanceType, instanceProfile, strings.Split(ecsSecurityGroups, ","))
 	if err != nil {
 		for i := 0; i < 5 && err != nil; i++ {
 			if strings.HasPrefix(err.Error(), "RetryableError:") {
 				fmt.Printf("Error: %v - waiting 10s and retrying...\n", err.Error())
 				time.Sleep(10 * time.Second)
-				err = ecs.createLaunchConfiguration(clusterName, keyName, instanceType, instanceProfile, strings.Split(ecsSecurityGroups, ","))
+				err = autoscaling.createLaunchConfiguration(clusterName, keyName, instanceType, instanceProfile, strings.Split(ecsSecurityGroups, ","))
 			}
 		}
 		if err != nil {
@@ -237,7 +238,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	intEcsDesiredSize, _ := strconv.ParseInt(ecsDesiredSize, 10, 64)
 	intEcsMaxSize, _ := strconv.ParseInt(ecsMaxSize, 10, 64)
 	intEcsMinSize, _ := strconv.ParseInt(ecsMinSize, 10, 64)
-	ecs.createAutoScalingGroup(clusterName, intEcsDesiredSize, intEcsMaxSize, intEcsMinSize, strings.Split(ecsSubnets, ","))
+	autoscaling.createAutoScalingGroup(clusterName, intEcsDesiredSize, intEcsMaxSize, intEcsMinSize, strings.Split(ecsSubnets, ","))
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
@@ -289,7 +290,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 
 	// wait for autoscaling group to be in service
 	fmt.Println("Wait for autoscaling group to be in service")
-	ecs.waitForAutoScalingGroupInService(clusterName)
+	autoscaling.waitForAutoScalingGroupInService(clusterName)
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
@@ -374,14 +375,15 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 func teardown(t *testing.T) {
 	iam := IAM{}
 	ecs := ECS{}
+	autoscaling := AutoScaling{}
 	paramstore := Paramstore{}
 	roleName := "ecs-" + clusterName
 	cloudwatch := CloudWatch{}
-	err := ecs.deleteAutoScalingGroup(clusterName, true)
+	err := autoscaling.deleteAutoScalingGroup(clusterName, true)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	err = ecs.deleteLaunchConfiguration(clusterName)
+	err = autoscaling.deleteLaunchConfiguration(clusterName)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
@@ -449,7 +451,7 @@ func teardown(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 	fmt.Println("Wait for autoscaling group to not exist")
-	err = ecs.waitForAutoScalingGroupNotExists(clusterName)
+	err = autoscaling.waitForAutoScalingGroupNotExists(clusterName)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}

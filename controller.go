@@ -6,6 +6,7 @@ import (
 
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -603,11 +604,60 @@ func (c *Controller) resume() error {
 	if err != nil {
 		return err
 	}
-	for _, dd := range dds {
+	for i, dd := range dds {
 		if dd.Status == "running" {
 			// run goroutine to update status of service
 			controllerLogger.Infof("Starting waitUntilServiceStable for %v", dd.ServiceName)
-			go ecs.launchWaitUntilServicesStable(&dd)
+			go ecs.launchWaitUntilServicesStable(&dds[i])
+		}
+	}
+	// check for nodes draining
+	autoscaling := AutoScaling{}
+	services := make(map[string][]string)
+	dss, _ := c.getServices()
+	for i, ds := range dss {
+		services[ds.C] = append(services[ds.C], dss[i].S)
+	}
+	for clusterName, _ := range services {
+		autoScalingGroupName, err := autoscaling.getAutoScalingGroupByTag(clusterName)
+		if err != nil {
+			return err
+		}
+		hn, err := autoscaling.getLifecycleHookNames(autoScalingGroupName, "autoscaling:EC2_INSTANCE_TERMINATING")
+		if err != nil || len(hn) == 0 {
+			return err
+		}
+		ciArns, err := ecs.listContainerInstances(clusterName)
+		if err != nil {
+			return err
+		}
+		cis, err := ecs.describeContainerInstances(clusterName, ciArns)
+		if err != nil {
+			return err
+		}
+		dc, err := service.getClusterInfo()
+		if err != nil {
+			return err
+		}
+		for _, ci := range cis {
+			if ci.Status == "DRAINING" {
+				// write new record to switch container instance to draining (in case there's a record left with DRAINING)
+				var writeRecord bool
+				if dc != nil {
+					for i, dcci := range dc.ContainerInstances {
+						if clusterName == dcci.ClusterName && ci.Ec2InstanceId == dcci.ContainerInstanceId && dcci.Status != "DRAINING" {
+							dc.ContainerInstances[i].Status = "DRAINING"
+							writeRecord = true
+						}
+					}
+				}
+				if writeRecord {
+					service.putClusterInfo(*dc, clusterName, "no")
+				}
+				// launch wait for drained
+				controllerLogger.Infof("Launching waitForDrainedNode for cluster=%v, instance=%v, autoscalingGroupName=%v", clusterName, ci.Ec2InstanceId, autoScalingGroupName)
+				go ecs.launchWaitForDrainedNode(clusterName, ci.ContainerInstanceArn, ci.Ec2InstanceId, autoScalingGroupName, hn[0], "")
+			}
 		}
 	}
 	controllerLogger.Debugf("Finished controller resume. Checked %d services", len(dds))
@@ -619,6 +669,7 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 	apiLogger.Debugf("found ecs notification")
 	service := newService()
 	ecs := ECS{}
+	autoscaling := AutoScaling{}
 	// determine cluster name
 	s := strings.Split(message.Detail.ClusterArn, "/")
 	if len(s) != 2 {
@@ -671,6 +722,7 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 				dcci.ContainerInstanceId = f.InstanceId
 				dcci.FreeMemory = f.FreeMemory
 				dcci.FreeCpu = f.FreeCpu
+				dcci.Status = f.Status
 				dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 			}
 		}
@@ -699,46 +751,127 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		}
 		dcci.FreeMemory = f.FreeMemory
 		dcci.FreeCpu = f.FreeCpu
+		dcci.Status = f.Status
 		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 	}
-	// make scaling decision
-	var resourcesFit bool
-	for _, dcci := range dc.ContainerInstances {
-		if dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
-			resourcesFit = true
-			controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v with %v cpu and %v memory",
-				clusterName,
-				cpuNeeded[clusterName],
-				memoryNeeded[clusterName],
-				dcci.ContainerInstanceId,
-				dcci.FreeCpu,
-				dcci.FreeMemory,
-			)
-		}
+	// check whether at min/max capacity
+	autoScalingGroupName, err := autoscaling.getAutoScalingGroupByTag(clusterName)
+	if err != nil {
+		return err
 	}
+	minSize, desiredCapacity, maxSize, err := autoscaling.getClusterNodeDesiredCount(autoScalingGroupName)
+	if err != nil {
+		return err
+	}
+	// make scaling (up) decision
+	var resourcesFit bool
 	var scalingOp = "no"
-	if !resourcesFit {
-		controllerLogger.Debugf("No instance found with %v cpu and %v memory free", cpuNeeded[clusterName], memoryNeeded[clusterName])
-
-		startTime := time.Now().Add(-5 * time.Minute)
-		lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
-		if err != nil {
-			return err
+	if desiredCapacity < maxSize {
+		for _, dcci := range dc.ContainerInstances {
+			if dcci.Status != "DRAINING" && dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
+				resourcesFit = true
+				controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v with %v cpu and %v memory",
+					clusterName,
+					cpuNeeded[clusterName],
+					memoryNeeded[clusterName],
+					dcci.ContainerInstanceId,
+					dcci.FreeCpu,
+					dcci.FreeMemory,
+				)
+			}
 		}
-		if lastScalingOp == "no" {
-			controllerLogger.Infof("Initiating scaling activity")
-			scalingOp = "up"
-			autoScalingGroupName, err := ecs.getAutoScalingGroupByTag(clusterName)
+		if !resourcesFit {
+			controllerLogger.Debugf("No instance found with %v cpu and %v memory free", cpuNeeded[clusterName], memoryNeeded[clusterName])
+
+			startTime := time.Now().Add(-5 * time.Minute)
+			lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
 			if err != nil {
 				return err
 			}
-			err = ecs.scaleClusterNodes(autoScalingGroupName, 1)
+			if lastScalingOp == "no" {
+				controllerLogger.Infof("Initiating scaling activity")
+				scalingOp = "up"
+				err = autoscaling.scaleClusterNodes(autoScalingGroupName, 1)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	// make scaling (down) decision
+	if desiredCapacity > minSize && resourcesFit {
+		// calculate registered resources
+		f, err := ecs.convertResourceToRir(message.Detail.RegisteredResources)
+		if err != nil {
+			return err
+		}
+		var clusterMemoryNeeded = f.RegisteredMemory + memoryNeeded[clusterName]        // capacity of full container node + biggest task
+		clusterMemoryNeeded += int64(math.Ceil(float64(memoryNeeded[clusterName]) / 2)) // + buffer
+		var clusterCpuNeeded = f.RegisteredCpu + cpuNeeded[clusterName]
+		var totalFreeCpu, totalFreeMemory int64
+		for _, dcci := range dc.ContainerInstances {
+			totalFreeCpu += dcci.FreeCpu
+			totalFreeMemory += dcci.FreeMemory
+		}
+		controllerLogger.Debugf("Have %d cpu available, need %d", totalFreeCpu, clusterCpuNeeded)
+		controllerLogger.Debugf("Have %d memory available, need %d", totalFreeMemory, clusterMemoryNeeded)
+		if totalFreeCpu >= clusterCpuNeeded && totalFreeMemory >= clusterMemoryNeeded {
+			startTime := time.Now().Add(-5 * time.Minute)
+			lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
 			if err != nil {
 				return err
+			}
+			if lastScalingOp == "no" {
+				controllerLogger.Infof("Starting scaling down operation (cpu: %d >= %d, mem: %d >= %d", totalFreeCpu, clusterCpuNeeded, totalFreeMemory, clusterMemoryNeeded)
+				scalingOp = "down"
+				autoScalingGroupName, err := autoscaling.getAutoScalingGroupByTag(clusterName)
+				if err != nil {
+					return err
+				}
+				err = autoscaling.scaleClusterNodes(autoScalingGroupName, -1)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
 	// write object
 	service.putClusterInfo(*dc, clusterName, scalingOp)
+	return nil
+}
+func (c *Controller) processLifecycleMessage(message SNSPayloadLifecycle) error {
+	ecs := ECS{}
+	clusterName, err := ecs.getClusterNameByInstanceId(message.Detail.EC2InstanceId)
+	if err != nil {
+		return err
+	}
+	containerInstanceArn, err := ecs.getContainerInstanceArnByInstanceId(clusterName, message.Detail.EC2InstanceId)
+	if err != nil {
+		return err
+	}
+	err = ecs.drainNode(clusterName, containerInstanceArn)
+	if err != nil {
+		return err
+	}
+	service := newService()
+	dc, err := service.getClusterInfo()
+	if err != nil {
+		return err
+	}
+	// write new record to switch container instance to draining
+	var writeRecord bool
+	if dc != nil {
+		for i, dcci := range dc.ContainerInstances {
+			if clusterName == dcci.ClusterName && message.Detail.EC2InstanceId == dcci.ContainerInstanceId {
+				dc.ContainerInstances[i].Status = "DRAINING"
+				writeRecord = true
+			}
+		}
+	}
+	if writeRecord {
+		service.putClusterInfo(*dc, clusterName, "no")
+	}
+	// monitor drained node
+	go ecs.launchWaitForDrainedNode(clusterName, containerInstanceArn, message.Detail.EC2InstanceId, message.Detail.AutoScalingGroupName, message.Detail.LifecycleHookName, message.Detail.LifecycleActionToken)
 	return nil
 }
