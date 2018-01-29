@@ -6,8 +6,38 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
 * Creates necessary IAM roles
 * Creates ALB target and listener rules
 * Creates and updates ECS Services based on JSON input
+* SAML supported Web UI to redeploy/rollback versions, add/update/delete parameters, examine event/container logs, scale, and run manual tasks
+* Support to scale out and scale in ECS Container Instances
 
-## How to deploy
+## Quick Usage
+```
+$ curl -X POST http://localhost:8080/ecs-deploy/api/v1/deploy/myservice -H 'Content-type: application/json' -H "Authorization:Bearer $TOKEN" -d \
+'{
+  "cluster": "mycluster",
+  "servicePort": 80,
+  "serviceProtocol": "HTTP",
+  "desiredCount": 1,
+  "containers": [
+    {
+      "containerName": "myservice",
+      "containerImage": "nginx",
+      "containerURI": "index.docker.io/nginx:alpine",
+      "containerPort": 80,
+      "memoryReservation": 128,
+      "essential": true
+    }
+  ],
+  "healthCheck": {
+    "healthyThreshold": 3,
+    "unhealthyThreshold": 3,
+    "path": "/",
+    "interval": 60,
+    "matcher": "200,301"
+  }
+}'
+```
+
+## How to install
 
 * Deploy the docker image as a service on ECS
   * See examples/ecs-deploy.tf for a terraform deploy script
