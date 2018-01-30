@@ -33,8 +33,13 @@
         "elasticloadbalancing:CreateRule",
         "elasticloadbalancing:createTargetGroup",
         "elasticloadbalancing:ModifyTargetGroupAttributes",
-        "acm:DescribeCertificate"
-
+        "acm:DescribeCertificate",
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeLifecycleHooks",
+        "autoscaling:DescribeAutoScalingNotificationTypes",
+        "autoscaling:UpdateAutoScalingGroup",
+        "autoscaling:CompleteLifecycleAction",
+        "logs:GetLogEvents"
       ],
       "Resource": "*"
     },
