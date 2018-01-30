@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -309,6 +310,14 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 		}
 		if container.CPU > 0 {
 			containerDefinition.Cpu = aws.Int64(container.CPU)
+		} else {
+			if container.CPU == 0 && getEnv("DEFAULT_CONTAINER_CPU_LIMIT", "") != "" {
+				defaultCpuLimit, err := strconv.ParseInt(getEnv("DEFAULT_CONTAINER_CPU_LIMIT", ""), 10, 64)
+				if err != nil {
+					return nil, err
+				}
+				containerDefinition.Cpu = aws.Int64(defaultCpuLimit)
+			}
 		}
 
 		if container.Essential {
