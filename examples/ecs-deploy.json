@@ -25,10 +25,6 @@
         "value": "deploy"
       },
       {
-        "name": "DEVELOPER_PASSWORD",
-        "value": "develop"
-      },
-      {
         "name": "AWS_ACCOUNT_ENV",
         "value": "staging"
       }

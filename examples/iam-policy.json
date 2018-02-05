@@ -59,7 +59,10 @@
       "Action": [
           "dynamodb:*"
       ],
-      "Resource": "arn:aws:dynamodb:us-east-1:<accountid>:table/Services"
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:<accountid>:table/Services",
+        "arn:aws:dynamodb:us-east-1:<accountid>:table/Services/*"
+      ]
     }
   ]
 }

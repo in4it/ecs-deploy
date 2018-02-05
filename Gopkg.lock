@@ -181,6 +181,12 @@
   revision = "b7efc6231e45b10bfd779852831c8bb59b350ec5"
 
 [[projects]]
+  name = "github.com/spf13/pflag"
+  packages = ["."]
+  revision = "e57e3eeb33f795204c1ca35f56c44f83227c6e66"
+  version = "v1.0.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/swaggo/gin-swagger"
   packages = [".","swaggerFiles"]
@@ -243,6 +249,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "40f26c93d7223df9978a475634f1b2fa5836b30cb7868d08b7652639c826a310"
+  inputs-digest = "546a91607299f2edcb864c1295a41e6edde6345f292a1110e76fadf265ade3a5"
   solver-name = "gps-cdcl"
   solver-version = 1

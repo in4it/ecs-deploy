@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	//"github.com/RobotsAndPencils/go-saml"
@@ -8,6 +8,7 @@ import (
 	_ "github.com/in4it/ecs-deploy/docs"
 	"github.com/in4it/ecs-deploy/ngserve"
 	"github.com/in4it/ecs-deploy/session"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 	"github.com/robbiet480/go.sns"
 	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
@@ -35,9 +36,13 @@ type API struct {
 }
 
 // deploy binding from JSON
+type DeployServices struct {
+	Services []Deploy `json:"services" binding:"required"`
+}
 type Deploy struct {
 	Cluster               string                      `json:"cluster" binding:"required"`
-	ServicePort           int64                       `json:"servicePort" binding:"required"`
+	ServiceName           string                      `json:"serviceName"`
+	ServicePort           int64                       `json:"servicePort"`
 	ServiceProtocol       string                      `json:"serviceProtocol" binding:"required"`
 	DesiredCount          int64                       `json:"desiredCount" binding:"required"`
 	MinimumHealthyPercent int64                       `json:"minimumHealthyPercent"`
@@ -248,8 +253,8 @@ type SNSPayloadLifecycleDetail struct {
 	LifecycleTransition  string `json:"LifecycleTransition"`
 }
 
-func (a *API) launch() error {
-	if getEnv("SAML_ENABLED", "") == "yes" {
+func (a *API) Launch() error {
+	if util.GetEnv("SAML_ENABLED", "") == "yes" {
 		err := a.initSAML()
 		if err != nil {
 			return err
@@ -265,7 +270,7 @@ func (a *API) launch() error {
 func (a *API) initSAML() error {
 	// initialize samlHelper
 	var err error
-	a.samlHelper, err = newSAML(getEnv("SAML_METADATA_URL", ""), []byte(getEnv("SAML_CERTIFICATE", "")), []byte(getEnv("SAML_PRIVATE_KEY", "")))
+	a.samlHelper, err = newSAML(util.GetEnv("SAML_METADATA_URL", ""), []byte(util.GetEnv("SAML_CERTIFICATE", "")), []byte(util.GetEnv("SAML_PRIVATE_KEY", "")))
 	if err != nil {
 		return err
 	}
@@ -281,11 +286,11 @@ func (a *API) createRoutes() {
 	r.Use(location.Default())
 
 	// cookie sessions
-	r.Use(session.SessionHandler("ecs-deploy", getEnv("JWT_SECRET", "unsecure secret key 8a045eb")))
+	r.Use(session.SessionHandler("ecs-deploy", util.GetEnv("JWT_SECRET", "unsecure secret key 8a045eb")))
 
 	// prefix
-	prefix := getEnv("URL_PREFIX", "")
-	apiPrefix := prefix + getEnv("URL_PREFIX_API", "/api/v1")
+	prefix := util.GetEnv("URL_PREFIX", "")
+	apiPrefix := prefix + util.GetEnv("URL_PREFIX_API", "/api/v1")
 
 	// webapp
 	r.Use(ngserve.ServeWithDefault(prefix+"/webapp", ngserve.LocalFile("./webapp/dist", false), "./webapp/dist/index.html"))
@@ -301,7 +306,7 @@ func (a *API) createRoutes() {
 		r.GET(prefix+"/health", a.healthHandler)
 
 		// saml init
-		if getEnv("SAML_ENABLED", "") == "yes" {
+		if util.GetEnv("SAML_ENABLED", "") == "yes" {
 			r.POST(prefix+"/saml/acs", a.samlHelper.samlInitHandler)
 			r.GET(prefix+"/saml/acs", a.samlHelper.samlInitHandler)
 		}
@@ -327,6 +332,7 @@ func (a *API) createRoutes() {
 
 		// Deploy
 		auth.POST("/deploy/:service", a.deployServiceHandler)
+		auth.POST("/deploy", a.deployServicesHandler)
 
 		// Redeploy existing version
 		auth.POST("/deploy/:service/:time", a.redeployServiceHandler)
@@ -381,12 +387,12 @@ func (a *API) createRoutes() {
 func (a *API) createAuthMiddleware() {
 	a.authMiddleware = &jwt.GinJWTMiddleware{
 		Realm:            "ecs-deploy",
-		Key:              []byte(getEnv("JWT_SECRET", "unsecure secret key 8a045eb")),
+		Key:              []byte(util.GetEnv("JWT_SECRET", "unsecure secret key 8a045eb")),
 		SigningAlgorithm: "HS256",
 		Timeout:          time.Hour,
 		MaxRefresh:       time.Hour,
 		Authenticator: func(userId string, password string, c *gin.Context) (string, bool) {
-			if (userId == "deploy" && password == getEnv("DEPLOY_PASSWORD", "deploy")) || (userId == "developer" && password == getEnv("DEVELOPER_PASSWORD", "developer")) {
+			if (userId == "deploy" && password == util.GetEnv("DEPLOY_PASSWORD", "deploy")) || (userId == "developer" && password == util.GetEnv("DEVELOPER_PASSWORD", "developer")) {
 				return userId, true
 			}
 
@@ -467,7 +473,7 @@ func (a *API) healthHandler(c *gin.Context) {
 func (a *API) deployServiceHandler(c *gin.Context) {
 	var json Deploy
 	controller := Controller{}
-	controller.setDeployDefaults(&json)
+	controller.SetDeployDefaults(&json)
 	if err := c.ShouldBindJSON(&json); err == nil {
 		if err = a.deployServiceValidator(c.Param("service"), json); err == nil {
 			res, err := controller.deploy(c.Param("service"), json)
@@ -481,6 +487,45 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		}
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+}
+
+// @summary Deploy services to ECS
+// @description Deploy services to ECS
+// @id ecs-deploy-service
+// @accept  json
+// @produce  json
+// @router /api/v1/deploy [post]
+func (a *API) deployServicesHandler(c *gin.Context) {
+	var json DeployServices
+	var errors map[string]string
+	var results []*DeployResult
+	var err error
+	var res *DeployResult
+	var failures int
+	errors = make(map[string]string)
+	controller := Controller{}
+	if err = c.ShouldBindJSON(&json); err == nil {
+		for i, v := range json.Services {
+			controller.SetDeployDefaults(&json.Services[i])
+			if err = a.deployServiceValidator(v.ServiceName, json.Services[i]); err == nil {
+				res, err = controller.deploy(v.ServiceName, json.Services[i])
+				if err == nil {
+					results = append(results, res)
+				}
+			}
+			if err != nil {
+				failures += 1
+				errors[v.ServiceName] = err.Error()
+			}
+		}
+		c.JSON(200, gin.H{
+			"messages": results,
+			"failures": failures,
+			"errors":   errors,
+		})
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
@@ -511,6 +556,9 @@ func (a *API) redeployServiceHandler(c *gin.Context) {
 func (a *API) deployServiceValidator(serviceName string, d Deploy) error {
 	if len(serviceName) < 3 {
 		return errors.New("service name needs to be at least 3 characters")
+	}
+	if strings.ToLower(d.ServiceProtocol) != "none" && d.ServicePort == 0 {
+		return errors.New("ServicePort needs to be set if ServiceProtocol is not set to none.")
 	}
 	t := false
 	for _, container := range d.Containers {
@@ -714,7 +762,7 @@ func (a *API) getDeploymentHandler(c *gin.Context) {
 }
 
 func (a *API) redirectFrontendHandler(c *gin.Context) {
-	c.Redirect(http.StatusMovedPermanently, getEnv("URL_PREFIX", "")+"/webapp/")
+	c.Redirect(http.StatusMovedPermanently, util.GetEnv("URL_PREFIX", "")+"/webapp/")
 }
 
 func (a *API) listServiceParametersHandler(c *gin.Context) {

@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/guregu/dynamo"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
 	"errors"
@@ -84,7 +85,7 @@ type DynamoClusterContainerInstance struct {
 func newService() *Service {
 	s := Service{}
 	s.db = dynamo.New(session.New(), &aws.Config{})
-	s.table = s.db.Table(getEnv("DYNAMODB_TABLE", "Services"))
+	s.table = s.db.Table(util.GetEnv("DYNAMODB_TABLE", "Services"))
 	return &s
 }
 
@@ -127,7 +128,7 @@ func (s *Service) getServices(ds *DynamoServices) error {
 }
 func (s *Service) createService(dsElement *DynamoServicesElement) error {
 	// check input
-	if (s.serviceName == "") || (s.clusterName == "") || (len(s.listeners) == 0) {
+	if (s.serviceName == "") || (s.clusterName == "") {
 		serviceLogger.Errorf("Couldn't add %v (cluster = %v, listener # = %d)", s.serviceName, s.clusterName, len(s.listeners))
 		return errors.New("Couldn't add " + s.serviceName + ": cluster / listeners is empty")
 	}
@@ -203,7 +204,7 @@ func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDe
 		w.Scaling.DesiredCount = d.DesiredCount
 	} else {
 		w.Scaling = lastDeploy.Scaling
-		w.Scaling.DesiredCount = Max(d.DesiredCount, lastDeploy.Scaling.DesiredCount)
+		w.Scaling.DesiredCount = util.Max(d.DesiredCount, lastDeploy.Scaling.DesiredCount)
 	}
 
 	err = s.table.Put(w).Run()
@@ -394,7 +395,7 @@ func (s *Service) getServiceVersionsByTags(serviceName, imageName string, tags m
 }
 
 func (s *Service) createTable() error {
-	err := s.db.CreateTable(getEnv("DYNAMODB_TABLE", "Services"), DynamoDeployment{}).
+	err := s.db.CreateTable(util.GetEnv("DYNAMODB_TABLE", "Services"), DynamoDeployment{}).
 		Provision(2, 1).
 		ProvisionIndex("DayIndex", 1, 1).
 		ProvisionIndex("MonthIndex", 1, 1).
@@ -403,7 +404,7 @@ func (s *Service) createTable() error {
 		return err
 	}
 
-	s.table = s.db.Table(getEnv("DYNAMODB_TABLE", "Services"))
+	s.table = s.db.Table(util.GetEnv("DYNAMODB_TABLE", "Services"))
 	return nil
 }
 func (s *Service) getClusterName() (string, error) {

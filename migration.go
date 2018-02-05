@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"github.com/juju/loggo"
@@ -26,7 +26,7 @@ func (m *Migration) run(apiVersion string) error {
 		runningMinor = 0
 	}
 	if runningMajor == 1 && runningMinor < 2 {
-		migrationLogger.Infof("Starting migration from %v to %v", apiVersion, getApiVersion())
+		migrationLogger.Infof("Starting migration from %v to %v", apiVersion, m.getApiVersion())
 		var dss DynamoServices
 		service := newService()
 		ecs := ECS{}
@@ -46,8 +46,12 @@ func (m *Migration) run(apiVersion string) error {
 			service.updateServiceLimits(service.clusterName, service.serviceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
 			time.Sleep(500 * time.Millisecond)
 		}
-		service.setApiVersion(getApiVersion())
-		migrationLogger.Infof("Updated API version to %v", getApiVersion())
+		service.setApiVersion(m.getApiVersion())
+		migrationLogger.Infof("Updated API version to %v", m.getApiVersion())
 	}
 	return nil
+}
+
+func (m *Migration) getApiVersion() string {
+	return apiVersion
 }
