@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
 	"context"
@@ -259,9 +260,9 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 		var imageUri string
 		if container.ContainerURI == "" {
 			if container.ContainerImage == "" {
-				imageUri = iam.accountId + ".dkr.ecr." + getEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerName
+				imageUri = iam.accountId + ".dkr.ecr." + util.GetEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerName
 			} else {
-				imageUri = iam.accountId + ".dkr.ecr." + getEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerImage
+				imageUri = iam.accountId + ".dkr.ecr." + util.GetEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerImage
 			}
 			if container.ContainerTag != "" {
 				imageUri += ":" + container.ContainerTag
@@ -288,16 +289,16 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 			containerDefinition.SetCommand(container.ContainerCommand)
 		}
 		// set cloudwacht logs if enabled
-		if getEnv("CLOUDWATCH_LOGS_ENABLED", "no") == "yes" {
+		if util.GetEnv("CLOUDWATCH_LOGS_ENABLED", "no") == "yes" {
 			var logPrefix string
-			if getEnv("CLOUDWATCH_LOGS_PREFIX", "") != "" {
-				logPrefix = getEnv("CLOUDWATCH_LOGS_PREFIX", "") + "-" + getEnv("AWS_ACCOUNT_ENV", "")
+			if util.GetEnv("CLOUDWATCH_LOGS_PREFIX", "") != "" {
+				logPrefix = util.GetEnv("CLOUDWATCH_LOGS_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "")
 			}
 			containerDefinition.SetLogConfiguration(&ecs.LogConfiguration{
 				LogDriver: aws.String("awslogs"),
 				Options: map[string]*string{
 					"awslogs-group":         aws.String(logPrefix),
-					"awslogs-region":        aws.String(getEnv("AWS_REGION", "")),
+					"awslogs-region":        aws.String(util.GetEnv("AWS_REGION", "")),
 					"awslogs-stream-prefix": aws.String(container.ContainerName),
 				},
 			})
@@ -311,8 +312,8 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 		if container.CPU > 0 {
 			containerDefinition.Cpu = aws.Int64(container.CPU)
 		} else {
-			if container.CPU == 0 && getEnv("DEFAULT_CONTAINER_CPU_LIMIT", "") != "" {
-				defaultCpuLimit, err := strconv.ParseInt(getEnv("DEFAULT_CONTAINER_CPU_LIMIT", ""), 10, 64)
+			if container.CPU == 0 && util.GetEnv("DEFAULT_CONTAINER_CPU_LIMIT", "") != "" {
+				defaultCpuLimit, err := strconv.ParseInt(util.GetEnv("DEFAULT_CONTAINER_CPU_LIMIT", ""), 10, 64)
 				if err != nil {
 					return nil, err
 				}
@@ -324,10 +325,10 @@ func (e *ECS) createTaskDefinition(d Deploy) (*string, error) {
 			containerDefinition.Essential = aws.Bool(container.Essential)
 		}
 
-		if getEnv("PARAMSTORE_ENABLED", "no") == "yes" {
+		if util.GetEnv("PARAMSTORE_ENABLED", "no") == "yes" {
 			containerDefinition.SetEnvironment([]*ecs.KeyValuePair{
-				{Name: aws.String("AWS_REGION"), Value: aws.String(getEnv("AWS_REGION", ""))},
-				{Name: aws.String("AWS_ENV_PATH"), Value: aws.String("/" + getEnv("PARAMSTORE_PREFIX", "") + "-" + getEnv("AWS_ACCOUNT_ENV", "") + "/" + e.serviceName + "/")},
+				{Name: aws.String("AWS_REGION"), Value: aws.String(util.GetEnv("AWS_REGION", ""))},
+				{Name: aws.String("AWS_ENV_PATH"), Value: aws.String("/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + e.serviceName + "/")},
 			})
 		}
 
@@ -493,15 +494,8 @@ func (e *ECS) createService(d Deploy) error {
 	}
 
 	input := &ecs.CreateServiceInput{
-		Cluster:      aws.String(d.Cluster),
-		DesiredCount: aws.Int64(d.DesiredCount),
-		LoadBalancers: []*ecs.LoadBalancer{
-			{
-				ContainerName:  aws.String(e.serviceName),
-				ContainerPort:  aws.Int64(d.ServicePort),
-				TargetGroupArn: aws.String(*e.targetGroupArn),
-			},
-		},
+		Cluster:        aws.String(d.Cluster),
+		DesiredCount:   aws.Int64(d.DesiredCount),
 		ServiceName:    aws.String(e.serviceName),
 		TaskDefinition: aws.String(*e.taskDefArn),
 		PlacementStrategy: []*ecs.PlacementStrategy{
@@ -514,6 +508,16 @@ func (e *ECS) createService(d Deploy) error {
 				Type:  aws.String("binpack"),
 			},
 		},
+	}
+
+	if strings.ToLower(d.ServiceProtocol) != "none" {
+		input.SetLoadBalancers([]*ecs.LoadBalancer{
+			{
+				ContainerName:  aws.String(e.serviceName),
+				ContainerPort:  aws.Int64(d.ServicePort),
+				TargetGroupArn: aws.String(*e.targetGroupArn),
+			},
+		})
 	}
 
 	// network configuration
@@ -542,7 +546,9 @@ func (e *ECS) createService(d Deploy) error {
 		input.SetNetworkConfiguration(nc)
 	} else {
 		// only set role if network mode is not awsvpc (it will be set automatically)
-		input.SetRole(getEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
+		if strings.ToLower(d.ServiceProtocol) != "none" { // only set the role if there's a loadbalancer necessary
+			input.SetRole(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
+		}
 	}
 
 	// check whether min/max is set
@@ -1337,4 +1343,31 @@ func (e *ECS) launchWaitForDrainedNode(clusterName, containerInstanceArn, instan
 	}
 	ecsLogger.Infof("launchWaitForDrainedNode: Node drained, completed lifecycle action")
 	return nil
+}
+
+// list services
+func (e *ECS) listServices(clusterName string) ([]*string, error) {
+	svc := ecs.New(session.New())
+	var services []*string
+
+	input := &ecs.ListServicesInput{
+		Cluster: aws.String(clusterName),
+	}
+
+	pageNum := 0
+	err := svc.ListServicesPages(input,
+		func(page *ecs.ListServicesOutput, lastPage bool) bool {
+			pageNum++
+			services = append(services, page.ServiceArns...)
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+	}
+	return services, err
 }

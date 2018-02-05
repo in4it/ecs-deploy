@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"errors"
@@ -6,7 +6,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
+	"os"
 	"strings"
 )
 
@@ -28,7 +30,7 @@ type Paramstore struct {
 }
 
 func (p *Paramstore) isEnabled() bool {
-	if getEnv("PARAMSTORE_ENABLED", "no") == "yes" {
+	if util.GetEnv("PARAMSTORE_ENABLED", "no") == "yes" {
 		return true
 	} else {
 		return false
@@ -36,17 +38,17 @@ func (p *Paramstore) isEnabled() bool {
 }
 
 func (p *Paramstore) getPrefix() string {
-	if getEnv("PARAMSTORE_PREFIX", "") == "" {
+	if util.GetEnv("PARAMSTORE_PREFIX", "") == "" {
 		return ""
 	} else {
-		return "/" + getEnv("PARAMSTORE_PREFIX", "") + "-" + getEnv("AWS_ACCOUNT_ENV", "") + "/ecs-deploy/"
+		return "/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/ecs-deploy/"
 	}
 }
 func (p *Paramstore) getPrefixForService(serviceName string) string {
-	if getEnv("PARAMSTORE_PREFIX", "") == "" {
+	if util.GetEnv("PARAMSTORE_PREFIX", "") == "" {
 		return ""
 	} else {
-		return "/" + getEnv("PARAMSTORE_PREFIX", "") + "-" + getEnv("AWS_ACCOUNT_ENV", "") + "/" + serviceName + "/"
+		return "/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + serviceName + "/"
 	}
 }
 func (p *Paramstore) assumeRole(roleArn, roleSessionName, prevCreds string) (string, error) {
@@ -167,7 +169,7 @@ func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) string {
           "ssm:GetParametersByPath"
         ],
         "Resource": [
-          "arn:aws:ssm:` + getEnv("AWS_REGION", "") + `:` + accountId + `:parameter/` + getEnv("PARAMSTORE_PREFIX", "") + `-` + getEnv("AWS_ACCOUNT_ENV", "") + `/` + serviceName + `/*"
+          "arn:aws:ssm:` + util.GetEnv("AWS_REGION", "") + `:` + accountId + `:parameter/` + util.GetEnv("PARAMSTORE_PREFIX", "") + `-` + util.GetEnv("AWS_ACCOUNT_ENV", "") + `/` + serviceName + `/*"
         ],
         "Effect": "Allow"
       },
@@ -176,7 +178,7 @@ func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) string {
           "kms:Decrypt"
         ],
         "Resource": [
-          "` + getEnv("PARAMSTORE_KMS_ARN", "") + `"
+          "` + util.GetEnv("PARAMSTORE_KMS_ARN", "") + `"
         ],
         "Effect": "Allow"
       }
@@ -199,7 +201,7 @@ func (p *Paramstore) putParameter(serviceName string, parameter DeployServicePar
 	}
 	if parameter.Encrypted {
 		input.SetType("SecureString")
-		input.SetKeyId(getEnv("PARAMSTORE_KMS_ARN", ""))
+		input.SetKeyId(util.GetEnv("PARAMSTORE_KMS_ARN", ""))
 	} else {
 		input.SetType("String")
 	}
@@ -235,6 +237,28 @@ func (p *Paramstore) deleteParameter(serviceName, parameter string) error {
 			paramstoreLogger.Errorf(err.Error())
 		}
 		return err
+	}
+	return nil
+}
+
+func (p *Paramstore) bootstrap(serviceName, prefix string, environment string, parameters []DeployServiceParameter) error {
+	os.Setenv("PARAMSTORE_PREFIX", prefix)
+	os.Setenv("AWS_ACCOUNT_ENV", environment)
+	for _, v := range parameters {
+		p.putParameter(serviceName, v)
+	}
+	return nil
+}
+
+func (p *Paramstore) RetrieveKeys() error {
+	if p.isEnabled() {
+		err := p.getParameters(p.getPrefix(), true)
+		if err != nil {
+			return err
+		}
+		for k, v := range p.parameters {
+			os.Setenv(k, v.Value)
+		}
 	}
 	return nil
 }

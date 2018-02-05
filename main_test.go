@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"github.com/juju/loggo"

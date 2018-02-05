@@ -1,8 +1,9 @@
-package main
+package ecsdeploy
 
 import (
 	"encoding/base64"
 	"errors"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 	"io/ioutil"
 	"sort"
@@ -102,11 +103,11 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	}
 	e.templateMap["${SERVICE_PORT}"] = strconv.FormatInt(e.deployData.ServicePort, 10)
 	e.templateMap["${SERVICE_PROTOCOL}"] = e.deployData.ServiceProtocol
-	e.templateMap["${AWS_REGION}"] = getEnv("AWS_REGION", "")
+	e.templateMap["${AWS_REGION}"] = util.GetEnv("AWS_REGION", "")
 	e.templateMap["${ACCOUNT_ID}"] = iam.accountId
-	e.templateMap["${PARAMSTORE_PREFIX}"] = getEnv("PARAMSTORE_PREFIX", "")
-	e.templateMap["${AWS_ACCOUNT_ENV}"] = getEnv("AWS_ACCOUNT_ENV", "")
-	e.templateMap["${PARAMSTORE_KMS_ARN}"] = getEnv("PARAMSTORE_KMS_ARN", "")
+	e.templateMap["${PARAMSTORE_PREFIX}"] = util.GetEnv("PARAMSTORE_PREFIX", "")
+	e.templateMap["${AWS_ACCOUNT_ENV}"] = util.GetEnv("AWS_ACCOUNT_ENV", "")
+	e.templateMap["${PARAMSTORE_KMS_ARN}"] = util.GetEnv("PARAMSTORE_KMS_ARN", "")
 	e.templateMap["${VPC_ID}"] = e.alb[clusterName].vpcId
 	if e.deployData.HealthCheck.HealthyThreshold != 0 {
 		b, err := ioutil.ReadFile("templates/export/alb_targetgroup_healthcheck.tf")

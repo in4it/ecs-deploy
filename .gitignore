@@ -1,6 +1,8 @@
 *.swp
 .env
 ecs-deploy
+ecs-client-linux-amd64
+ecs-deploy-linux-amd64
 *.crt
 *.key
 webapp/node_modules/

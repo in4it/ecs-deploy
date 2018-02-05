@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/acm"
 	"github.com/aws/aws-sdk-go/service/elbv2"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
 	"errors"
@@ -413,7 +414,7 @@ func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn str
 		if len(rules) != 1 {
 			return errors.New("Wrong number of rules (expected 1, got " + strconv.Itoa(len(rules)) + ")")
 		}
-		hostname := rules[0] + "." + getEnv("LOADBALANCER_DOMAIN", a.domain)
+		hostname := rules[0] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.domain)
 		input.SetConditions([]*elbv2.RuleCondition{
 			{
 				Field:  aws.String("host-header"),
@@ -424,7 +425,7 @@ func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn str
 		if len(rules) != 2 {
 			return errors.New("Wrong number of rules (expected 2, got " + strconv.Itoa(len(rules)) + ")")
 		}
-		hostname := rules[1] + "." + getEnv("LOADBALANCER_DOMAIN", a.domain)
+		hostname := rules[1] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.domain)
 		input.SetConditions([]*elbv2.RuleCondition{
 			{
 				Field:  aws.String("path-pattern"),
@@ -542,7 +543,7 @@ func (a *ALB) getTargetGroupArn(serviceName string) (*string, error) {
 	}
 }
 func (a *ALB) getDomain() string {
-	return getEnv("LOADBALANCER_DOMAIN", a.domain)
+	return util.GetEnv("LOADBALANCER_DOMAIN", a.domain)
 }
 func (a *ALB) findRule(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, *string, error) {
 	if len(conditionField) != len(conditionValue) {

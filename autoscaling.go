@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -109,10 +109,11 @@ func (a *AutoScaling) createLaunchConfiguration(clusterName string, keyName stri
 	_, err = svc.CreateLaunchConfiguration(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
-			ecsLogger.Errorf("%v", aerr.Error())
 			if strings.Contains(aerr.Message(), "Invalid IamInstanceProfile") {
-				ecsLogger.Errorf("Caught RetryableError: %v", aerr.Message())
+				ecsLogger.Debugf("Caught RetryableError: %v", aerr.Message())
 				return errors.New("RetryableError: Invalid IamInstanceProfile")
+			} else {
+				ecsLogger.Errorf("%v", aerr.Error())
 			}
 		} else {
 			ecsLogger.Errorf("%v", err.Error())
@@ -290,7 +291,7 @@ func (a *AutoScaling) getAutoScalingGroupByTag(clusterName string) (string, erro
 		}
 	}
 	if result == "" {
-		return result, errors.New("Could not find cluster by tag key=Cluster,Value=" + clusterName)
+		return result, errors.New("ClusterNotFound: Could not find cluster by tag key=Cluster,Value=" + clusterName)
 	}
 	return result, nil
 }

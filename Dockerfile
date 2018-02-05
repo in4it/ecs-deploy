@@ -48,4 +48,4 @@ COPY --from=webapp-builder /webapp/dist webapp/dist
 # remove unnecessary source files
 RUN rm -rf *.go webapp/src
 
-CMD ["./ecs-deploy"]  
+CMD ["./ecs-deploy", "--server"]  

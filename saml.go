@@ -1,4 +1,4 @@
-package main
+package ecsdeploy
 
 // saml gin-gonic implementation
 // uses saml/samlsp with parts rewritten to make it work with gin-gonic and gin-jwt
@@ -9,6 +9,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
 	"crypto/rsa"
@@ -74,7 +75,7 @@ func newSAML(strIdpMetadataURL string, X509KeyPair, keyPEMBlock []byte) (*SAML, 
 		return nil, err
 	}
 
-	rootURL, err := url.Parse(getEnv("SAML_ACS_URL", ""))
+	rootURL, err := url.Parse(util.GetEnv("SAML_ACS_URL", ""))
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (s *SAML) getIDPCert() string {
 }
 
 func (s *SAML) samlEnabledHandler(c *gin.Context) {
-	if getEnv("SAML_ENABLED", "") == "yes" {
+	if util.GetEnv("SAML_ENABLED", "") == "yes" {
 		c.JSON(200, gin.H{
 			"saml": "enabled",
 		})
@@ -130,7 +131,7 @@ func (s *SAML) samlResponseHandler(c *gin.Context) {
 	claims["exp"] = expire.Unix()
 	claims["orig_iat"] = s.TimeFunc().Unix()
 
-	tokenString, err := token.SignedString([]byte(getEnv("JWT_SECRET", "unsecure secret key 8a045eb")))
+	tokenString, err := token.SignedString([]byte(util.GetEnv("JWT_SECRET", "unsecure secret key 8a045eb")))
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -139,7 +140,7 @@ func (s *SAML) samlResponseHandler(c *gin.Context) {
 		return
 	}
 	// redirect to UI with jwt token
-	c.Redirect(http.StatusFound, getEnv("URL_PREFIX", "")+"/webapp/saml?token="+tokenString)
+	c.Redirect(http.StatusFound, util.GetEnv("URL_PREFIX", "")+"/webapp/saml?token="+tokenString)
 }
 
 // samlsp/middleware.go adapted for gin gonic
