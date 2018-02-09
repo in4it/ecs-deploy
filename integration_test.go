@@ -6,30 +6,31 @@ import (
 	"os/signal"
 	"testing"
 	"time"
+
+	"github.com/in4it/ecs-deploy/util"
 )
 
-var runIntegrationTest = getEnv("TEST_RUN_INTEGRATION", "no")
-var bootstrapFlags = BootstrapFlags{
-	region:                getEnv("AWS_REGION", ""),
-	clusterName:           getEnv("TEST_CLUSTERNAME", "integrationtest"),
-	environment:           getEnv("TEST_ENVIRONMENT", ""),
-	albSecurityGroups:     getEnv("TEST_ALB_SG", ""),
-	ecsSubnets:            getEnv("TEST_ECS_SUBNETS", ""),
-	cloudwatchLogsPrefix:  getEnv("TEST_CLOUDWATCH_LOGS_PREFIX", ""),
-	cloudwatchLogsEnabled: getEnv("TEST_CLOUDWATCH_LOGS_ENABLED", "no"),
-	keyName:               getEnv("TEST_KEYNAME", getEnv("TEST_CLUSTERNAME", "integrationtest")),
-	instanceType:          getEnv("TEST_INSTANCETYPE", "t2.micro"),
-	instanceProfile:       getEnv("TEST_INSTANCEPROFILE", getEnv("TEST_CLUSTERNAME", "integrationtest")),
-	ecsSecurityGroups:     getEnv("TEST_ECS_SG", ""),
-	ecsMinSize:            getEnv("TEST_ECS_MINSIZE", "1"),
-	ecsMaxSize:            getEnv("TEST_ECS_MAXSIZE", "1"),
-	ecsDesiredSize:        getEnv("TEST_ECS_DESIREDSIZE", "1"),
-	paramstoreEnabled:     getEnv("TEST_PARAMSTORE_ENABLED", "no"),
-	disableEcsDeploy:      true,
+var runIntegrationTest = util.GetEnv("TEST_RUN_INTEGRATION", "no")
+var bootstrapFlags = &Flags{
+	Region:                util.GetEnv("AWS_REGION", ""),
+	ClusterName:           util.GetEnv("TEST_CLUSTERNAME", "integrationtest"),
+	Environment:           util.GetEnv("TEST_ENVIRONMENT", ""),
+	AlbSecurityGroups:     util.GetEnv("TEST_ALB_SG", ""),
+	EcsSubnets:            util.GetEnv("TEST_ECS_SUBNETS", ""),
+	CloudwatchLogsPrefix:  util.GetEnv("TEST_CLOUDWATCH_LOGS_PREFIX", ""),
+	CloudwatchLogsEnabled: util.YesNoToBool(util.GetEnv("TEST_CLOUDWATCH_LOGS_ENABLED", "no")),
+	KeyName:               util.GetEnv("TEST_KEYNAME", util.GetEnv("TEST_CLUSTERNAME", "integrationtest")),
+	InstanceType:          util.GetEnv("TEST_INSTANCETYPE", "t2.micro"),
+	EcsSecurityGroups:     util.GetEnv("TEST_ECS_SG", ""),
+	EcsMinSize:            util.GetEnv("TEST_ECS_MINSIZE", "1"),
+	EcsMaxSize:            util.GetEnv("TEST_ECS_MAXSIZE", "1"),
+	EcsDesiredSize:        util.GetEnv("TEST_ECS_DESIREDSIZE", "1"),
+	ParamstoreEnabled:     util.YesNoToBool(util.GetEnv("TEST_PARAMSTORE_ENABLED", "no")),
+	DisableEcsDeploy:      true,
 }
 
 var ecsDefault = Deploy{
-	Cluster:               bootstrapFlags.clusterName,
+	Cluster:               bootstrapFlags.ClusterName,
 	ServiceName:           "integrationtest-default",
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
@@ -49,7 +50,7 @@ var ecsDefault = Deploy{
 	},
 }
 var ecsDefaultConcurrentDeploy = Deploy{
-	Cluster:               bootstrapFlags.clusterName,
+	Cluster:               bootstrapFlags.ClusterName,
 	ServiceName:           "integrationtest-concurrency",
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
@@ -73,7 +74,7 @@ var ecsMultiDeploy = DeployServices{
 	Services: []Deploy{ecsDefault, ecsDefaultConcurrentDeploy},
 }
 var ecsDefaultWithChanges = Deploy{
-	Cluster:               bootstrapFlags.clusterName,
+	Cluster:               bootstrapFlags.ClusterName,
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
 	DesiredCount:          1,
@@ -97,7 +98,7 @@ var ecsDefaultWithChanges = Deploy{
 	},
 }
 var ecsDefaultFailingHealthCheck = Deploy{
-	Cluster:               bootstrapFlags.clusterName,
+	Cluster:               bootstrapFlags.ClusterName,
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
 	DesiredCount:          1,
@@ -117,7 +118,7 @@ var ecsDefaultFailingHealthCheck = Deploy{
 	},
 }
 var ecsDeploy = Deploy{
-	Cluster:               bootstrapFlags.clusterName,
+	Cluster:               bootstrapFlags.ClusterName,
 	ServicePort:           8080,
 	ServiceProtocol:       "HTTP",
 	DesiredCount:          1,
@@ -168,12 +169,15 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	// vars
 	var err error
 	ecs := ECS{}
-	iam := IAM{}
 	service := newService()
 	controller := Controller{}
-	clusterName := bootstrapFlags.clusterName
+	clusterName := bootstrapFlags.ClusterName
 
-	controller.bootstrap(bootstrapFlags)
+	err = controller.Bootstrap(bootstrapFlags)
+	if err != nil {
+		t.Errorf("Couldn't spin up cluster: %v", err.Error())
+		return shutdown
+	}
 
 	// deploy (3 times: one time to create, one to update and one with different layout)
 	var deployRes *DeployResult
@@ -254,8 +258,11 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 }
 func teardown(t *testing.T) {
 	controller := Controller{}
-	err := controller.deleteCluster(bootstrapFlags)
+	err := controller.DeleteCluster(bootstrapFlags)
 	if err != nil {
 		t.Errorf("Error: %v\n", err)
 	}
+}
+func shutdown(t *testing.T) {
+	fmt.Println("Shutting down without teardown")
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -1060,6 +1061,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		}
 		paramstore.bootstrap("ecs-deploy", b.ParamstorePrefix, b.Environment, parameters)
 		// retrieve keys from parameter store and set as environment variable
+		os.Setenv("PARAMSTORE_ENABLED", "yes")
 		err = paramstore.RetrieveKeys()
 		if err != nil {
 			return err
@@ -1094,9 +1096,9 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	fmt.Println("===============================================")
 	fmt.Println("=== Successfully bootstrapped ecs-deploy    ===")
 	fmt.Println("===============================================")
-	fmt.Printf("     URL: http://%v/ecs-deploy                  ", alb.dnsName)
+	fmt.Printf("     URL: http://%v/ecs-deploy                  \n", alb.dnsName)
 	fmt.Println("    Login: deploy                              ")
-	fmt.Printf("     Password: %v                               ", deployPassword)
+	fmt.Printf("     Password: %v                               \n", deployPassword)
 	fmt.Println("===============================================")
 	return nil
 }

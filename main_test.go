@@ -1,8 +1,10 @@
 package ecsdeploy
 
 import (
-	"github.com/juju/loggo"
 	"testing"
+
+	"github.com/in4it/ecs-deploy/util"
+	"github.com/juju/loggo"
 )
 
 var accountId *string
@@ -11,7 +13,7 @@ const noAWSMsg = "AWS Credentials not found - test skipped"
 
 func init() {
 	// set logging to debug
-	if getEnv("DEBUG", "") == "true" {
+	if util.GetEnv("DEBUG", "") == "true" {
 		loggo.ConfigureLoggers(`<root>=DEBUG`)
 	}
 	// check AWS access first
@@ -24,7 +26,7 @@ func init() {
 }
 
 func TestGetEnv(t *testing.T) {
-	if getEnv("does-not-exist", "ok") != "ok" {
+	if util.GetEnv("does-not-exist", "ok") != "ok" {
 		t.Errorf("env does-not-exist is not supposed to exist")
 	}
 }
