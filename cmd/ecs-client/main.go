@@ -357,7 +357,8 @@ func readSession() (Session, error) {
 	var session Session
 	content, err := ioutil.ReadFile(filepath.Join(os.Getenv("HOME"), ".ecsdeploy", "session.json"))
 	if err != nil {
-		return session, err
+		// no file present, return empty session
+		return session, nil
 	}
 	err = json.Unmarshal(content, &session)
 	if err != nil {

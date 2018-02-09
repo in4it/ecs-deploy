@@ -6,6 +6,8 @@ all: deps build
 
 build: build-server build-client
 
+build-static: build-server-static build-client-static
+
 deps:
 	dep ensure
 
@@ -14,6 +16,12 @@ build-server:
 
 build-client:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
+
+build-server-static:
+	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -a -installsuffix cgo ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 
+
+build-client-static:
+	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -a -installsuffix cgo ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
 
 test:
 	go test

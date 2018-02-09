@@ -9,7 +9,7 @@
         {
           "containerName": "myworker-echoserver",
           "containerImage": "echoserver",
-          "containerURI": "gcr.io/google_containers/echoserver:1.4444",
+          "containerURI": "gcr.io/google_containers/echoserver:1.4",
           "memoryReservation": 64,
           "essential": true
         }
