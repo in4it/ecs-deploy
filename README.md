@@ -9,43 +9,55 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
 * SAML supported Web UI to redeploy/rollback versions, add/update/delete parameters, examine event/container logs, scale, and run manual tasks
 * Support to scale out and scale in ECS Container Instances
 
-## Quick Usage
+## Usage
+
+### Download
+
+You can download ecs-deploy and ecs-client from the [releases page](https://github.com/in4it/ecs-deploy/releases) or you can use the [image from dockerhub](https://hub.docker.com/r/in4it/ecs-deploy/).
+
+### Bootstrap ECS cluster
+
+You can bootstrap a new ECS cluster using ecs-deploy. It'll setup a autoscaling group, ALB, IAM roles, and the ECS cluster.
+
 ```
-$ curl -X POST http://localhost:8080/ecs-deploy/api/v1/deploy/myservice -H 'Content-type: application/json' -H "Authorization:Bearer $TOKEN" -d \
-'{
-  "cluster": "mycluster",
-  "servicePort": 80,
-  "serviceProtocol": "HTTP",
-  "desiredCount": 1,
-  "containers": [
-    {
-      "containerName": "myservice",
-      "containerImage": "nginx",
-      "containerURI": "index.docker.io/nginx:alpine",
-      "containerPort": 80,
-      "memoryReservation": 128,
-      "essential": true
-    }
-  ],
-  "healthCheck": {
-    "healthyThreshold": 3,
-    "unhealthyThreshold": 3,
-    "path": "/",
-    "interval": 60,
-    "matcher": "200,301"
-  }
-}'
+./ecs-deploy --bootstrap \
+  --alb-security-groups sg-123456 \
+  --cloudwatch-logs-enabled \
+  --cloudwatch-logs-prefix mycompany \
+  --cluster-name mycluster \
+  --ecs-desired-size 1 \
+  --ecs-max-size 1 \
+  --ecs-min-size 1 \
+  --ecs-security-groups sg-123456 \
+  --ecs-subnets subnet-123456 \
+  --environment staging \
+  --instance-type t2.micro \
+  --key-name mykey \
+  --loadbalancer-domain cluster.in4it.io \
+  --paramstore-enabled \
+  --paramstore-kms-arn aws:arn:kms:region:accountid:key/1234 \
+  --paramstore-prefix mycompany \
+  --profile your-aws-profile \
+  --region your-aws-region
 ```
 
-## How to install
+You'll need to setup the security groups and VPC/subnets first. The ALB security group should allow port 80 and 443 incoming, the ECS security group should allow 32768:61000 from the ALB.
 
-* Deploy the docker image as a service on ECS
-  * See examples/ecs-deploy.tf for a terraform deploy script
-    * This script creates an ALB with the same name as the ECS cluster
-    * Adds the IAM policy from examples/iam-policy.json
-    * Adds dynamodb table with history of deployments
+If you no longer need the cluster, you can remove it by specifying --delete-cluster instead of --bootstrap
 
-## Environment variables
+Alternatively you can use terraform to deploy the ecs cluster. See examples/ecs-deploy.tf for a terraform example that spins up an ecs cluster. You will need to use the IAM policy from examples/iam-policy.json to give ecs-deploy the necessary permissions.
+
+### Deploy to ECS Cluster
+
+To deploy the examples (an nginx server and a echoserver), use ecs-client:
+
+```
+./ecs-client login --url http://yourdomain/ecs-cluster
+./ecs-client deploy -f examples/services/multiple-services/multiple-services.json
+
+```
+
+## Configuration (Environment variables)
 
 ### AWS Specific variables:
 
