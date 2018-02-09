@@ -6,3 +6,4 @@ ecs-deploy
 *.crt
 *.key
 .git
+vendor/
