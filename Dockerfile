@@ -28,7 +28,7 @@ WORKDIR /go/src/github.com/in4it/ecs-deploy/
 COPY . .
 
 RUN go-wrapper download   
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ecs-deploy .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ecs-deploy cmd/ecs-deploy/main.go
 
 #
 # Runtime container
