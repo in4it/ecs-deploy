@@ -38,10 +38,14 @@ func (p *Paramstore) isEnabled() bool {
 }
 
 func (p *Paramstore) getPrefix() string {
-	if util.GetEnv("PARAMSTORE_PREFIX", "") == "" {
-		return ""
+	if util.GetEnv("AWS_ENV_PATH", "") != "" {
+		return util.GetEnv("AWS_ENV_PATH", "")
 	} else {
-		return "/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/ecs-deploy/"
+		if util.GetEnv("PARAMSTORE_PREFIX", "") == "" {
+			return ""
+		} else {
+			return "/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/ecs-deploy/"
+		}
 	}
 }
 func (p *Paramstore) getPrefixForService(serviceName string) string {
