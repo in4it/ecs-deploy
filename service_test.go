@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/in4it/ecs-deploy/util"
 )
 
 func TestGetLastDeploy(t *testing.T) {
@@ -12,7 +14,7 @@ func TestGetLastDeploy(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	service := newService()
-	service.serviceName = getEnv("TEST_SERVICENAME", "ecs-deploy")
+	service.serviceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
 	dd, err := service.getLastDeploy()
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
@@ -61,7 +63,7 @@ func TestGetDeploymentSecondToLast(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	service := newService()
-	service.serviceName = getEnv("TEST_SERVICENAME", "ecs-deploy")
+	service.serviceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
 	dds, err := service.getDeploys("secondToLast", 1)
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoSecondToLast") {
@@ -107,7 +109,7 @@ func TestGetScalingActivity(t *testing.T) {
 	}
 	service := newService()
 
-	clusterName := getEnv("TEST_CLUSTERNAME", "testcluster")
+	clusterName := util.GetEnv("TEST_CLUSTERNAME", "testcluster")
 	startTime := time.Now().Add(-5 * time.Minute)
 
 	result, err := service.getScalingActivity(clusterName, startTime)

@@ -3,13 +3,15 @@ package ecsdeploy
 import (
 	"fmt"
 	"testing"
+
+	"github.com/in4it/ecs-deploy/util"
 )
 
 func TestGetHighestRule(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	a, err := newALB(getEnv("TEST_CLUSTERNAME", "test-cluster"))
+	a, err := newALB(util.GetEnv("TEST_CLUSTERNAME", "test-cluster"))
 	if err != nil {
 		t.Errorf("Error: %v", err)
 		return

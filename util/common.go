@@ -61,3 +61,11 @@ func RandStringBytesMaskImprSrc(n int) string {
 
 	return string(b)
 }
+
+func YesNoToBool(s string) bool {
+	if strings.ToLower(s) == "yes" {
+		return true
+	} else {
+		return false
+	}
+}
