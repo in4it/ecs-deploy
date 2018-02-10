@@ -746,6 +746,7 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 				var dcci DynamoClusterContainerInstance
 				dcci.ClusterName = k
 				dcci.ContainerInstanceId = f.InstanceId
+				dcci.AvailabilityZone = f.AvailabilityZone
 				dcci.FreeMemory = f.FreeMemory
 				dcci.FreeCpu = f.FreeCpu
 				dcci.Status = f.Status
@@ -758,12 +759,19 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		if v.ContainerInstanceId == message.Detail.Ec2InstanceId {
 			found = true
 			dc.ContainerInstances[k].ClusterName = clusterName
+			// get resources
 			f, err := ecs.convertResourceToFir(message.Detail.RemainingResources)
 			if err != nil {
 				return err
 			}
 			dc.ContainerInstances[k].FreeMemory = f.FreeMemory
 			dc.ContainerInstances[k].FreeCpu = f.FreeCpu
+			// get az
+			for _, v := range message.Detail.Attributes {
+				if v.Name == "ecs.availability-zone" {
+					dc.ContainerInstances[k].AvailabilityZone = v.Value
+				}
+			}
 		}
 	}
 	if !found {
@@ -778,6 +786,12 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		dcci.FreeMemory = f.FreeMemory
 		dcci.FreeCpu = f.FreeCpu
 		dcci.Status = f.Status
+		// get az
+		for _, v := range message.Detail.Attributes {
+			if v.Name == "ecs.availability-zone" {
+				dcci.AvailabilityZone = v.Value
+			}
+		}
 		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 	}
 	// check whether at min/max capacity
@@ -790,25 +804,36 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		return err
 	}
 	// make scaling (up) decision
-	var resourcesFit bool
+	resourcesFit := make(map[string]bool)
+	resourcesFitGlobal := true
 	var scalingOp = "no"
 	if desiredCapacity < maxSize {
 		for _, dcci := range dc.ContainerInstances {
 			if dcci.Status != "DRAINING" && dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
-				resourcesFit = true
-				controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v with %v cpu and %v memory",
+				resourcesFit[dcci.AvailabilityZone] = true
+				controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v (%v) with %v cpu and %v memory",
 					clusterName,
 					cpuNeeded[clusterName],
 					memoryNeeded[clusterName],
 					dcci.ContainerInstanceId,
+					dcci.AvailabilityZone,
 					dcci.FreeCpu,
 					dcci.FreeMemory,
 				)
+			} else {
+				// set resourcesFit[az] in case it's not set to true
+				if _, ok := resourcesFit[dcci.AvailabilityZone]; !ok {
+					resourcesFit[dcci.AvailabilityZone] = false
+				}
 			}
 		}
-		if !resourcesFit {
-			controllerLogger.Debugf("No instance found with %v cpu and %v memory free", cpuNeeded[clusterName], memoryNeeded[clusterName])
-
+		for k, v := range resourcesFit {
+			if !v {
+				resourcesFitGlobal = false
+				controllerLogger.Infof("No instance found in %v with %v cpu and %v memory free", k, cpuNeeded[clusterName], memoryNeeded[clusterName])
+			}
+		}
+		if !resourcesFitGlobal {
 			startTime := time.Now().Add(-5 * time.Minute)
 			lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
 			if err != nil {
@@ -825,7 +850,7 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		}
 	}
 	// make scaling (down) decision
-	if desiredCapacity > minSize && resourcesFit {
+	if desiredCapacity > minSize && resourcesFitGlobal {
 		// calculate registered resources
 		f, err := ecs.convertResourceToRir(message.Detail.RegisteredResources)
 		if err != nil {
@@ -834,14 +859,32 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		var clusterMemoryNeeded = f.RegisteredMemory + memoryNeeded[clusterName]        // capacity of full container node + biggest task
 		clusterMemoryNeeded += int64(math.Ceil(float64(memoryNeeded[clusterName]) / 2)) // + buffer
 		var clusterCpuNeeded = f.RegisteredCpu + cpuNeeded[clusterName]
-		var totalFreeCpu, totalFreeMemory int64
+		totalFreeCpu := make(map[string]int64)
+		totalFreeMemory := make(map[string]int64)
+		hasFreeResources := make(map[string]bool)
+		hasFreeResourcesGlobal := true
 		for _, dcci := range dc.ContainerInstances {
-			totalFreeCpu += dcci.FreeCpu
-			totalFreeMemory += dcci.FreeMemory
+			totalFreeCpu[dcci.AvailabilityZone] += dcci.FreeCpu
+			totalFreeMemory[dcci.AvailabilityZone] += dcci.FreeMemory
 		}
-		controllerLogger.Debugf("Have %d cpu available, need %d", totalFreeCpu, clusterCpuNeeded)
-		controllerLogger.Debugf("Have %d memory available, need %d", totalFreeMemory, clusterMemoryNeeded)
-		if totalFreeCpu >= clusterCpuNeeded && totalFreeMemory >= clusterMemoryNeeded {
+		for k, _ := range totalFreeCpu {
+			controllerLogger.Debugf("%v: Have %d cpu available, need %d", k, totalFreeCpu[k], clusterCpuNeeded)
+			controllerLogger.Debugf("%v: Have %d memory available, need %d", k, totalFreeMemory[k], clusterMemoryNeeded)
+			if totalFreeCpu[k] >= clusterCpuNeeded && totalFreeMemory[k] >= clusterMemoryNeeded {
+				hasFreeResources[k] = true
+			} else {
+				// set hasFreeResources[k] in case the map key hasn't been set to true
+				if _, ok := hasFreeResources[k]; !ok {
+					hasFreeResources[k] = false
+				}
+			}
+		}
+		for _, v := range hasFreeResources {
+			if !v {
+				hasFreeResourcesGlobal = false
+			}
+		}
+		if hasFreeResourcesGlobal {
 			startTime := time.Now().Add(-5 * time.Minute)
 			lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
 			if err != nil {

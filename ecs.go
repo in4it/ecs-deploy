@@ -52,6 +52,7 @@ type ContainerDefinition struct {
 type ContainerInstance struct {
 	ContainerInstanceArn string
 	Ec2InstanceId        string
+	AvailabilityZone     string
 	PendingTasksCount    int64
 	RegisteredAt         time.Time
 	RegisteredResources  []ContainerInstanceResource
@@ -70,10 +71,11 @@ type ContainerInstanceResource struct {
 
 // free instance resource
 type FreeInstanceResource struct {
-	InstanceId string
-	Status     string
-	FreeMemory int64
-	FreeCpu    int64
+	InstanceId       string
+	AvailabilityZone string
+	Status           string
+	FreeMemory       int64
+	FreeCpu          int64
 }
 
 // registered instance resource
@@ -1046,6 +1048,12 @@ func (e *ECS) describeContainerInstances(clusterName string, containerInstances 
 			vv.Type = aws.StringValue(v.Type)
 			c.RemainingResources = append(c.RemainingResources, vv)
 		}
+		// get AZ
+		for _, ciAttr := range ci.Attributes {
+			if aws.StringValue(ciAttr.Name) == "ecs.availability-zone" {
+				c.AvailabilityZone = aws.StringValue(ciAttr.Value)
+			}
+		}
 		cis = append(cis, c)
 	}
 	return cis, nil
@@ -1202,6 +1210,7 @@ func (e *ECS) getFreeResources(clusterName string) ([]FreeInstanceResource, erro
 			return firs, err
 		}
 		fir.InstanceId = ci.Ec2InstanceId
+		fir.AvailabilityZone = ci.AvailabilityZone
 		fir.Status = ci.Status
 		firs = append(firs, fir)
 	}

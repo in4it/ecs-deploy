@@ -77,6 +77,7 @@ type DynamoClusterScalingOperation struct {
 type DynamoClusterContainerInstance struct {
 	ClusterName         string
 	ContainerInstanceId string
+	AvailabilityZone    string
 	FreeMemory          int64
 	FreeCpu             int64
 	Status              string
