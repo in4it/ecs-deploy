@@ -221,16 +221,21 @@ type SNSPayloadEcs struct {
 	Detail     SNSPayloadEcsDetail `json:"detail"`
 }
 type SNSPayloadEcsDetail struct {
-	ClusterArn           string                      `json:"clusterArn"`
-	ContainerInstanceArn string                      `json:"containerInstanceArn"`
-	Ec2InstanceId        string                      `json:"ec2InstanceId"`
-	RegisteredResources  []ContainerInstanceResource `json:"registeredResources"`
-	RemainingResources   []ContainerInstanceResource `json:"remainingResources"`
-	Status               string                      `json:"status"`
-	Version              int64                       `json:"version"`
-	VersionInfo          EcsVersionInfo              `json:"versionInfo"`
-	UpdatedAt            string                      `json:"updatedAt"`
-	RegisteredAt         string                      `json:"registeredAt"`
+	ClusterArn           string                          `json:"clusterArn"`
+	ContainerInstanceArn string                          `json:"containerInstanceArn"`
+	Ec2InstanceId        string                          `json:"ec2InstanceId"`
+	RegisteredResources  []ContainerInstanceResource     `json:"registeredResources"`
+	RemainingResources   []ContainerInstanceResource     `json:"remainingResources"`
+	Status               string                          `json:"status"`
+	Version              int64                           `json:"version"`
+	VersionInfo          EcsVersionInfo                  `json:"versionInfo"`
+	UpdatedAt            string                          `json:"updatedAt"`
+	RegisteredAt         string                          `json:"registeredAt"`
+	Attributes           []SNSPayloadEcsDetailAttributes `json:"attributes"`
+}
+type SNSPayloadEcsDetailAttributes struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // lifecycle event
