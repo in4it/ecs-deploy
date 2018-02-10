@@ -1,3 +1,5 @@
+ARG SOURCE_COMMIT
+
 #
 # build angular project
 #
@@ -44,6 +46,8 @@ WORKDIR /app
 COPY . .
 COPY --from=go-builder /go/src/github.com/in4it/ecs-deploy/ecs-deploy .
 COPY --from=webapp-builder /webapp/dist webapp/dist
+
+RUN echo $SOURCE_COMMIT > source_commit
 
 # remove unnecessary source files
 RUN rm -rf *.go webapp/src
