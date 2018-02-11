@@ -1,4 +1,4 @@
-package ecsdeploy
+package service
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,9 +20,9 @@ var serviceLogger = loggo.GetLogger("service")
 type Service struct {
 	db          *dynamo.DB
 	table       dynamo.Table
-	serviceName string
-	clusterName string
-	listeners   []string
+	ServiceName string
+	ClusterName string
+	Listeners   []string
 }
 
 type DynamoDeployment struct {
@@ -83,7 +83,7 @@ type DynamoClusterContainerInstance struct {
 	Status              string
 }
 
-func newService() *Service {
+func NewService() *Service {
 	s := Service{}
 	s.db = dynamo.New(session.New(), &aws.Config{})
 	s.table = s.db.Table(util.GetEnv("DYNAMODB_TABLE", "Services"))
@@ -103,7 +103,7 @@ func (s *Service) initService(dsElement *DynamoServicesElement) error {
 	return nil
 }
 
-func (s *Service) getServices(ds *DynamoServices) error {
+func (s *Service) GetServices(ds *DynamoServices) error {
 	err := s.table.Get("ServiceName", "__SERVICES").Range("Time", dynamo.Equal, "0").One(ds)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -127,15 +127,15 @@ func (s *Service) getServices(ds *DynamoServices) error {
 	}
 	return nil
 }
-func (s *Service) createService(dsElement *DynamoServicesElement) error {
+func (s *Service) CreateService(dsElement *DynamoServicesElement) error {
 	// check input
-	if (s.serviceName == "") || (s.clusterName == "") {
-		serviceLogger.Errorf("Couldn't add %v (cluster = %v, listener # = %d)", s.serviceName, s.clusterName, len(s.listeners))
-		return errors.New("Couldn't add " + s.serviceName + ": cluster / listeners is empty")
+	if (s.ServiceName == "") || (s.ClusterName == "") {
+		serviceLogger.Errorf("Couldn't add %v (cluster = %v, listener # = %d)", s.ServiceName, s.ClusterName, len(s.Listeners))
+		return errors.New("Couldn't add " + s.ServiceName + ": cluster / listeners is empty")
 	}
 
 	var ds DynamoServices
-	err := s.getServices(&ds)
+	err := s.GetServices(&ds)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
 			// service needs to be initialized
@@ -176,7 +176,7 @@ func (s *Service) createService(dsElement *DynamoServicesElement) error {
 				switch aerr.Code() {
 				case dynamodb.ErrCodeConditionalCheckFailedException:
 					serviceLogger.Debugf("Conditional check failed - retrying (%v)", aerr.Error())
-					err = s.getServices(&ds)
+					err = s.GetServices(&ds)
 					if err != nil {
 						return err
 					}
@@ -195,12 +195,12 @@ func (s *Service) createService(dsElement *DynamoServicesElement) error {
 	}
 	return nil
 }
-func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDeployment, error) {
+func (s *Service) NewDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDeployment, error) {
 	day := time.Now().Format("2006-01-02")
 	month := time.Now().Format("2006-01")
-	w := DynamoDeployment{ServiceName: s.serviceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running", Version: 1}
+	w := DynamoDeployment{ServiceName: s.ServiceName, Time: time.Now(), Day: day, Month: month, TaskDefinitionArn: taskDefinitionArn, DeployData: d, Status: "running", Version: 1}
 
-	lastDeploy, err := s.getLastDeploy()
+	lastDeploy, err := s.GetLastDeploy()
 	if err != nil {
 		w.Scaling.DesiredCount = d.DesiredCount
 	} else {
@@ -216,12 +216,12 @@ func (s *Service) newDeployment(taskDefinitionArn *string, d *Deploy) (*DynamoDe
 	}
 	return &w, nil
 }
-func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
+func (s *Service) GetLastDeploy() (*DynamoDeployment, error) {
 	var dd DynamoDeployment
-	if s.serviceName == "" {
+	if s.ServiceName == "" {
 		return nil, errors.New("serviceName not set")
 	}
-	err := s.table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
+	err := s.table.Get("ServiceName", s.ServiceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dd)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
 			return nil, errors.New("NoItemsFound: no items found")
@@ -248,7 +248,7 @@ func (s *Service) getLastDeploy() (*DynamoDeployment, error) {
 	serviceLogger.Debugf("Retrieved last deployment %v at %v", dd.ServiceName, dd.Time)
 	return &dd, nil
 }
-func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, error) {
+func (s *Service) GetDeploys(action string, limit int64) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
 	// add date to table
 	switch {
@@ -281,7 +281,7 @@ func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, er
 	case action == "secondToLast":
 		var dd []DynamoDeployment
 		serviceLogger.Debugf("Retrieving second last deploy")
-		err := s.table.Get("ServiceName", s.serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(2).All(&dd)
+		err := s.table.Get("ServiceName", s.ServiceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(2).All(&dd)
 		if err != nil {
 			return dds, err
 		}
@@ -294,14 +294,14 @@ func (s *Service) getDeploys(action string, limit int64) ([]DynamoDeployment, er
 	}
 	return dds, nil
 }
-func (s *Service) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
+func (s *Service) GetDeploysForService(serviceName string) ([]DynamoDeployment, error) {
 	var dds []DynamoDeployment
 	serviceLogger.Debugf("Retrieving records for: %v", serviceName)
 	err := s.table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(20).All(&dds)
 	return dds, err
 }
 
-func (s *Service) setDeploymentStatus(dd *DynamoDeployment, status string) error {
+func (s *Service) SetDeploymentStatus(dd *DynamoDeployment, status string) error {
 	var err error
 	dd.Version = dd.Version + 1
 	dd.Status = status
@@ -321,7 +321,7 @@ func (s *Service) setDeploymentStatus(dd *DynamoDeployment, status string) error
 	}
 	return nil
 }
-func (s *Service) setDeploymentStatusWithReason(dd *DynamoDeployment, status, reason string) error {
+func (s *Service) SetDeploymentStatusWithReason(dd *DynamoDeployment, status, reason string) error {
 	var err error
 	dd.Version = dd.Version + 1
 	dd.Status = status
@@ -342,7 +342,7 @@ func (s *Service) setDeploymentStatusWithReason(dd *DynamoDeployment, status, re
 	}
 	return nil
 }
-func (s *Service) getDeployment(serviceName string, strTime string) (*DynamoDeployment, error) {
+func (s *Service) GetDeployment(serviceName string, strTime string) (*DynamoDeployment, error) {
 	var dd DynamoDeployment
 
 	layout := "2006-01-02T15:04:05.9Z"
@@ -369,7 +369,7 @@ func (s *Service) getDeployment(serviceName string, strTime string) (*DynamoDepl
 	return &dd, nil
 }
 
-func (s *Service) getServiceVersionsByTags(serviceName, imageName string, tags map[string]string) ([]ServiceVersion, error) {
+func (s *Service) GetServiceVersionsByTags(serviceName, imageName string, tags map[string]string) ([]ServiceVersion, error) {
 	var svs []ServiceVersion
 	var dds []DynamoDeployment
 
@@ -395,7 +395,7 @@ func (s *Service) getServiceVersionsByTags(serviceName, imageName string, tags m
 
 }
 
-func (s *Service) createTable() error {
+func (s *Service) CreateTable() error {
 	err := s.db.CreateTable(util.GetEnv("DYNAMODB_TABLE", "Services"), DynamoDeployment{}).
 		Provision(2, 1).
 		ProvisionIndex("DayIndex", 1, 1).
@@ -408,16 +408,16 @@ func (s *Service) createTable() error {
 	s.table = s.db.Table(util.GetEnv("DYNAMODB_TABLE", "Services"))
 	return nil
 }
-func (s *Service) getClusterName() (string, error) {
+func (s *Service) GetClusterName() (string, error) {
 	var clusterName string
 	var ds DynamoServices
-	serviceLogger.Debugf("Going to determine clusterName of %v", s.serviceName)
-	err := s.getServices(&ds)
+	serviceLogger.Debugf("Going to determine clusterName of %v", s.ServiceName)
+	err := s.GetServices(&ds)
 	if err != nil {
 		return clusterName, err
 	}
 	for _, v := range ds.Services {
-		if v.S == s.serviceName {
+		if v.S == s.ServiceName {
 			clusterName = v.C
 		}
 	}
@@ -426,8 +426,8 @@ func (s *Service) getClusterName() (string, error) {
 	}
 	return clusterName, nil
 }
-func (s *Service) setScalingProperty(desiredCount int64) error {
-	dd, err := s.getLastDeploy()
+func (s *Service) SetScalingProperty(desiredCount int64) error {
+	dd, err := s.GetLastDeploy()
 	dd.Scaling.DesiredCount = desiredCount
 
 	err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
@@ -438,8 +438,8 @@ func (s *Service) setScalingProperty(desiredCount int64) error {
 	}
 	return nil
 }
-func (s *Service) setManualTasksArn(manualTaskArn string) error {
-	dd, err := s.getLastDeploy()
+func (s *Service) SetManualTasksArn(manualTaskArn string) error {
+	dd, err := s.GetLastDeploy()
 	dd.ManualTasksArns = append(dd.ManualTasksArns, manualTaskArn)
 	dd.Version = dd.Version + 1
 
@@ -456,10 +456,10 @@ func (s *Service) setManualTasksArn(manualTaskArn string) error {
 	}
 	return nil
 }
-func (s *Service) updateServiceLimits(clusterName, serviceName string, cpuReservation, cpuLimit, memoryReservation, memoryLimit int64) error {
+func (s *Service) UpdateServiceLimits(clusterName, serviceName string, cpuReservation, cpuLimit, memoryReservation, memoryLimit int64) error {
 	var dss DynamoServices
 	var found bool
-	err := s.getServices(&dss)
+	err := s.GetServices(&dss)
 	if err != nil {
 		return err
 	}
@@ -478,17 +478,17 @@ func (s *Service) updateServiceLimits(clusterName, serviceName string, cpuReserv
 	dss.Version = dss.Version + 1
 	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
 }
-func (s *Service) getApiVersion() (string, error) {
+func (s *Service) GetApiVersion() (string, error) {
 	var dss DynamoServices
-	err := s.getServices(&dss)
+	err := s.GetServices(&dss)
 	if err != nil {
 		return "", err
 	}
 	return dss.ApiVersion, nil
 }
-func (s *Service) setApiVersion(apiVersion string) error {
+func (s *Service) SetApiVersion(apiVersion string) error {
 	var dss DynamoServices
-	err := s.getServices(&dss)
+	err := s.GetServices(&dss)
 	if err != nil {
 		return err
 	}
@@ -497,7 +497,7 @@ func (s *Service) setApiVersion(apiVersion string) error {
 	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
 }
 
-func (s *Service) getClusterInfo() (*DynamoCluster, error) {
+func (s *Service) GetClusterInfo() (*DynamoCluster, error) {
 	var dc DynamoCluster
 	err := s.table.Get("ServiceName", "__CLUSTERS").Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(1).One(&dc)
 	if err != nil {
@@ -513,7 +513,7 @@ func (s *Service) getClusterInfo() (*DynamoCluster, error) {
 	}
 	return &dc, nil
 }
-func (s *Service) putClusterInfo(dc DynamoCluster, clusterName string, action string) (*DynamoCluster, error) {
+func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action string) (*DynamoCluster, error) {
 	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action}
 	dc.Identifier = "__CLUSTERS"
 	dc.Time = time.Now()
@@ -532,7 +532,7 @@ func (s *Service) putClusterInfo(dc DynamoCluster, clusterName string, action st
 	}
 	return &dc, nil
 }
-func (s *Service) getScalingActivity(clusterName string, startTime time.Time) (string, error) {
+func (s *Service) GetScalingActivity(clusterName string, startTime time.Time) (string, error) {
 	var dcs []DynamoCluster
 	err := s.table.Get("ServiceName", "__CLUSTERS").Range("Time", dynamo.GreaterOrEqual, startTime).All(&dcs)
 	if err != nil {

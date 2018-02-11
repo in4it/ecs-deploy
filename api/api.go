@@ -1,4 +1,4 @@
-package ecsdeploy
+package api
 
 import (
 	//"github.com/RobotsAndPencils/go-saml"
@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
 	"github.com/in4it/ecs-deploy/ngserve"
+	"github.com/in4it/ecs-deploy/provider/ecs"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/session"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
@@ -33,229 +35,6 @@ type API struct {
 	authMiddleware *jwt.GinJWTMiddleware
 	//sp             saml.ServiceProviderSettings
 	samlHelper *SAML
-}
-
-// deploy binding from JSON
-type DeployServices struct {
-	Services []Deploy `json:"services" binding:"required"`
-}
-type Deploy struct {
-	Cluster               string                      `json:"cluster" binding:"required"`
-	ServiceName           string                      `json:"serviceName"`
-	ServicePort           int64                       `json:"servicePort"`
-	ServiceProtocol       string                      `json:"serviceProtocol" binding:"required"`
-	DesiredCount          int64                       `json:"desiredCount" binding:"required"`
-	MinimumHealthyPercent int64                       `json:"minimumHealthyPercent"`
-	MaximumPercent        int64                       `json:"maximumPercent"`
-	Containers            []*DeployContainer          `json:"containers" binding:"required,dive"`
-	HealthCheck           DeployHealthCheck           `json:"healthCheck"`
-	RuleConditions        []*DeployRuleConditions     `json:"ruleConditions`
-	NetworkMode           string                      `json:"networkMode"`
-	NetworkConfiguration  DeployNetworkConfiguration  `json:"networkConfiguration"`
-	PlacementConstraints  []DeployPlacementConstraint `json:"placementConstraints"`
-	LaunchType            string                      `json:"launchType"`
-	DeregistrationDelay   int64                       `json:"deregistrationDelay"`
-	Stickiness            DeployStickiness            `json:"stickiness"`
-}
-type DeployContainer struct {
-	ContainerName     string    `json:"containerName" binding:"required"`
-	ContainerTag      string    `json:"containerTag" binding:"required"`
-	ContainerPort     int64     `json:"containerPort"`
-	ContainerCommand  []*string `json:"containerCommand"`
-	ContainerImage    string    `json:"containerImage`
-	ContainerURI      string    `json:"containerURI"`
-	Essential         bool      `json:"essential"`
-	Memory            int64     `json:"memory"`
-	MemoryReservation int64     `json:"memoryReservation"`
-	CPU               int64     `json:"cpu"`
-	CPUReservation    int64     `json:"cpuReservation"`
-}
-type DeployNetworkConfiguration struct {
-	AssignPublicIp string   `json:"assignPublicIp"`
-	SecurityGroups []string `json:"securityGroups"`
-	Subnets        []string `json:"subnets"`
-}
-type DeployPlacementConstraint struct {
-	Expression string `json:"expression"`
-	Type       string `json:"type"`
-}
-type DeployHealthCheck struct {
-	HealthyThreshold   int64  `json:"healthyThreshold"`
-	UnhealthyThreshold int64  `json:"unhealthyThreshold"`
-	Path               string `json:"path"`
-	Port               string `json:"port"`
-	Protocol           string `json:"protocol"`
-	Interval           int64  `json:"interval"`
-	Matcher            string `json:"matcher"`
-	Timeout            int64  `json:"timeout"`
-	GracePeriodSeconds int64  `json:"gracePeriodSeconds"`
-}
-type DeployRuleConditions struct {
-	Listeners   []string `json:"listeners"`
-	PathPattern string   `json:"pathPattern"`
-	Hostname    string   `json:"hostname"`
-}
-type DeployStickiness struct {
-	Enabled  bool  `json:"enabled"`
-	Duration int64 `json:"duration"`
-}
-
-type DeployResult struct {
-	ServiceName       string    `json:"serviceName"`
-	ClusterName       string    `json:"clusterName"`
-	TaskDefinitionArn string    `json:"taskDefinitionArn"`
-	Status            string    `json:"status"`
-	DeployError       string    `json:"deployError"`
-	DeploymentTime    time.Time `json:"deploymentTime"`
-}
-type DeployServiceParameter struct {
-	Name      string `json:"name" binding:"required"`
-	Value     string `json:"value" binding:"required"`
-	Encrypted bool   `json:"encrypted"`
-}
-
-type RunningService struct {
-	ServiceName  string                     `json:"serviceName"`
-	ClusterName  string                     `json:"clusterName"`
-	RunningCount int64                      `json:"runningCount"`
-	PendingCount int64                      `json:"pendingCount"`
-	DesiredCount int64                      `json:"desiredCount"`
-	Status       string                     `json:"status"`
-	Events       []RunningServiceEvent      `json:"events"`
-	Deployments  []RunningServiceDeployment `json:"deployments"`
-	Tasks        []RunningTask              `json:"tasks"`
-}
-type RunningServiceDeployment struct {
-	Status         string    `json:"status"`
-	RunningCount   int64     `json:"runningCount"`
-	PendingCount   int64     `json:"pendingCount"`
-	DesiredCount   int64     `json:"desiredCount"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
-	TaskDefinition string    `json:"taskDefinition"`
-}
-type RunningServiceEvent struct {
-	CreatedAt time.Time `json:"createdAt"`
-	Id        string    `json:"id"`
-	Message   string    `json:"message"`
-}
-type ServiceVersion struct {
-	ImageName  string    `json:"imageName"`
-	Tag        string    `json:"tag"`
-	ImageId    string    `json:"imageId"`
-	LastDeploy time.Time `json:"lastDeploy"`
-}
-type RunningTask struct {
-	ContainerInstanceArn string                 `json:"containerInstanceArn"`
-	Containers           []RunningTaskContainer `json:"containers"`
-	Cpu                  string                 `json:"cpu"`
-	CreatedAt            time.Time              `json:"createdAt"`
-	DesiredStatus        string                 `json:"desiredStatus"`
-	ExecutionStoppedAt   time.Time              `json:"executionStoppedAt"`
-	Group                string                 `json:"group"`
-	LastStatus           string                 `json:"lastStatus"`
-	LaunchType           string                 `json:"launchType"`
-	Memory               string                 `json:"memory"`
-	PullStartedAt        time.Time              `json:"pullStartedAt"`
-	PullStoppedAt        time.Time              `json:"pullStoppedAt"`
-	StartedAt            time.Time              `json:"startedAt"`
-	StartedBy            string                 `json:"startedBy"`
-	StoppedAt            time.Time              `json:"stoppedAt"`
-	StoppedReason        string                 `json:"stoppedReason"`
-	StoppingAt           time.Time              `json:"stoppingAt"`
-	TaskArn              string                 `json:"taskArn"`
-	TaskDefinitionArn    string                 `json:"taskDefinitionArn"`
-	Version              int64                  `json:"version"`
-}
-type RunningTaskContainer struct {
-	ContainerArn string `json:"containerArn"`
-	ExitCode     int64  `json:"exitCode"`
-	LastStatus   string `json:"lastStatus"`
-	Name         string `json:"name"`
-	Reason       string `json:"reason"`
-}
-
-// "Run ad-hoc task" type
-type RunTask struct {
-	StartedBy          string                     `json:"startedBy"`
-	ContainerOverrides []RunTaskContainerOverride `json:"containerOverrides"`
-}
-type RunTaskContainerOverride struct {
-	Name    string   `json:"name"`
-	Command []string `json:"command"`
-}
-
-// SNS payload
-type SNSPayload struct {
-	Message          string `json:"Message"`
-	MessageId        string `json:"MessageId"`
-	Signature        string `json:"Signature"`
-	SignatureVersion string `json:"SignatureVersion"`
-	SigningCertURL   string `json:"SigningCertURL"`
-	SubscribeURL     string `json:"SubscribeURL"`
-	Subject          string `json:"Subject"`
-	Timestamp        string `json:"Timestamp"`
-	Token            string `json:"Token"`
-	TopicArn         string `json:"TopicArn"`
-	Type             string `json:"Type" binding:"required"`
-	UnsubscribeURL   string `json:"UnsubscribeURL"`
-}
-
-// generic payload (to check detail type)
-type SNSPayloadGeneric struct {
-	Version    string `json:"version"`
-	Id         string `json:"id"`
-	DetailType string `json:"detail-type" binding:"required"`
-}
-
-// ECS SNS Event
-type SNSPayloadEcs struct {
-	Version    string              `json:"version"`
-	Id         string              `json:"id"`
-	DetailType string              `json:"detail-type" binding:"required"`
-	Source     string              `json:"source"`
-	Account    string              `json:"account"`
-	Time       string              `json:"time"`
-	Region     string              `json:"region"`
-	Resources  []string            `json:"resources"`
-	Detail     SNSPayloadEcsDetail `json:"detail"`
-}
-type SNSPayloadEcsDetail struct {
-	ClusterArn           string                          `json:"clusterArn"`
-	ContainerInstanceArn string                          `json:"containerInstanceArn"`
-	Ec2InstanceId        string                          `json:"ec2InstanceId"`
-	RegisteredResources  []ContainerInstanceResource     `json:"registeredResources"`
-	RemainingResources   []ContainerInstanceResource     `json:"remainingResources"`
-	Status               string                          `json:"status"`
-	Version              int64                           `json:"version"`
-	VersionInfo          EcsVersionInfo                  `json:"versionInfo"`
-	UpdatedAt            string                          `json:"updatedAt"`
-	RegisteredAt         string                          `json:"registeredAt"`
-	Attributes           []SNSPayloadEcsDetailAttributes `json:"attributes"`
-}
-type SNSPayloadEcsDetailAttributes struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-// lifecycle event
-type SNSPayloadLifecycle struct {
-	Version    string                    `json:"version"`
-	Id         string                    `json:"id"`
-	DetailType string                    `json:"detail-type" binding:"required"`
-	Source     string                    `json:"source"`
-	Account    string                    `json:"account"`
-	Time       string                    `json:"time"`
-	Region     string                    `json:"region"`
-	Resources  []string                  `json:"resources"`
-	Detail     SNSPayloadLifecycleDetail `json:"detail"`
-}
-type SNSPayloadLifecycleDetail struct {
-	LifecycleActionToken string `json:"LifecycleActionToken"`
-	AutoScalingGroupName string `json:"AutoScalingGroupName"`
-	LifecycleHookName    string `json:"LifecycleHookName"`
-	EC2InstanceId        string `json:"EC2InstanceId"`
-	LifecycleTransition  string `json:"LifecycleTransition"`
 }
 
 func (a *API) Launch() error {
@@ -476,12 +255,12 @@ func (a *API) healthHandler(c *gin.Context) {
 // @param   service         path    string     true        "service name"
 // @router /api/v1/deploy/{service} [post]
 func (a *API) deployServiceHandler(c *gin.Context) {
-	var json Deploy
+	var json service.Deploy
 	controller := Controller{}
 	controller.SetDeployDefaults(&json)
 	if err := c.ShouldBindJSON(&json); err == nil {
 		if err = a.deployServiceValidator(c.Param("service"), json); err == nil {
-			res, err := controller.deploy(c.Param("service"), json)
+			res, err := controller.Deploy(c.Param("service"), json)
 			if err == nil {
 				c.JSON(200, gin.H{
 					"message": res,
@@ -504,11 +283,11 @@ func (a *API) deployServiceHandler(c *gin.Context) {
 // @produce  json
 // @router /api/v1/deploy [post]
 func (a *API) deployServicesHandler(c *gin.Context) {
-	var json DeployServices
+	var json service.DeployServices
 	var errors map[string]string
-	var results []*DeployResult
+	var results []*service.DeployResult
 	var err error
-	var res *DeployResult
+	var res *service.DeployResult
 	var failures int
 	errors = make(map[string]string)
 	controller := Controller{}
@@ -516,7 +295,7 @@ func (a *API) deployServicesHandler(c *gin.Context) {
 		for i, v := range json.Services {
 			controller.SetDeployDefaults(&json.Services[i])
 			if err = a.deployServiceValidator(v.ServiceName, json.Services[i]); err == nil {
-				res, err = controller.deploy(v.ServiceName, json.Services[i])
+				res, err = controller.Deploy(v.ServiceName, json.Services[i])
 				if err == nil {
 					results = append(results, res)
 				}
@@ -558,7 +337,7 @@ func (a *API) redeployServiceHandler(c *gin.Context) {
 	}
 }
 
-func (a *API) deployServiceValidator(serviceName string, d Deploy) error {
+func (a *API) deployServiceValidator(serviceName string, d service.Deploy) error {
 	if len(serviceName) < 3 {
 		return errors.New("service name needs to be at least 3 characters")
 	}
@@ -792,7 +571,7 @@ func (a *API) listServiceParametersHandler(c *gin.Context) {
 	}
 }
 func (a *API) putServiceParameterHandler(c *gin.Context) {
-	var json DeployServiceParameter
+	var json service.DeployServiceParameter
 	var creds string
 	claims := jwt.ExtractClaims(c)
 	controller := Controller{}
@@ -877,17 +656,17 @@ func (a *API) webhookHandler(c *gin.Context) {
 				_, err = snsPayload.Subscribe()
 			} else if snsMessageType == "Notification" {
 				apiLogger.Debugf("Incoming Notification")
-				var genericMessage SNSPayloadGeneric
+				var genericMessage ecs.SNSPayloadGeneric
 				if err = json.Unmarshal([]byte(snsPayload.Message), &genericMessage); err == nil {
 					apiLogger.Debugf("Message detail type: %v", genericMessage.DetailType)
 					if genericMessage.DetailType == "ECS Container Instance State Change" {
-						var ecsMessage SNSPayloadEcs
+						var ecsMessage ecs.SNSPayloadEcs
 						if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
 							apiLogger.Debugf("ECS Message: %v", snsPayload.Message)
 							err = controller.processEcsMessage(ecsMessage)
 						}
 					} else if genericMessage.DetailType == "EC2 Instance-terminate Lifecycle Action" {
-						var lifecycleMessage SNSPayloadLifecycle
+						var lifecycleMessage ecs.SNSPayloadLifecycle
 						if err = json.Unmarshal([]byte(snsPayload.Message), &lifecycleMessage); err == nil {
 							apiLogger.Debugf("Lifecycle Message: %v", snsPayload.Message)
 							err = controller.processLifecycleMessage(lifecycleMessage)
@@ -911,7 +690,7 @@ func (a *API) webhookHandler(c *gin.Context) {
 	}
 }
 func (a *API) runTaskHandler(c *gin.Context) {
-	var json RunTask
+	var json service.RunTask
 	controller := Controller{}
 	if err := c.ShouldBindJSON(&json); err == nil {
 		claims := jwt.ExtractClaims(c)

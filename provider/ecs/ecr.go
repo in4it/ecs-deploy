@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -13,25 +13,25 @@ var ecrLogger = loggo.GetLogger("ecr")
 
 // ECR struct
 type ECR struct {
-	repositoryName, repositoryURI string
+	RepositoryName, RepositoryURI string
 }
 
 // Creates ECR repository
-func (e *ECR) createRepository() error {
+func (e *ECR) CreateRepository() error {
 	svc := ecr.New(session.New())
 	input := &ecr.CreateRepositoryInput{
-		RepositoryName: aws.String(e.repositoryName),
+		RepositoryName: aws.String(e.RepositoryName),
 	}
 
 	res, err := svc.CreateRepository(input)
 	if err == nil && res.Repository.RepositoryUri != nil {
-		e.repositoryURI = *res.Repository.RepositoryUri
+		e.RepositoryURI = *res.Repository.RepositoryUri
 		return nil
 	} else {
 		return err
 	}
 }
-func (e *ECR) listImagesWithTag(repositoryName string) (map[string]string, error) {
+func (e *ECR) ListImagesWithTag(repositoryName string) (map[string]string, error) {
 	svc := ecr.New(session.New())
 
 	images := make(map[string]string)

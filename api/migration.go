@@ -1,6 +1,8 @@
-package ecsdeploy
+package api
 
 import (
+	"github.com/in4it/ecs-deploy/provider/ecs"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/juju/loggo"
 
 	"strconv"
@@ -27,26 +29,26 @@ func (m *Migration) run(apiVersion string) error {
 	}
 	if runningMajor == 1 && runningMinor < 2 {
 		migrationLogger.Infof("Starting migration from %v to %v", apiVersion, m.getApiVersion())
-		var dss DynamoServices
-		service := newService()
-		ecs := ECS{}
-		err := service.getServices(&dss)
+		var dss service.DynamoServices
+		s := service.NewService()
+		e := ecs.ECS{}
+		err := s.GetServices(&dss)
 		if err != nil {
 			return err
 		}
 		for _, ds := range dss.Services {
 			// doing one per half second not to overload db
-			service.clusterName = ds.C
-			service.serviceName = ds.S
-			d, err := service.getLastDeploy()
+			s.ClusterName = ds.C
+			s.ServiceName = ds.S
+			d, err := s.GetLastDeploy()
 			if err != nil {
 				return err
 			}
-			cpuReservation, cpuLimit, memoryReservation, memoryLimit := ecs.getContainerLimits(*d.DeployData)
-			service.updateServiceLimits(service.clusterName, service.serviceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
+			cpuReservation, cpuLimit, memoryReservation, memoryLimit := e.GetContainerLimits(*d.DeployData)
+			s.UpdateServiceLimits(s.ClusterName, s.ServiceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
 			time.Sleep(500 * time.Millisecond)
 		}
-		service.setApiVersion(m.getApiVersion())
+		s.SetApiVersion(m.getApiVersion())
 		migrationLogger.Infof("Updated API version to %v", m.getApiVersion())
 	}
 	return nil

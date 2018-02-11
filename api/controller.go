@@ -1,7 +1,9 @@
-package ecsdeploy
+package api
 
 import (
 	"github.com/google/go-cmp/cmp"
+	"github.com/in4it/ecs-deploy/provider/ecs"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
@@ -24,22 +26,22 @@ var controllerLogger = loggo.GetLogger("controller")
 
 func (c *Controller) createRepository(repository string) (*string, error) {
 	// create service in ECR if not exists
-	ecr := ECR{repositoryName: repository}
-	err := ecr.createRepository()
+	ecr := ecs.ECR{RepositoryName: repository}
+	err := ecr.CreateRepository()
 	if err != nil {
 		controllerLogger.Errorf("Could not create repository %v: %v", repository, err)
 		return nil, errors.New("CouldNotCreateRepository")
 	}
-	msg := fmt.Sprintf("Service: %v - ECR: %v", repository, ecr.repositoryURI)
+	msg := fmt.Sprintf("Service: %v - ECR: %v", repository, ecr.RepositoryURI)
 	return &msg, nil
 }
 
-func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error) {
+func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.DeployResult, error) {
 	// get last deployment
-	service := newService()
-	service.serviceName = serviceName
-	service.clusterName = d.Cluster
-	ddLast, err := service.getLastDeploy()
+	s := service.NewService()
+	s.ServiceName = serviceName
+	s.ClusterName = d.Cluster
+	ddLast, err := s.GetLastDeploy()
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
 			controllerLogger.Errorf("Error while getting last deployment for %v: %v", serviceName, err)
@@ -55,20 +57,20 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 
 	// create role if role doesn't exists
-	iam := IAM{}
-	iamRoleArn, err := iam.roleExists("ecs-" + serviceName)
+	iam := ecs.IAM{}
+	iamRoleArn, err := iam.RoleExists("ecs-" + serviceName)
 	if err == nil && iamRoleArn == nil {
 		// role does not exist, create it
 		controllerLogger.Debugf("Role does not exist, creating: ecs-%v", serviceName)
-		iamRoleArn, err = iam.createRole("ecs-"+serviceName, iam.getEcsTaskIAMTrust())
+		iamRoleArn, err = iam.CreateRole("ecs-"+serviceName, iam.GetEcsTaskIAMTrust())
 		if err != nil {
 			return nil, err
 		}
 		// optionally add a policy
-		ps := Paramstore{}
-		if ps.isEnabled() {
+		ps := ecs.Paramstore{}
+		if ps.IsEnabled() {
 			controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", serviceName)
-			err = iam.putRolePolicy("ecs-"+serviceName, "paramstore-"+serviceName, ps.getParamstoreIAMPolicy(serviceName))
+			err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+serviceName, ps.GetParamstoreIAMPolicy(serviceName))
 			if err != nil {
 				return nil, err
 			}
@@ -78,8 +80,8 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 
 	// create task definition
-	ecs := ECS{serviceName: serviceName, iamRoleArn: *iamRoleArn, clusterName: d.Cluster}
-	taskDefArn, err := ecs.createTaskDefinition(d)
+	e := ecs.ECS{ServiceName: serviceName, IamRoleArn: *iamRoleArn, ClusterName: d.Cluster}
+	taskDefArn, err := e.CreateTaskDefinition(d)
 	if err != nil {
 		controllerLogger.Errorf("Could not create task def %v", serviceName)
 		return nil, err
@@ -89,7 +91,7 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 
 	// update service with new task (update desired instance in case of difference)
 	controllerLogger.Debugf("Updating service: %v with taskdefarn: %v", serviceName, *taskDefArn)
-	serviceExists, err := ecs.serviceExists(serviceName)
+	serviceExists, err := e.ServiceExists(serviceName)
 	if err == nil && !serviceExists {
 		controllerLogger.Debugf("service (%v) not found, creating...", serviceName)
 		err = c.createService(serviceName, d, taskDefArn)
@@ -103,32 +105,32 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 		// compare with previous deployment if there is one
 		if ddLast != nil {
 			if strings.ToLower(d.ServiceProtocol) != "none" {
-				alb, err := newALB(d.Cluster)
-				targetGroupArn, err := alb.getTargetGroupArn(serviceName)
+				alb, err := ecs.NewALB(d.Cluster)
+				targetGroupArn, err := alb.GetTargetGroupArn(serviceName)
 				if err != nil {
 					return nil, err
 				}
 				// update healthchecks if changed
 				if !cmp.Equal(ddLast.DeployData.HealthCheck, d.HealthCheck) {
 					controllerLogger.Debugf("Updating ecs healthcheck: %v", serviceName)
-					alb.updateHealthCheck(*targetGroupArn, d.HealthCheck)
+					alb.UpdateHealthCheck(*targetGroupArn, d.HealthCheck)
 				}
 				// update target group attributes if changed
 				if !cmp.Equal(ddLast.DeployData.Stickiness, d.Stickiness) || ddLast.DeployData.DeregistrationDelay != d.DeregistrationDelay {
-					err = alb.modifyTargetGroupAttributes(*targetGroupArn, d)
+					err = alb.ModifyTargetGroupAttributes(*targetGroupArn, d)
 					if err != nil {
 						return nil, err
 					}
 				}
 			}
 			// update memory limits if changed
-			if !ecs.isEqualContainerLimits(d, *ddLast.DeployData) {
-				cpuReservation, cpuLimit, memoryReservation, memoryLimit := ecs.getContainerLimits(d)
-				service.updateServiceLimits(service.clusterName, service.serviceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
+			if !e.IsEqualContainerLimits(d, *ddLast.DeployData) {
+				cpuReservation, cpuLimit, memoryReservation, memoryLimit := e.GetContainerLimits(d)
+				s.UpdateServiceLimits(s.ClusterName, s.ServiceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
 			}
 		}
 		// update service
-		_, err = ecs.updateService(serviceName, taskDefArn, d)
+		_, err = e.UpdateService(serviceName, taskDefArn, d)
 		controllerLogger.Debugf("Updating ecs service: %v", serviceName)
 		if err != nil {
 			controllerLogger.Errorf("Could not update service %v: %v", serviceName, err)
@@ -138,7 +140,7 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 
 	// Mark previous deployment as aborted if still running
 	if ddLast != nil && ddLast.Status == "running" {
-		err = service.setDeploymentStatus(ddLast, "aborted")
+		err = s.SetDeploymentStatus(ddLast, "aborted")
 		if err != nil {
 			controllerLogger.Errorf("Could not set status of %v to aborted: %v", serviceName, err)
 			return nil, err
@@ -146,16 +148,16 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 
 	// write changes in db
-	dd, err := service.newDeployment(taskDefArn, &d)
+	dd, err := s.NewDeployment(taskDefArn, &d)
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
 		return nil, err
 	}
 
 	// run goroutine to update status of service
-	go ecs.launchWaitUntilServicesStable(dd)
+	go e.LaunchWaitUntilServicesStable(dd)
 
-	ret := &DeployResult{
+	ret := &service.DeployResult{
 		ServiceName:       serviceName,
 		ClusterName:       d.Cluster,
 		TaskDefinitionArn: *taskDefArn,
@@ -163,16 +165,16 @@ func (c *Controller) deploy(serviceName string, d Deploy) (*DeployResult, error)
 	}
 	return ret, nil
 }
-func (c *Controller) redeploy(serviceName, time string) (*DeployResult, error) {
-	s := newService()
-	dd, err := s.getDeployment(serviceName, time)
+func (c *Controller) redeploy(serviceName, time string) (*service.DeployResult, error) {
+	s := service.NewService()
+	dd, err := s.GetDeployment(serviceName, time)
 	if err != nil {
 		return nil, err
 	}
 
 	controllerLogger.Debugf("Redeploying %v_%v", serviceName, time)
 
-	ret, err := c.deploy(serviceName, *dd.DeployData)
+	ret, err := c.Deploy(serviceName, *dd.DeployData)
 
 	if err != nil {
 		return nil, err
@@ -182,11 +184,11 @@ func (c *Controller) redeploy(serviceName, time string) (*DeployResult, error) {
 }
 
 // service not found, create ALB target group + rule
-func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *string) error {
-	iam := IAM{}
+func (c *Controller) createService(serviceName string, d service.Deploy, taskDefArn *string) error {
+	iam := ecs.IAM{}
 	var targetGroupArn *string
 	var listeners []string
-	alb, err := newALB(d.Cluster)
+	alb, err := ecs.NewALB(d.Cluster)
 	if err != nil {
 		return err
 	}
@@ -195,13 +197,13 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 	if strings.ToLower(d.ServiceProtocol) != "none" {
 		var err error
 		controllerLogger.Debugf("Creating target group for service: %v", serviceName)
-		targetGroupArn, err = alb.createTargetGroup(serviceName, d)
+		targetGroupArn, err = alb.CreateTargetGroup(serviceName, d)
 		if err != nil {
 			return err
 		}
 		// modify target group attributes
 		if d.DeregistrationDelay != -1 || d.Stickiness.Enabled {
-			err = alb.modifyTargetGroupAttributes(*targetGroupArn, d)
+			err = alb.ModifyTargetGroupAttributes(*targetGroupArn, d)
 			if err != nil {
 				return err
 			}
@@ -216,15 +218,15 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 
 	// check whether ecs-service-role exists
 	controllerLogger.Debugf("Checking whether role exists: %v", util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
-	iamServiceRoleArn, err := iam.roleExists(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
+	iamServiceRoleArn, err := iam.RoleExists(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
 	if err == nil && iamServiceRoleArn == nil {
 		controllerLogger.Debugf("Creating ecs service role")
-		_, err = iam.createRole(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.getEcsServiceIAMTrust())
+		_, err = iam.CreateRole(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.GetEcsServiceIAMTrust())
 		if err != nil {
 			return err
 		}
 		controllerLogger.Debugf("Attaching ecs service role")
-		err = iam.attachRolePolicy(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.getEcsServicePolicy())
+		err = iam.AttachRolePolicy(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.GetEcsServicePolicy())
 		if err != nil {
 			return err
 		}
@@ -234,22 +236,22 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 
 	// create ecs service
 	controllerLogger.Debugf("Creating ecs service: %v", serviceName)
-	ecs := ECS{serviceName: serviceName, taskDefArn: taskDefArn, targetGroupArn: targetGroupArn}
-	err = ecs.createService(d)
+	e := ecs.ECS{ServiceName: serviceName, TaskDefArn: taskDefArn, TargetGroupArn: targetGroupArn}
+	err = e.CreateService(d)
 	if err != nil {
 		return err
 	}
 
 	// create service in dynamodb
-	service := newService()
-	service.serviceName = serviceName
-	service.clusterName = d.Cluster
-	service.listeners = listeners
+	s := service.NewService()
+	s.ServiceName = serviceName
+	s.ClusterName = d.Cluster
+	s.Listeners = listeners
 
-	dsEl := &DynamoServicesElement{S: service.serviceName, C: service.clusterName, L: service.listeners}
-	dsEl.CpuReservation, dsEl.CpuLimit, dsEl.MemoryReservation, dsEl.MemoryLimit = ecs.getContainerLimits(d)
+	dsEl := &service.DynamoServicesElement{S: s.ServiceName, C: s.ClusterName, L: s.Listeners}
+	dsEl.CpuReservation, dsEl.CpuLimit, dsEl.MemoryReservation, dsEl.MemoryLimit = e.GetContainerLimits(d)
 
-	err = service.createService(dsEl)
+	err = s.CreateService(dsEl)
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
 		return err
@@ -258,10 +260,10 @@ func (c *Controller) createService(serviceName string, d Deploy, taskDefArn *str
 }
 
 // Deploy rules for a specific targetGroup
-func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGroupArn *string, alb *ALB) ([]string, error) {
+func (c *Controller) createRulesForTarget(serviceName string, d service.Deploy, targetGroupArn *string, alb *ecs.ALB) ([]string, error) {
 	var listeners []string
 	// get last priority number
-	priority, err := alb.getHighestRule()
+	priority, err := alb.GetHighestRule()
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +274,7 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 		for _, r := range d.RuleConditions {
 			if r.PathPattern != "" && r.Hostname != "" {
 				rules := []string{r.PathPattern, r.Hostname}
-				l, err := alb.createRuleForListeners("combined", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+				l, err := alb.CreateRuleForListeners("combined", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
 				if err != nil {
 					return nil, err
 				}
@@ -280,7 +282,7 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 				listeners = append(listeners, l...)
 			} else if r.PathPattern != "" {
 				rules := []string{r.PathPattern}
-				l, err := alb.createRuleForListeners("pathPattern", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+				l, err := alb.CreateRuleForListeners("pathPattern", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
 				if err != nil {
 					return nil, err
 				}
@@ -288,7 +290,7 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 				listeners = append(listeners, l...)
 			} else if r.Hostname != "" {
 				rules := []string{r.Hostname}
-				l, err := alb.createRuleForListeners("hostname", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
+				l, err := alb.CreateRuleForListeners("hostname", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
 				if err != nil {
 					return nil, err
 				}
@@ -300,12 +302,12 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 		// create default rules ( /servicename path on all listeners )
 		controllerLogger.Debugf("Creating alb rule(s) service: %v", serviceName)
 		rules := []string{"/" + serviceName}
-		l, err := alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 10))
+		l, err := alb.CreateRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 10))
 		if err != nil {
 			return nil, err
 		}
 		rules = []string{"/" + serviceName + "/*"}
-		_, err = alb.createRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 11))
+		_, err = alb.CreateRuleForAllListeners("pathPattern", *targetGroupArn, rules, (priority + 11))
 		if err != nil {
 			return nil, err
 		}
@@ -314,51 +316,51 @@ func (c *Controller) createRulesForTarget(serviceName string, d Deploy, targetGr
 	return listeners, nil
 }
 
-func (c *Controller) getDeploys() ([]DynamoDeployment, error) {
-	s := newService()
-	return s.getDeploys("byMonth", 20)
+func (c *Controller) getDeploys() ([]service.DynamoDeployment, error) {
+	s := service.NewService()
+	return s.GetDeploys("byMonth", 20)
 }
-func (c *Controller) getDeploysForService(serviceName string) ([]DynamoDeployment, error) {
-	s := newService()
-	return s.getDeploysForService(serviceName)
+func (c *Controller) getDeploysForService(serviceName string) ([]service.DynamoDeployment, error) {
+	s := service.NewService()
+	return s.GetDeploysForService(serviceName)
 }
-func (c *Controller) getServices() ([]*DynamoServicesElement, error) {
-	s := newService()
-	var ds DynamoServices
-	err := s.getServices(&ds)
+func (c *Controller) getServices() ([]*service.DynamoServicesElement, error) {
+	s := service.NewService()
+	var ds service.DynamoServices
+	err := s.GetServices(&ds)
 	return ds.Services, err
 }
 
-func (c *Controller) describeServices() ([]RunningService, error) {
-	var rss []RunningService
+func (c *Controller) describeServices() ([]service.RunningService, error) {
+	var rss []service.RunningService
 	showEvents := false
 	showTasks := false
 	showStoppedTasks := false
 	services := make(map[string][]*string)
-	ecs := ECS{}
+	e := ecs.ECS{}
 	dss, _ := c.getServices()
 	for _, ds := range dss {
 		services[ds.C] = append(services[ds.C], &ds.S)
 	}
 	for clusterName, serviceList := range services {
-		newRss, err := ecs.describeServices(clusterName, serviceList, showEvents, showTasks, showStoppedTasks)
+		newRss, err := e.DescribeServices(clusterName, serviceList, showEvents, showTasks, showStoppedTasks)
 		if err != nil {
-			return []RunningService{}, err
+			return []service.RunningService{}, err
 		}
 		rss = append(rss, newRss...)
 	}
 	return rss, nil
 }
-func (c *Controller) describeService(serviceName string) (RunningService, error) {
-	var rs RunningService
+func (c *Controller) describeService(serviceName string) (service.RunningService, error) {
+	var rs service.RunningService
 	showEvents := true
 	showTasks := true
 	showStoppedTasks := false
-	ecs := ECS{}
+	e := ecs.ECS{}
 	dss, _ := c.getServices()
 	for _, ds := range dss {
 		if ds.S == serviceName {
-			rss, err := ecs.describeServices(ds.C, []*string{&serviceName}, showEvents, showTasks, showStoppedTasks)
+			rss, err := e.DescribeServices(ds.C, []*string{&serviceName}, showEvents, showTasks, showStoppedTasks)
 			if err != nil {
 				return rs, err
 			}
@@ -371,14 +373,14 @@ func (c *Controller) describeService(serviceName string) (RunningService, error)
 	}
 	return rs, errors.New("Service " + serviceName + " not found")
 }
-func (c *Controller) describeServiceVersions(serviceName string) ([]ServiceVersion, error) {
+func (c *Controller) describeServiceVersions(serviceName string) ([]service.ServiceVersion, error) {
 	var imageName string
-	var sv []ServiceVersion
-	service := newService()
-	service.serviceName = serviceName
-	ecr := ECR{}
+	var sv []service.ServiceVersion
+	s := service.NewService()
+	s.ServiceName = serviceName
+	ecr := ecs.ECR{}
 	// get last service to know container name
-	ddLast, err := service.getLastDeploy()
+	ddLast, err := s.GetLastDeploy()
 	if err != nil {
 		return sv, err
 	}
@@ -396,24 +398,24 @@ func (c *Controller) describeServiceVersions(serviceName string) ([]ServiceVersi
 		return sv, errors.New("Couldn't find imageName for service " + serviceName)
 	}
 	// get image tags
-	tags, err := ecr.listImagesWithTag(imageName)
+	tags, err := ecr.ListImagesWithTag(imageName)
 	if err != nil {
 		return sv, err
 	}
 	// populate last deployed on
-	sv, err = service.getServiceVersionsByTags(serviceName, imageName, tags)
+	sv, err = s.GetServiceVersionsByTags(serviceName, imageName, tags)
 	if err != nil {
 		return sv, err
 	}
 	return sv, nil
 }
-func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResult, error) {
-	s := newService()
-	dd, err := s.getDeployment(serviceName, time)
+func (c *Controller) getDeploymentStatus(serviceName, time string) (*service.DeployResult, error) {
+	s := service.NewService()
+	dd, err := s.GetDeployment(serviceName, time)
 	if err != nil {
 		return nil, err
 	}
-	ret := &DeployResult{
+	ret := &service.DeployResult{
 		ClusterName:       dd.DeployData.Cluster,
 		ServiceName:       serviceName,
 		DeploymentTime:    dd.Time,
@@ -423,42 +425,42 @@ func (c *Controller) getDeploymentStatus(serviceName, time string) (*DeployResul
 	}
 	return ret, nil
 }
-func (c *Controller) getDeployment(serviceName, time string) (*Deploy, error) {
-	s := newService()
-	dd, err := s.getDeployment(serviceName, time)
+func (c *Controller) getDeployment(serviceName, time string) (*service.Deploy, error) {
+	s := service.NewService()
+	dd, err := s.GetDeployment(serviceName, time)
 	if err != nil {
 		return nil, err
 	}
 	return dd.DeployData, nil
 }
-func (c *Controller) getServiceParameters(serviceName, userId, creds string) (map[string]Parameter, string, error) {
+func (c *Controller) getServiceParameters(serviceName, userId, creds string) (map[string]ecs.Parameter, string, error) {
 	var err error
-	p := Paramstore{}
+	p := ecs.Paramstore{}
 	role := util.GetEnv("PARAMSTORE_ASSUME_ROLE", "")
 	if role != "" {
-		creds, err = p.assumeRole(role, userId, creds)
+		creds, err = p.AssumeRole(role, userId, creds)
 		if err != nil {
-			return p.parameters, creds, err
+			return p.Parameters, creds, err
 		}
 	}
-	err = p.getParameters("/"+util.GetEnv("PARAMSTORE_PREFIX", "")+"-"+util.GetEnv("AWS_ACCOUNT_ENV", "")+"/"+serviceName+"/", false)
+	err = p.GetParameters("/"+util.GetEnv("PARAMSTORE_PREFIX", "")+"-"+util.GetEnv("AWS_ACCOUNT_ENV", "")+"/"+serviceName+"/", false)
 	if err != nil {
-		return p.parameters, creds, err
+		return p.Parameters, creds, err
 	}
-	return p.parameters, creds, nil
+	return p.Parameters, creds, nil
 }
-func (c *Controller) putServiceParameter(serviceName, userId, creds string, parameter DeployServiceParameter) (map[string]int64, string, error) {
+func (c *Controller) putServiceParameter(serviceName, userId, creds string, parameter service.DeployServiceParameter) (map[string]int64, string, error) {
 	var err error
-	p := Paramstore{}
+	p := ecs.Paramstore{}
 	res := make(map[string]int64)
 	role := util.GetEnv("PARAMSTORE_ASSUME_ROLE", "")
 	if role != "" {
-		creds, err = p.assumeRole(role, userId, creds)
+		creds, err = p.AssumeRole(role, userId, creds)
 		if err != nil {
 			return res, creds, err
 		}
 	}
-	version, err := p.putParameter(serviceName, parameter)
+	version, err := p.PutParameter(serviceName, parameter)
 
 	res["version"] = *version
 
@@ -466,24 +468,24 @@ func (c *Controller) putServiceParameter(serviceName, userId, creds string, para
 }
 func (c *Controller) deleteServiceParameter(serviceName, userId, creds, parameter string) (string, error) {
 	var err error
-	p := Paramstore{}
+	p := ecs.Paramstore{}
 	role := util.GetEnv("PARAMSTORE_ASSUME_ROLE", "")
 	if role != "" {
-		creds, err = p.assumeRole(role, userId, creds)
+		creds, err = p.AssumeRole(role, userId, creds)
 		if err != nil {
 			return creds, err
 		}
 	}
-	err = p.deleteParameter(serviceName, parameter)
+	err = p.DeleteParameter(serviceName, parameter)
 
 	return creds, err
 }
 
 func (c *Controller) deleteService(serviceName string) error {
-	var ds *DynamoServices
+	var ds *service.DynamoServices
 	var clusterName string
-	service := Service{}
-	err := service.getServices(ds)
+	s := service.NewService()
+	err := s.GetServices(ds)
 	if err != nil {
 		return err
 	}
@@ -492,116 +494,116 @@ func (c *Controller) deleteService(serviceName string) error {
 			clusterName = v.C
 		}
 	}
-	alb, err := newALB(clusterName)
+	alb, err := ecs.NewALB(clusterName)
 	if err != nil {
 		return err
 	}
-	targetGroupArn, err := alb.getTargetGroupArn(serviceName)
+	targetGroupArn, err := alb.GetTargetGroupArn(serviceName)
 	if err != nil {
 		return err
 	}
-	err = alb.deleteTargetGroup(*targetGroupArn)
+	err = alb.DeleteTargetGroup(*targetGroupArn)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 func (c *Controller) scaleService(serviceName string, desiredCount int64) error {
-	service := newService()
-	service.serviceName = serviceName
-	clusterName, err := service.getClusterName()
+	s := service.NewService()
+	s.ServiceName = serviceName
+	clusterName, err := s.GetClusterName()
 	if err != nil {
 		return err
 	}
-	service.setScalingProperty(desiredCount)
-	ecs := ECS{}
-	ecs.manualScaleService(clusterName, serviceName, desiredCount)
+	s.SetScalingProperty(desiredCount)
+	e := ecs.ECS{}
+	e.ManualScaleService(clusterName, serviceName, desiredCount)
 	return nil
 }
 
-func (c *Controller) SetDeployDefaults(d *Deploy) {
+func (c *Controller) SetDeployDefaults(d *service.Deploy) {
 	d.DeregistrationDelay = -1
 	d.Stickiness.Duration = -1
 }
 
-func (c *Controller) runTask(serviceName string, runTask RunTask) (string, error) {
-	service := newService()
-	service.serviceName = serviceName
+func (c *Controller) runTask(serviceName string, runTask service.RunTask) (string, error) {
+	s := service.NewService()
+	s.ServiceName = serviceName
 	var taskArn string
-	clusterName, err := service.getClusterName()
+	clusterName, err := s.GetClusterName()
 	if err != nil {
 		return taskArn, err
 	}
-	ecs := ECS{}
-	taskDefinition, err := ecs.getTaskDefinition(clusterName, serviceName)
+	e := ecs.ECS{}
+	taskDefinition, err := e.GetTaskDefinition(clusterName, serviceName)
 	if err != nil {
 		return taskArn, err
 	}
-	taskArn, err = ecs.runTask(clusterName, taskDefinition, runTask)
+	taskArn, err = e.RunTask(clusterName, taskDefinition, runTask)
 	if err != nil {
 		return taskArn, err
 	}
-	err = service.setManualTasksArn(taskArn)
+	err = s.SetManualTasksArn(taskArn)
 	if err != nil {
 		return taskArn, err
 	}
 	return taskArn, nil
 }
-func (c *Controller) describeTaskDefinition(serviceName string) (TaskDefinition, error) {
-	var taskDefinition TaskDefinition
-	service := newService()
-	service.serviceName = serviceName
-	clusterName, err := service.getClusterName()
+func (c *Controller) describeTaskDefinition(serviceName string) (ecs.TaskDefinition, error) {
+	var taskDefinition ecs.TaskDefinition
+	s := service.NewService()
+	s.ServiceName = serviceName
+	clusterName, err := s.GetClusterName()
 	if err != nil {
 		return taskDefinition, err
 	}
-	ecs := ECS{}
-	taskDefinitionName, err := ecs.getTaskDefinition(clusterName, serviceName)
+	e := ecs.ECS{}
+	taskDefinitionName, err := e.GetTaskDefinition(clusterName, serviceName)
 	if err != nil {
 		return taskDefinition, err
 	}
-	taskDefinition, err = ecs.describeTaskDefinition(taskDefinitionName)
+	taskDefinition, err = e.DescribeTaskDefinition(taskDefinitionName)
 	if err != nil {
 		return taskDefinition, err
 	}
 	return taskDefinition, nil
 }
-func (c *Controller) listTasks(serviceName string) ([]RunningTask, error) {
-	var tasks []RunningTask
+func (c *Controller) listTasks(serviceName string) ([]service.RunningTask, error) {
+	var tasks []service.RunningTask
 	var taskArns []*string
-	service := newService()
-	service.serviceName = serviceName
-	clusterName, err := service.getClusterName()
+	s := service.NewService()
+	s.ServiceName = serviceName
+	clusterName, err := s.GetClusterName()
 	if err != nil {
 		return tasks, err
 	}
-	ecs := ECS{}
-	runningTasks, err := ecs.listTasks(clusterName, serviceName, "RUNNING", "family")
+	e := ecs.ECS{}
+	runningTasks, err := e.ListTasks(clusterName, serviceName, "RUNNING", "family")
 	if err != nil {
 		return tasks, err
 	}
-	stoppedTasks, err := ecs.listTasks(clusterName, serviceName, "STOPPED", "family")
+	stoppedTasks, err := e.ListTasks(clusterName, serviceName, "STOPPED", "family")
 	if err != nil {
 		return tasks, err
 	}
 	taskArns = append(taskArns, runningTasks...)
 	taskArns = append(taskArns, stoppedTasks...)
-	tasks, err = ecs.describeTasks(clusterName, taskArns)
+	tasks, err = e.DescribeTasks(clusterName, taskArns)
 	if err != nil {
 		return tasks, err
 	}
 	return tasks, nil
 }
-func (c *Controller) getServiceLogs(serviceName, taskArn, containerName string, start, end time.Time) (CloudWatchLog, error) {
-	cloudwatch := CloudWatch{}
-	return cloudwatch.getLogEventsByTime(util.GetEnv("CLOUDWATCH_LOGS_PREFIX", "")+"-"+util.GetEnv("AWS_ACCOUNT_ENV", ""), containerName+"/"+containerName+"/"+taskArn, start, end, "")
+func (c *Controller) getServiceLogs(serviceName, taskArn, containerName string, start, end time.Time) (ecs.CloudWatchLog, error) {
+	cw := ecs.CloudWatch{}
+	return cw.GetLogEventsByTime(util.GetEnv("CLOUDWATCH_LOGS_PREFIX", "")+"-"+util.GetEnv("AWS_ACCOUNT_ENV", ""), containerName+"/"+containerName+"/"+taskArn, start, end, "")
 }
 
 func (c *Controller) Resume() error {
 	migration := Migration{}
-	service := newService()
+	s := service.NewService()
 	// check api version of database
-	dbApiVersion, err := service.getApiVersion()
+	dbApiVersion, err := s.GetApiVersion()
 	if err != nil {
 		return err
 	}
@@ -613,8 +615,8 @@ func (c *Controller) Resume() error {
 	}
 
 	// check whether anything needs to be resumed
-	ecs := ECS{}
-	dds, err := service.getDeploys("byDay", 20)
+	e := ecs.ECS{}
+	dds, err := s.GetDeploys("byDay", 20)
 	if err != nil {
 		return err
 	}
@@ -622,11 +624,11 @@ func (c *Controller) Resume() error {
 		if dd.Status == "running" {
 			// run goroutine to update status of service
 			controllerLogger.Infof("Starting waitUntilServiceStable for %v", dd.ServiceName)
-			go ecs.launchWaitUntilServicesStable(&dds[i])
+			go e.LaunchWaitUntilServicesStable(&dds[i])
 		}
 	}
 	// check for nodes draining
-	autoscaling := AutoScaling{}
+	autoscaling := ecs.AutoScaling{}
 	services := make(map[string][]string)
 	dss, _ := c.getServices()
 	for i, ds := range dss {
@@ -634,7 +636,7 @@ func (c *Controller) Resume() error {
 	}
 	for clusterName, _ := range services {
 		var clusterNotFound bool
-		autoScalingGroupName, err := autoscaling.getAutoScalingGroupByTag(clusterName)
+		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 		if err != nil {
 			if strings.HasPrefix(err.Error(), "ClusterNotFound:") {
 				controllerLogger.Infof("Cluster %v not running - skipping resume for this cluster", clusterName)
@@ -645,21 +647,21 @@ func (c *Controller) Resume() error {
 		}
 		if !clusterNotFound {
 			var lifecycleHookNotFound bool
-			hn, err := autoscaling.getLifecycleHookNames(autoScalingGroupName, "autoscaling:EC2_INSTANCE_TERMINATING")
+			hn, err := autoscaling.GetLifecycleHookNames(autoScalingGroupName, "autoscaling:EC2_INSTANCE_TERMINATING")
 			if err != nil || len(hn) == 0 {
 				controllerLogger.Errorf("Cluster %v doesn't have a lifecycle hook", clusterName)
 				lifecycleHookNotFound = true
 			}
 			if !lifecycleHookNotFound {
-				ciArns, err := ecs.listContainerInstances(clusterName)
+				ciArns, err := e.ListContainerInstances(clusterName)
 				if err != nil {
 					return err
 				}
-				cis, err := ecs.describeContainerInstances(clusterName, ciArns)
+				cis, err := e.DescribeContainerInstances(clusterName, ciArns)
 				if err != nil {
 					return err
 				}
-				dc, err := service.getClusterInfo()
+				dc, err := s.GetClusterInfo()
 				if err != nil {
 					return err
 				}
@@ -676,11 +678,11 @@ func (c *Controller) Resume() error {
 							}
 						}
 						if writeRecord {
-							service.putClusterInfo(*dc, clusterName, "no")
+							s.PutClusterInfo(*dc, clusterName, "no")
 						}
 						// launch wait for drained
 						controllerLogger.Infof("Launching waitForDrainedNode for cluster=%v, instance=%v, autoscalingGroupName=%v", clusterName, ci.Ec2InstanceId, autoScalingGroupName)
-						go ecs.launchWaitForDrainedNode(clusterName, ci.ContainerInstanceArn, ci.Ec2InstanceId, autoScalingGroupName, hn[0], "")
+						go e.LaunchWaitForDrainedNode(clusterName, ci.ContainerInstanceArn, ci.Ec2InstanceId, autoScalingGroupName, hn[0], "")
 					}
 				}
 			}
@@ -691,17 +693,17 @@ func (c *Controller) Resume() error {
 }
 
 // Process ECS event message and determine to scale or not
-func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
+func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 	apiLogger.Debugf("found ecs notification")
-	service := newService()
-	ecs := ECS{}
-	autoscaling := AutoScaling{}
+	s := service.NewService()
+	e := ecs.ECS{}
+	autoscaling := ecs.AutoScaling{}
 	// determine cluster name
-	s := strings.Split(message.Detail.ClusterArn, "/")
-	if len(s) != 2 {
+	sp := strings.Split(message.Detail.ClusterArn, "/")
+	if len(sp) != 2 {
 		return errors.New("Could not determine cluster name from message (arn: " + message.Detail.ClusterArn + ")")
 	}
-	clusterName := s[1]
+	clusterName := sp[1]
 	// determine max reservation
 	dss, _ := c.getServices()
 	memoryNeeded := make(map[string]int64)
@@ -729,21 +731,21 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		return errors.New("Minimal CPU needed for clusterName " + clusterName + " not found")
 	}
 	// determine minimum reservations
-	dc, err := service.getClusterInfo()
+	dc, err := s.GetClusterInfo()
 	if err != nil {
 		return err
 	}
 	if dc == nil || dc.Time.Before(time.Now().Add(-4*time.Minute /* 4 minutes cache */)) {
 		// no cache, need to retrieve everything
 		controllerLogger.Debugf("No cache found, need to retrieve using API calls")
-		dc = &DynamoCluster{}
+		dc = &service.DynamoCluster{}
 		for k, _ := range memoryNeeded {
-			firs, err := ecs.getFreeResources(k)
+			firs, err := e.GetFreeResources(k)
 			if err != nil {
 				return err
 			}
 			for _, f := range firs {
-				var dcci DynamoClusterContainerInstance
+				var dcci service.DynamoClusterContainerInstance
 				dcci.ClusterName = k
 				dcci.ContainerInstanceId = f.InstanceId
 				dcci.AvailabilityZone = f.AvailabilityZone
@@ -760,7 +762,7 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 			found = true
 			dc.ContainerInstances[k].ClusterName = clusterName
 			// get resources
-			f, err := ecs.convertResourceToFir(message.Detail.RemainingResources)
+			f, err := e.ConvertResourceToFir(message.Detail.RemainingResources)
 			if err != nil {
 				return err
 			}
@@ -776,10 +778,10 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 	}
 	if !found {
 		// add element
-		var dcci DynamoClusterContainerInstance
+		var dcci service.DynamoClusterContainerInstance
 		dcci.ClusterName = clusterName
 		dcci.ContainerInstanceId = message.Detail.Ec2InstanceId
-		f, err := ecs.convertResourceToFir(message.Detail.RemainingResources)
+		f, err := e.ConvertResourceToFir(message.Detail.RemainingResources)
 		if err != nil {
 			return err
 		}
@@ -795,11 +797,11 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 	}
 	// check whether at min/max capacity
-	autoScalingGroupName, err := autoscaling.getAutoScalingGroupByTag(clusterName)
+	autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 	if err != nil {
 		return err
 	}
-	minSize, desiredCapacity, maxSize, err := autoscaling.getClusterNodeDesiredCount(autoScalingGroupName)
+	minSize, desiredCapacity, maxSize, err := autoscaling.GetClusterNodeDesiredCount(autoScalingGroupName)
 	if err != nil {
 		return err
 	}
@@ -835,14 +837,14 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		}
 		if !resourcesFitGlobal {
 			startTime := time.Now().Add(-5 * time.Minute)
-			lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
+			lastScalingOp, err := s.GetScalingActivity(clusterName, startTime)
 			if err != nil {
 				return err
 			}
 			if lastScalingOp == "no" {
 				controllerLogger.Infof("Initiating scaling activity")
 				scalingOp = "up"
-				err = autoscaling.scaleClusterNodes(autoScalingGroupName, 1)
+				err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
 				if err != nil {
 					return err
 				}
@@ -852,7 +854,7 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 	// make scaling (down) decision
 	if desiredCapacity > minSize && resourcesFitGlobal {
 		// calculate registered resources
-		f, err := ecs.convertResourceToRir(message.Detail.RegisteredResources)
+		f, err := e.ConvertResourceToRir(message.Detail.RegisteredResources)
 		if err != nil {
 			return err
 		}
@@ -886,18 +888,18 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		}
 		if hasFreeResourcesGlobal {
 			startTime := time.Now().Add(-5 * time.Minute)
-			lastScalingOp, err := service.getScalingActivity(clusterName, startTime)
+			lastScalingOp, err := s.GetScalingActivity(clusterName, startTime)
 			if err != nil {
 				return err
 			}
 			if lastScalingOp == "no" {
 				controllerLogger.Infof("Starting scaling down operation (cpu: %d >= %d, mem: %d >= %d", totalFreeCpu, clusterCpuNeeded, totalFreeMemory, clusterMemoryNeeded)
 				scalingOp = "down"
-				autoScalingGroupName, err := autoscaling.getAutoScalingGroupByTag(clusterName)
+				autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 				if err != nil {
 					return err
 				}
-				err = autoscaling.scaleClusterNodes(autoScalingGroupName, -1)
+				err = autoscaling.ScaleClusterNodes(autoScalingGroupName, -1)
 				if err != nil {
 					return err
 				}
@@ -905,25 +907,25 @@ func (c *Controller) processEcsMessage(message SNSPayloadEcs) error {
 		}
 	}
 	// write object
-	service.putClusterInfo(*dc, clusterName, scalingOp)
+	s.PutClusterInfo(*dc, clusterName, scalingOp)
 	return nil
 }
-func (c *Controller) processLifecycleMessage(message SNSPayloadLifecycle) error {
-	ecs := ECS{}
-	clusterName, err := ecs.getClusterNameByInstanceId(message.Detail.EC2InstanceId)
+func (c *Controller) processLifecycleMessage(message ecs.SNSPayloadLifecycle) error {
+	e := ecs.ECS{}
+	clusterName, err := e.GetClusterNameByInstanceId(message.Detail.EC2InstanceId)
 	if err != nil {
 		return err
 	}
-	containerInstanceArn, err := ecs.getContainerInstanceArnByInstanceId(clusterName, message.Detail.EC2InstanceId)
+	containerInstanceArn, err := e.GetContainerInstanceArnByInstanceId(clusterName, message.Detail.EC2InstanceId)
 	if err != nil {
 		return err
 	}
-	err = ecs.drainNode(clusterName, containerInstanceArn)
+	err = e.DrainNode(clusterName, containerInstanceArn)
 	if err != nil {
 		return err
 	}
-	service := newService()
-	dc, err := service.getClusterInfo()
+	s := service.NewService()
+	dc, err := s.GetClusterInfo()
 	if err != nil {
 		return err
 	}
@@ -938,15 +940,15 @@ func (c *Controller) processLifecycleMessage(message SNSPayloadLifecycle) error 
 		}
 	}
 	if writeRecord {
-		service.putClusterInfo(*dc, clusterName, "no")
+		s.PutClusterInfo(*dc, clusterName, "no")
 	}
 	// monitor drained node
-	go ecs.launchWaitForDrainedNode(clusterName, containerInstanceArn, message.Detail.EC2InstanceId, message.Detail.AutoScalingGroupName, message.Detail.LifecycleHookName, message.Detail.LifecycleActionToken)
+	go e.LaunchWaitForDrainedNode(clusterName, containerInstanceArn, message.Detail.EC2InstanceId, message.Detail.AutoScalingGroupName, message.Detail.LifecycleHookName, message.Detail.LifecycleActionToken)
 	return nil
 }
 
 func (c *Controller) Bootstrap(b *Flags) error {
-	var ecsDeploy = Deploy{
+	var ecsDeploy = service.Deploy{
 		Cluster:               b.ClusterName,
 		ServiceName:           "ecs-deploy",
 		ServicePort:           8080,
@@ -954,7 +956,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		DesiredCount:          1,
 		MinimumHealthyPercent: 100,
 		MaximumPercent:        200,
-		Containers: []*DeployContainer{
+		Containers: []*service.DeployContainer{
 			{
 				ContainerName:     "ecs-deploy",
 				ContainerPort:     8080,
@@ -966,28 +968,28 @@ func (c *Controller) Bootstrap(b *Flags) error {
 			},
 		},
 	}
-	ecs := ECS{}
-	iam := IAM{}
-	paramstore := Paramstore{}
-	service := newService()
-	cloudwatch := CloudWatch{}
-	autoscaling := AutoScaling{}
+	e := ecs.ECS{}
+	iam := ecs.IAM{}
+	paramstore := ecs.Paramstore{}
+	s := service.NewService()
+	cloudwatch := ecs.CloudWatch{}
+	autoscaling := ecs.AutoScaling{}
 	roleName := "ecs-" + b.ClusterName
 	instanceProfile := "ecs-" + b.ClusterName
 	deployPassword := util.RandStringBytesMaskImprSrc(8)
 
 	// create dynamodb table
-	err := service.createTable()
+	err := s.CreateTable()
 	if err != nil && !strings.HasPrefix(err.Error(), "ResourceInUseException") {
 		return err
 	}
 
 	// create instance profile for cluster
-	err = iam.getAccountId()
+	err = iam.GetAccountId()
 	if err != nil {
 		return err
 	}
-	_, err = iam.createRole(roleName, iam.getEC2IAMTrust())
+	_, err = iam.CreateRole(roleName, iam.GetEC2IAMTrust())
 	if err != nil {
 		return err
 	}
@@ -997,7 +999,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		if err != nil {
 			return err
 		}
-		ec2RolePolicy = strings.Replace(string(r), "${LOGS_RESOURCE}", "arn:aws:logs:"+b.Region+":"+iam.accountId+":log-group:"+b.CloudwatchLogsPrefix+"-"+b.Environment+":*", -1)
+		ec2RolePolicy = strings.Replace(string(r), "${LOGS_RESOURCE}", "arn:aws:logs:"+b.Region+":"+iam.AccountId+":log-group:"+b.CloudwatchLogsPrefix+"-"+b.Environment+":*", -1)
 	} else {
 		r, err := ioutil.ReadFile("templates/iam/ecs-ec2-policy.json")
 		if err != nil {
@@ -1005,19 +1007,19 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		}
 		ec2RolePolicy = string(r)
 	}
-	iam.putRolePolicy(roleName, "ecs-ec2-policy", ec2RolePolicy)
+	iam.PutRolePolicy(roleName, "ecs-ec2-policy", ec2RolePolicy)
 
 	// wait for role instance profile to exist
-	err = iam.createInstanceProfile(roleName)
+	err = iam.CreateInstanceProfile(roleName)
 	if err != nil {
 		return err
 	}
-	err = iam.addRoleToInstanceProfile(roleName, roleName)
+	err = iam.AddRoleToInstanceProfile(roleName, roleName)
 	if err != nil {
 		return err
 	}
 	fmt.Println("Waiting until instance profile exists...")
-	err = iam.waitUntilInstanceProfileExists(roleName)
+	err = iam.WaitUntilInstanceProfileExists(roleName)
 	if err != nil {
 		return err
 	}
@@ -1026,20 +1028,20 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	if err != nil {
 		return err
 	}
-	pubKey, err := ecs.getPubKeyFromPrivateKey(string(r))
+	pubKey, err := e.GetPubKeyFromPrivateKey(string(r))
 	if err != nil {
 		return err
 	}
-	ecs.importKeyPair(b.ClusterName, pubKey)
+	e.ImportKeyPair(b.ClusterName, pubKey)
 
 	// create launch configuration
-	err = autoscaling.createLaunchConfiguration(b.ClusterName, b.KeyName, b.InstanceType, instanceProfile, strings.Split(b.EcsSecurityGroups, ","))
+	err = autoscaling.CreateLaunchConfiguration(b.ClusterName, b.KeyName, b.InstanceType, instanceProfile, strings.Split(b.EcsSecurityGroups, ","))
 	if err != nil {
 		for i := 0; i < 5 && err != nil; i++ {
 			if strings.HasPrefix(err.Error(), "RetryableError:") {
 				fmt.Printf("Error: %v - waiting 10s and retrying...\n", err.Error())
 				time.Sleep(10 * time.Second)
-				err = autoscaling.createLaunchConfiguration(b.ClusterName, b.KeyName, b.InstanceType, instanceProfile, strings.Split(b.EcsSecurityGroups, ","))
+				err = autoscaling.CreateLaunchConfiguration(b.ClusterName, b.KeyName, b.InstanceType, instanceProfile, strings.Split(b.EcsSecurityGroups, ","))
 			}
 		}
 		if err != nil {
@@ -1051,20 +1053,20 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	intEcsDesiredSize, _ := strconv.ParseInt(b.EcsDesiredSize, 10, 64)
 	intEcsMaxSize, _ := strconv.ParseInt(b.EcsMaxSize, 10, 64)
 	intEcsMinSize, _ := strconv.ParseInt(b.EcsMinSize, 10, 64)
-	autoscaling.createAutoScalingGroup(b.ClusterName, intEcsDesiredSize, intEcsMaxSize, intEcsMinSize, strings.Split(b.EcsSubnets, ","))
+	autoscaling.CreateAutoScalingGroup(b.ClusterName, intEcsDesiredSize, intEcsMaxSize, intEcsMinSize, strings.Split(b.EcsSubnets, ","))
 	if err != nil {
 		return err
 	}
 
 	// create log group
 	if b.CloudwatchLogsEnabled {
-		err = cloudwatch.createLogGroup(b.ClusterName, b.CloudwatchLogsPrefix+"-"+b.Environment)
+		err = cloudwatch.CreateLogGroup(b.ClusterName, b.CloudwatchLogsPrefix+"-"+b.Environment)
 		if err != nil {
 			return err
 		}
 	}
 	// create cluster
-	clusterArn, err := ecs.createCluster(b.ClusterName)
+	clusterArn, err := e.CreateCluster(b.ClusterName)
 	if err != nil {
 		return err
 	}
@@ -1074,21 +1076,21 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	}
 
 	// create load balancer, default target, and listener
-	alb, err := newALBAndCreate(b.ClusterName, "ipv4", "internet-facing", strings.Split(b.AlbSecurityGroups, ","), strings.Split(b.EcsSubnets, ","), "application")
+	alb, err := ecs.NewALBAndCreate(b.ClusterName, "ipv4", "internet-facing", strings.Split(b.AlbSecurityGroups, ","), strings.Split(b.EcsSubnets, ","), "application")
 	if err != nil {
 		return err
 	}
-	defaultTargetGroupArn, err := alb.createTargetGroup("ecs-deploy", ecsDeploy /* ecs deploy object */)
+	defaultTargetGroupArn, err := alb.CreateTargetGroup("ecs-deploy", ecsDeploy /* ecs deploy object */)
 	if err != nil {
 		return err
 	}
-	err = alb.createListener("HTTP", 80, *defaultTargetGroupArn)
+	err = alb.CreateListener("HTTP", 80, *defaultTargetGroupArn)
 	if err != nil {
 		return err
 	}
 	// create env vars
 	if b.ParamstoreEnabled {
-		parameters := []DeployServiceParameter{
+		parameters := []service.DeployServiceParameter{
 			{Name: "PARAMSTORE_ENABLED", Value: "yes"},
 			{Name: "PARAMSTORE_PREFIX", Value: b.ParamstorePrefix},
 			{Name: "JWT_SECRET", Value: util.RandStringBytesMaskImprSrc(32)},
@@ -1096,13 +1098,13 @@ func (c *Controller) Bootstrap(b *Flags) error {
 			{Name: "URL_PREFIX", Value: "/ecs-deploy"},
 		}
 		if b.ParamstoreKmsArn != "" {
-			parameters = append(parameters, DeployServiceParameter{Name: "PARAMSTORE_KMS_ARN", Value: b.ParamstoreKmsArn})
+			parameters = append(parameters, service.DeployServiceParameter{Name: "PARAMSTORE_KMS_ARN", Value: b.ParamstoreKmsArn})
 		}
 		if b.CloudwatchLogsEnabled {
-			parameters = append(parameters, DeployServiceParameter{Name: "CLOUDWATCH_LOGS_ENABLED", Value: "yes"})
-			parameters = append(parameters, DeployServiceParameter{Name: "CLOUDWATCH_LOGS_PREFIX", Value: b.CloudwatchLogsPrefix})
+			parameters = append(parameters, service.DeployServiceParameter{Name: "CLOUDWATCH_LOGS_ENABLED", Value: "yes"})
+			parameters = append(parameters, service.DeployServiceParameter{Name: "CLOUDWATCH_LOGS_PREFIX", Value: b.CloudwatchLogsPrefix})
 		}
-		paramstore.bootstrap("ecs-deploy", b.ParamstorePrefix, b.Environment, parameters)
+		paramstore.Bootstrap("ecs-deploy", b.ParamstorePrefix, b.Environment, parameters)
 		// retrieve keys from parameter store and set as environment variable
 		os.Setenv("PARAMSTORE_ENABLED", "yes")
 		err = paramstore.RetrieveKeys()
@@ -1113,16 +1115,16 @@ func (c *Controller) Bootstrap(b *Flags) error {
 
 	// wait for autoscaling group to be in service
 	fmt.Println("Waiting for autoscaling group to be in service...")
-	err = autoscaling.waitForAutoScalingGroupInService(b.ClusterName)
+	err = autoscaling.WaitForAutoScalingGroupInService(b.ClusterName)
 	if err != nil {
 		return err
 	}
 	if !b.DisableEcsDeploy {
-		_, err = c.deploy(ecsDeploy.ServiceName, ecsDeploy)
-		service.serviceName = ecsDeploy.ServiceName
+		_, err = c.Deploy(ecsDeploy.ServiceName, ecsDeploy)
+		s.ServiceName = ecsDeploy.ServiceName
 		var deployed bool
 		for i := 0; i < 30 && !deployed; i++ {
-			dd, err := service.getLastDeploy()
+			dd, err := s.GetLastDeploy()
 			if err != nil {
 				return err
 			}
@@ -1136,96 +1138,98 @@ func (c *Controller) Bootstrap(b *Flags) error {
 			}
 		}
 	}
+	fmt.Println("")
 	fmt.Println("===============================================")
 	fmt.Println("=== Successfully bootstrapped ecs-deploy    ===")
 	fmt.Println("===============================================")
-	fmt.Printf("     URL: http://%v/ecs-deploy                  \n", alb.dnsName)
-	fmt.Println("    Login: deploy                              ")
+	fmt.Printf("     URL: http://%v/ecs-deploy                  \n", alb.DnsName)
+	fmt.Printf("     Login: deploy                              \n")
 	fmt.Printf("     Password: %v                               \n", deployPassword)
 	fmt.Println("===============================================")
+	fmt.Println("")
 	return nil
 }
 
 func (c *Controller) DeleteCluster(b *Flags) error {
-	iam := IAM{}
-	ecs := ECS{}
-	autoscaling := AutoScaling{}
-	clusterName := b.DeleteCluster
+	iam := ecs.IAM{}
+	e := ecs.ECS{}
+	autoscaling := ecs.AutoScaling{}
+	clusterName := b.ClusterName
 	roleName := "ecs-" + clusterName
-	cloudwatch := CloudWatch{}
-	err := autoscaling.deleteAutoScalingGroup(clusterName, true)
+	cloudwatch := ecs.CloudWatch{}
+	err := autoscaling.DeleteAutoScalingGroup(clusterName, true)
 	if err != nil {
 		return err
 	}
-	err = autoscaling.deleteLaunchConfiguration(clusterName)
+	err = autoscaling.DeleteLaunchConfiguration(clusterName)
 	if err != nil {
 		return err
 	}
-	err = ecs.deleteKeyPair(clusterName)
+	err = e.DeleteKeyPair(clusterName)
 	if err != nil {
 		return err
 	}
-	err = iam.deleteRolePolicy(roleName, "ecs-ec2-policy")
+	err = iam.DeleteRolePolicy(roleName, "ecs-ec2-policy")
 	if err != nil {
 		return err
 	}
-	err = iam.removeRoleFromInstanceProfile(roleName, roleName)
+	err = iam.RemoveRoleFromInstanceProfile(roleName, roleName)
 	if err != nil {
 		return err
 	}
-	err = iam.deleteInstanceProfile(roleName)
+	err = iam.DeleteInstanceProfile(roleName)
 	if err != nil {
 		return err
 	}
-	err = iam.deleteRole(roleName)
+	err = iam.DeleteRole(roleName)
 	if err != nil {
 		return err
 	}
-	alb, err := newALB(clusterName)
+	alb, err := ecs.NewALB(clusterName)
 	if err != nil {
 		return err
 	}
-	for _, v := range alb.listeners {
-		err = alb.deleteListener(*v.ListenerArn)
+	for _, v := range alb.Listeners {
+		err = alb.DeleteListener(*v.ListenerArn)
 		if err != nil {
 			return err
 		}
 	}
-	serviceArns, err := ecs.listServices(clusterName)
+	serviceArns, err := e.ListServices(clusterName)
 	if err != nil {
 		return err
 	}
-	services, err := ecs.describeServices(clusterName, serviceArns, false, false, false)
+	services, err := e.DescribeServices(clusterName, serviceArns, false, false, false)
 	for _, v := range services {
-		targetGroup, _ := alb.getTargetGroupArn(v.ServiceName)
+		targetGroup, _ := alb.GetTargetGroupArn(v.ServiceName)
 		if targetGroup != nil {
-			err = alb.deleteTargetGroup(*targetGroup)
+			err = alb.DeleteTargetGroup(*targetGroup)
 			if err != nil {
 				return err
 			}
 		}
-		err = ecs.deleteService(clusterName, v.ServiceName)
+		err = e.DeleteService(clusterName, v.ServiceName)
 		if err != nil {
 			return err
 		}
-		err = ecs.waitUntilServicesInactive(clusterName, v.ServiceName)
+		err = e.WaitUntilServicesInactive(clusterName, v.ServiceName)
 		if err != nil {
 			return err
 		}
 	}
-	err = alb.deleteLoadBalancer()
+	err = alb.DeleteLoadBalancer()
 	if err != nil {
 		return err
 	}
 	fmt.Println("Wait for autoscaling group to not exist")
-	err = autoscaling.waitForAutoScalingGroupNotExists(clusterName)
+	err = autoscaling.WaitForAutoScalingGroupNotExists(clusterName)
 	if err != nil {
 		return err
 	}
 	var drained bool
 	fmt.Println("Waiting for EC2 instances to drain from ECS cluster")
 	for i := 0; i < 5 && !drained; i++ {
-		instanceArns, err := ecs.listContainerInstances(clusterName)
+		instanceArns, err := e.ListContainerInstances(clusterName)
 		if err != nil {
 			return err
 		}
@@ -1235,11 +1239,11 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 			time.Sleep(5 * time.Second)
 		}
 	}
-	err = ecs.deleteCluster(clusterName)
+	err = e.DeleteCluster(clusterName)
 	if err != nil {
 		return err
 	}
-	err = cloudwatch.deleteLogGroup(b.CloudwatchLogsPrefix + "-" + b.Environment)
+	err = cloudwatch.DeleteLogGroup(b.CloudwatchLogsPrefix + "-" + b.Environment)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -26,7 +26,7 @@ var cloudwatchLogger = loggo.GetLogger("cloudwatch")
 
 type CloudWatch struct{}
 
-func (cloudwatch *CloudWatch) createLogGroup(clusterName, logGroup string) error {
+func (cloudwatch *CloudWatch) CreateLogGroup(clusterName, logGroup string) error {
 	svc := cloudwatchlogs.New(session.New())
 	input := &cloudwatchlogs.CreateLogGroupInput{
 		LogGroupName: aws.String(logGroup),
@@ -48,7 +48,7 @@ func (cloudwatch *CloudWatch) createLogGroup(clusterName, logGroup string) error
 
 }
 
-func (cloudwatch *CloudWatch) deleteLogGroup(logGroup string) error {
+func (cloudwatch *CloudWatch) DeleteLogGroup(logGroup string) error {
 	svc := cloudwatchlogs.New(session.New())
 	input := &cloudwatchlogs.DeleteLogGroupInput{
 		LogGroupName: aws.String(logGroup),
@@ -66,7 +66,7 @@ func (cloudwatch *CloudWatch) deleteLogGroup(logGroup string) error {
 	return nil
 }
 
-func (cloudwatch *CloudWatch) getLogEventsByTime(logGroup, logStream string, startTime, endTime time.Time, nextToken string) (CloudWatchLog, error) {
+func (cloudwatch *CloudWatch) GetLogEventsByTime(logGroup, logStream string, startTime, endTime time.Time, nextToken string) (CloudWatchLog, error) {
 	var logEvents CloudWatchLog
 	svc := cloudwatchlogs.New(session.New())
 	input := &cloudwatchlogs.GetLogEventsInput{

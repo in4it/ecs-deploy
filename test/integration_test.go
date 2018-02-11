@@ -1,4 +1,4 @@
-package ecsdeploy
+package test
 
 import (
 	"fmt"
@@ -7,11 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/in4it/ecs-deploy/api"
+	"github.com/in4it/ecs-deploy/provider/ecs"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 )
 
 var runIntegrationTest = util.GetEnv("TEST_RUN_INTEGRATION", "no")
-var bootstrapFlags = &Flags{
+var bootstrapFlags = &api.Flags{
 	Region:                util.GetEnv("AWS_REGION", ""),
 	ClusterName:           util.GetEnv("TEST_CLUSTERNAME", "integrationtest"),
 	Environment:           util.GetEnv("TEST_ENVIRONMENT", ""),
@@ -29,7 +32,7 @@ var bootstrapFlags = &Flags{
 	DisableEcsDeploy:      true,
 }
 
-var ecsDefault = Deploy{
+var ecsDefault = service.Deploy{
 	Cluster:               bootstrapFlags.ClusterName,
 	ServiceName:           "integrationtest-default",
 	ServicePort:           80,
@@ -37,7 +40,7 @@ var ecsDefault = Deploy{
 	DesiredCount:          1,
 	MinimumHealthyPercent: 100,
 	MaximumPercent:        200,
-	Containers: []*DeployContainer{
+	Containers: []*service.DeployContainer{
 		{
 			ContainerName:     "integrationtest-default",
 			ContainerPort:     80,
@@ -49,7 +52,7 @@ var ecsDefault = Deploy{
 		},
 	},
 }
-var ecsDefaultConcurrentDeploy = Deploy{
+var ecsDefaultConcurrentDeploy = service.Deploy{
 	Cluster:               bootstrapFlags.ClusterName,
 	ServiceName:           "integrationtest-concurrency",
 	ServicePort:           80,
@@ -58,7 +61,7 @@ var ecsDefaultConcurrentDeploy = Deploy{
 	MinimumHealthyPercent: 100,
 	MaximumPercent:        200,
 	DeregistrationDelay:   5,
-	Containers: []*DeployContainer{
+	Containers: []*service.DeployContainer{
 		{
 			ContainerName:     "integrationtest-default",
 			ContainerPort:     80,
@@ -70,10 +73,10 @@ var ecsDefaultConcurrentDeploy = Deploy{
 		},
 	},
 }
-var ecsMultiDeploy = DeployServices{
-	Services: []Deploy{ecsDefault, ecsDefaultConcurrentDeploy},
+var ecsMultiDeploy = service.DeployServices{
+	Services: []service.Deploy{ecsDefault, ecsDefaultConcurrentDeploy},
 }
-var ecsDefaultWithChanges = Deploy{
+var ecsDefaultWithChanges = service.Deploy{
 	Cluster:               bootstrapFlags.ClusterName,
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
@@ -81,11 +84,11 @@ var ecsDefaultWithChanges = Deploy{
 	MinimumHealthyPercent: 100,
 	MaximumPercent:        200,
 	DeregistrationDelay:   0,
-	Stickiness: DeployStickiness{
+	Stickiness: service.DeployStickiness{
 		Enabled:  true,
 		Duration: 10000,
 	},
-	Containers: []*DeployContainer{
+	Containers: []*service.DeployContainer{
 		{
 			ContainerName:     "integrationtest-default",
 			ContainerPort:     80,
@@ -97,7 +100,7 @@ var ecsDefaultWithChanges = Deploy{
 		},
 	},
 }
-var ecsDefaultFailingHealthCheck = Deploy{
+var ecsDefaultFailingHealthCheck = service.Deploy{
 	Cluster:               bootstrapFlags.ClusterName,
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
@@ -105,7 +108,7 @@ var ecsDefaultFailingHealthCheck = Deploy{
 	MinimumHealthyPercent: 100,
 	MaximumPercent:        200,
 	DeregistrationDelay:   5,
-	Containers: []*DeployContainer{
+	Containers: []*service.DeployContainer{
 		{
 			ContainerName:     "integrationtest-default",
 			ContainerPort:     80,
@@ -117,7 +120,7 @@ var ecsDefaultFailingHealthCheck = Deploy{
 		},
 	},
 }
-var ecsDeploy = Deploy{
+var ecsDeploy = service.Deploy{
 	Cluster:               bootstrapFlags.ClusterName,
 	ServicePort:           8080,
 	ServiceProtocol:       "HTTP",
@@ -125,7 +128,7 @@ var ecsDeploy = Deploy{
 	MinimumHealthyPercent: 100,
 	MaximumPercent:        200,
 	DeregistrationDelay:   5,
-	Containers: []*DeployContainer{
+	Containers: []*service.DeployContainer{
 		{
 			ContainerName:     "integrationtest-ecs-deploy",
 			ContainerTag:      "latest",
@@ -168,10 +171,17 @@ func TestClusterIntegration(t *testing.T) {
 func setupTestCluster(t *testing.T) func(t *testing.T) {
 	// vars
 	var err error
-	ecs := ECS{}
-	service := newService()
-	controller := Controller{}
+	e := ecs.ECS{}
+	s := service.NewService()
+	controller := api.Controller{}
 	clusterName := bootstrapFlags.ClusterName
+
+	// change cur dir
+	err = os.Chdir("..")
+	if err != nil {
+		t.Errorf("Couldn't change directory")
+		return shutdown
+	}
 
 	err = controller.Bootstrap(bootstrapFlags)
 	if err != nil {
@@ -180,13 +190,13 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	}
 
 	// deploy (3 times: one time to create, one to update and one with different layout)
-	var deployRes *DeployResult
+	var deployRes, deployRes2 *service.DeployResult
 	for y := 0; y < 2; y++ {
-		service.serviceName = "integrationtest-default"
+		s.ServiceName = "integrationtest-default"
 		if y == 0 || y == 1 {
-			deployRes, err = controller.deploy(service.serviceName, ecsDefault)
+			deployRes, err = controller.Deploy(s.ServiceName, ecsDefault)
 		} else {
-			deployRes, err = controller.deploy(service.serviceName, ecsDefaultWithChanges)
+			deployRes, err = controller.Deploy(s.ServiceName, ecsDefaultWithChanges)
 		}
 		if err != nil {
 			t.Errorf("Error: %v\n", err)
@@ -197,14 +207,14 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 
 		var deployed bool
 		for i := 0; i < 30 && !deployed; i++ {
-			dd, err := service.getLastDeploy()
+			dd, err := s.GetDeployment(s.ServiceName, deployRes.DeploymentTime.Format("2006-01-02T15:04:05.999999999Z"))
 			if err != nil {
 				t.Errorf("Error: %v\n", err)
 			}
 			if dd != nil && dd.Status == "success" {
 				deployed = true
 			} else {
-				fmt.Printf("Waiting for deploy %v to have status success (latest status: %v)\n", service.serviceName, dd.Status)
+				fmt.Printf("Waiting for deploy %v to have status success (latest status: %v)\n", s.ServiceName, dd.Status)
 				time.Sleep(30 * time.Second)
 			}
 		}
@@ -215,10 +225,10 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	}
 
 	// deploy an update with healthchecks that fail and observe rolling back
-	controller.deploy(service.serviceName, ecsDefaultFailingHealthCheck)
+	deployRes2, err = controller.Deploy(s.ServiceName, ecsDefaultFailingHealthCheck)
 	var deployed bool
 	for i := 0; i < 30 && !deployed; i++ {
-		dd, err := service.getLastDeploy()
+		dd, err := s.GetDeployment(s.ServiceName, deployRes2.DeploymentTime.Format("2006-01-02T15:04:05.999999999Z"))
 		if err != nil {
 			t.Errorf("Error: %v\n", err)
 		}
@@ -230,9 +240,9 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 		}
 	}
 	settled := false
-	var runningService RunningService
+	var runningService service.RunningService
 	for i := 0; i < 30 && !settled; i++ {
-		runningService, err = ecs.describeService(clusterName, service.serviceName, false, false, false)
+		runningService, err = e.DescribeService(clusterName, s.ServiceName, false, false, false)
 		if err != nil {
 			t.Errorf("Error: %v\n", err)
 		}
@@ -257,7 +267,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	return teardown
 }
 func teardown(t *testing.T) {
-	controller := Controller{}
+	controller := api.Controller{}
 	err := controller.DeleteCluster(bootstrapFlags)
 	if err != nil {
 		t.Errorf("Error: %v\n", err)

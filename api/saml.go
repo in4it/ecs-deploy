@@ -1,4 +1,4 @@
-package ecsdeploy
+package api
 
 // saml gin-gonic implementation
 // uses saml/samlsp with parts rewritten to make it work with gin-gonic and gin-jwt

@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,7 +19,7 @@ var autoscalingLogger = loggo.GetLogger("autoscaling")
 type AutoScaling struct {
 }
 
-func (a *AutoScaling) completeLifecycleAction(autoScalingGroupName, instanceId, action, lifecycleHookName, lifecycleToken string) error {
+func (a *AutoScaling) CompleteLifecycleAction(autoScalingGroupName, instanceId, action, lifecycleHookName, lifecycleToken string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.CompleteLifecycleActionInput{
 		AutoScalingGroupName:  aws.String(autoScalingGroupName),
@@ -40,7 +40,7 @@ func (a *AutoScaling) completeLifecycleAction(autoScalingGroupName, instanceId, 
 	}
 	return nil
 }
-func (a *AutoScaling) completePendingLifecycleAction(autoScalingGroupName, instanceId, action, lifecycleHookName string) error {
+func (a *AutoScaling) CompletePendingLifecycleAction(autoScalingGroupName, instanceId, action, lifecycleHookName string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.CompleteLifecycleActionInput{
 		AutoScalingGroupName:  aws.String(autoScalingGroupName),
@@ -62,7 +62,7 @@ func (a *AutoScaling) completePendingLifecycleAction(autoScalingGroupName, insta
 	}
 	return nil
 }
-func (a *AutoScaling) getLifecycleHookNames(autoScalingGroupName, lifecycleHookType string) ([]string, error) {
+func (a *AutoScaling) GetLifecycleHookNames(autoScalingGroupName, lifecycleHookType string) ([]string, error) {
 	var lifecycleHookNames []string
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DescribeLifecycleHooksInput{
@@ -89,10 +89,10 @@ func (a *AutoScaling) getLifecycleHookNames(autoScalingGroupName, lifecycleHookT
 	return lifecycleHookNames, nil
 }
 
-func (a *AutoScaling) createLaunchConfiguration(clusterName string, keyName string, instanceType string, instanceProfile string, securitygroups []string) error {
+func (a *AutoScaling) CreateLaunchConfiguration(clusterName string, keyName string, instanceType string, instanceProfile string, securitygroups []string) error {
 	ecs := ECS{}
 	svc := autoscaling.New(session.New())
-	amiId, err := ecs.getECSAMI()
+	amiId, err := ecs.GetECSAMI()
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (a *AutoScaling) createLaunchConfiguration(clusterName string, keyName stri
 	}
 	return nil
 }
-func (a *AutoScaling) deleteLaunchConfiguration(clusterName string) error {
+func (a *AutoScaling) DeleteLaunchConfiguration(clusterName string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DeleteLaunchConfigurationInput{
 		LaunchConfigurationName: aws.String(clusterName),
@@ -138,7 +138,7 @@ func (a *AutoScaling) deleteLaunchConfiguration(clusterName string) error {
 	}
 	return nil
 }
-func (a *AutoScaling) createAutoScalingGroup(clusterName string, desiredCapacity int64, maxSize int64, minSize int64, subnets []string) error {
+func (a *AutoScaling) CreateAutoScalingGroup(clusterName string, desiredCapacity int64, maxSize int64, minSize int64, subnets []string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.CreateAutoScalingGroupInput{
 		AutoScalingGroupName:    aws.String(clusterName),
@@ -165,7 +165,7 @@ func (a *AutoScaling) createAutoScalingGroup(clusterName string, desiredCapacity
 	}
 	return nil
 }
-func (a *AutoScaling) waitForAutoScalingGroupInService(clusterName string) error {
+func (a *AutoScaling) WaitForAutoScalingGroupInService(clusterName string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: []*string{aws.String(clusterName)},
@@ -181,7 +181,7 @@ func (a *AutoScaling) waitForAutoScalingGroupInService(clusterName string) error
 	}
 	return nil
 }
-func (a *AutoScaling) waitForAutoScalingGroupNotExists(clusterName string) error {
+func (a *AutoScaling) WaitForAutoScalingGroupNotExists(clusterName string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: []*string{aws.String(clusterName)},
@@ -197,7 +197,7 @@ func (a *AutoScaling) waitForAutoScalingGroupNotExists(clusterName string) error
 	}
 	return nil
 }
-func (a *AutoScaling) deleteAutoScalingGroup(clusterName string, forceDelete bool) error {
+func (a *AutoScaling) DeleteAutoScalingGroup(clusterName string, forceDelete bool) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DeleteAutoScalingGroupInput{
 		AutoScalingGroupName: aws.String(clusterName),
@@ -214,8 +214,8 @@ func (a *AutoScaling) deleteAutoScalingGroup(clusterName string, forceDelete boo
 	}
 	return nil
 }
-func (a *AutoScaling) scaleClusterNodes(autoScalingGroupName string, change int64) error {
-	minSize, desiredCapacity, maxSize, err := a.getClusterNodeDesiredCount(autoScalingGroupName)
+func (a *AutoScaling) ScaleClusterNodes(autoScalingGroupName string, change int64) error {
+	minSize, desiredCapacity, maxSize, err := a.GetClusterNodeDesiredCount(autoScalingGroupName)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (a *AutoScaling) scaleClusterNodes(autoScalingGroupName string, change int6
 	}
 	return nil
 }
-func (a *AutoScaling) getClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error) {
+func (a *AutoScaling) GetClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error) {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DescribeAutoScalingGroupsInput{
 		AutoScalingGroupNames: []*string{aws.String(autoScalingGroupName)},
@@ -265,7 +265,7 @@ func (a *AutoScaling) getClusterNodeDesiredCount(autoScalingGroupName string) (i
 		aws.Int64Value(result.AutoScalingGroups[0].MaxSize),
 		nil
 }
-func (a *AutoScaling) getAutoScalingGroupByTag(clusterName string) (string, error) {
+func (a *AutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
 	var result string
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.DescribeAutoScalingGroupsInput{}
