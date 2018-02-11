@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"fmt"

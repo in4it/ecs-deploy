@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,25 +21,25 @@ var iamLogger = loggo.GetLogger("iam")
 // IAM struct
 type IAM struct {
 	stsAssumingRole *sts.STS
-	accountId       string
+	AccountId       string
 }
 
 // default IAM trust
 
-func (e *IAM) getEcsTaskIAMTrust() string {
+func (e *IAM) GetEcsTaskIAMTrust() string {
 	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ecs-tasks.amazonaws.com" }, "Effect": "Allow" } ] }`
 }
-func (e *IAM) getEcsServiceIAMTrust() string {
+func (e *IAM) GetEcsServiceIAMTrust() string {
 	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ecs.amazonaws.com" }, "Effect": "Allow" } ] }`
 }
-func (e *IAM) getEC2IAMTrust() string {
+func (e *IAM) GetEC2IAMTrust() string {
 	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ec2.amazonaws.com" }, "Effect": "Allow" } ] }`
 }
-func (e *IAM) getEcsServicePolicy() string {
+func (e *IAM) GetEcsServicePolicy() string {
 	return `arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole`
 }
 
-func (e *IAM) getAccountId() error {
+func (e *IAM) GetAccountId() error {
 	var svc *sts.STS
 	if e.stsAssumingRole == nil {
 		svc = sts.New(session.New())
@@ -60,11 +60,11 @@ func (e *IAM) getAccountId() error {
 		}
 		return errors.New("Couldn't get caller identity")
 	}
-	e.accountId = *result.Account
+	e.AccountId = *result.Account
 	return nil
 }
 
-func (e *IAM) roleExists(roleName string) (*string, error) {
+func (e *IAM) RoleExists(roleName string) (*string, error) {
 	svc := iam.New(session.New())
 	input := &iam.GetRoleInput{
 		RoleName: aws.String(roleName),
@@ -89,7 +89,7 @@ func (e *IAM) roleExists(roleName string) (*string, error) {
 	return result.Role.Arn, nil
 }
 
-func (e *IAM) createRole(roleName, assumePolicyDocument string) (*string, error) {
+func (e *IAM) CreateRole(roleName, assumePolicyDocument string) (*string, error) {
 	svc := iam.New(session.New())
 	input := &iam.CreateRoleInput{
 		AssumeRolePolicyDocument: aws.String(assumePolicyDocument),
@@ -125,7 +125,7 @@ func (e *IAM) createRole(roleName, assumePolicyDocument string) (*string, error)
 		return result.Role.Arn, nil
 	}
 }
-func (e *IAM) deleteRolePolicy(roleName, policyName string) error {
+func (e *IAM) DeleteRolePolicy(roleName, policyName string) error {
 	svc := iam.New(session.New())
 	input := &iam.DeleteRolePolicyInput{
 		RoleName:   aws.String(roleName),
@@ -143,7 +143,7 @@ func (e *IAM) deleteRolePolicy(roleName, policyName string) error {
 	}
 	return nil
 }
-func (e *IAM) deleteRole(roleName string) error {
+func (e *IAM) DeleteRole(roleName string) error {
 	svc := iam.New(session.New())
 	input := &iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
@@ -160,7 +160,7 @@ func (e *IAM) deleteRole(roleName string) error {
 	}
 	return nil
 }
-func (e *IAM) createInstanceProfile(instanceProfileName string) error {
+func (e *IAM) CreateInstanceProfile(instanceProfileName string) error {
 	svc := iam.New(session.New())
 	input := &iam.CreateInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
@@ -178,7 +178,7 @@ func (e *IAM) createInstanceProfile(instanceProfileName string) error {
 	}
 	return nil
 }
-func (e *IAM) addRoleToInstanceProfile(instanceProfileName, roleName string) error {
+func (e *IAM) AddRoleToInstanceProfile(instanceProfileName, roleName string) error {
 	svc := iam.New(session.New())
 	input := &iam.AddRoleToInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
@@ -196,7 +196,7 @@ func (e *IAM) addRoleToInstanceProfile(instanceProfileName, roleName string) err
 	}
 	return nil
 }
-func (e *IAM) removeRoleFromInstanceProfile(instanceProfileName, roleName string) error {
+func (e *IAM) RemoveRoleFromInstanceProfile(instanceProfileName, roleName string) error {
 	svc := iam.New(session.New())
 	input := &iam.RemoveRoleFromInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
@@ -214,7 +214,7 @@ func (e *IAM) removeRoleFromInstanceProfile(instanceProfileName, roleName string
 	}
 	return nil
 }
-func (e *IAM) deleteInstanceProfile(instanceProfileName string) error {
+func (e *IAM) DeleteInstanceProfile(instanceProfileName string) error {
 	svc := iam.New(session.New())
 	input := &iam.DeleteInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
@@ -231,7 +231,7 @@ func (e *IAM) deleteInstanceProfile(instanceProfileName string) error {
 	}
 	return nil
 }
-func (e *IAM) waitUntilInstanceProfileExists(instanceProfileName string) error {
+func (e *IAM) WaitUntilInstanceProfileExists(instanceProfileName string) error {
 	svc := iam.New(session.New())
 	input := &iam.GetInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
@@ -249,7 +249,7 @@ func (e *IAM) waitUntilInstanceProfileExists(instanceProfileName string) error {
 	return nil
 }
 
-func (e *IAM) putRolePolicy(roleName, policyName, policy string) error {
+func (e *IAM) PutRolePolicy(roleName, policyName, policy string) error {
 	svc := iam.New(session.New())
 
 	input := &iam.PutRolePolicyInput{
@@ -282,7 +282,7 @@ func (e *IAM) putRolePolicy(roleName, policyName, policy string) error {
 	}
 	return nil
 }
-func (e *IAM) attachRolePolicy(roleName, policyArn string) error {
+func (e *IAM) AttachRolePolicy(roleName, policyArn string) error {
 	svc := iam.New(session.New())
 	input := &iam.AttachRolePolicyInput{
 		PolicyArn: aws.String(policyArn),
@@ -318,7 +318,7 @@ func (e *IAM) attachRolePolicy(roleName, policyArn string) error {
 	return nil
 }
 
-func (e *IAM) assumeRole(roleArn, roleSessionName, prevCreds string) (*credentials.Credentials, string, error) {
+func (e *IAM) AssumeRole(roleArn, roleSessionName, prevCreds string) (*credentials.Credentials, string, error) {
 	sess := session.Must(session.NewSession())
 	// check previous credentials
 	var value credentials.Value
@@ -334,7 +334,7 @@ func (e *IAM) assumeRole(roleArn, roleSessionName, prevCreds string) (*credentia
 			if e.stsAssumingRole == nil {
 				return creds, "", errors.New("Could not assume role")
 			}
-			err = e.getAccountId()
+			err = e.GetAccountId()
 			if err != nil {
 				iamLogger.Debugf("Credentials are expired")
 				creds = nil

@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/acm"
 	"github.com/aws/aws-sdk-go/service/elbv2"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
@@ -21,14 +22,14 @@ var albLogger = loggo.GetLogger("alb")
 type ALB struct {
 	loadBalancerName string
 	loadBalancerArn  string
-	vpcId            string
-	listeners        []*elbv2.Listener
-	domain           string
-	rules            map[string][]*elbv2.Rule
-	dnsName          string
+	VpcId            string
+	Listeners        []*elbv2.Listener
+	Domain           string
+	Rules            map[string][]*elbv2.Rule
+	DnsName          string
 }
 
-func newALB(loadBalancerName string) (*ALB, error) {
+func NewALB(loadBalancerName string) (*ALB, error) {
 	a := ALB{}
 	a.loadBalancerName = loadBalancerName
 	// retrieve vpcId and loadBalancerArn
@@ -59,17 +60,17 @@ func newALB(loadBalancerName string) (*ALB, error) {
 	}
 	a.loadBalancerArn = *result.LoadBalancers[0].LoadBalancerArn
 	a.loadBalancerName = *result.LoadBalancers[0].LoadBalancerName
-	a.vpcId = *result.LoadBalancers[0].VpcId
+	a.VpcId = *result.LoadBalancers[0].VpcId
 
 	// get listeners
-	err = a.getListeners()
+	err = a.GetListeners()
 	if err != nil {
 		return nil, err
 	} else if len(result.LoadBalancers) == 0 {
 		return nil, errors.New("Could not get listeners for loadbalancer (no elements returned)")
 	}
 	// get domain (if SSL cert is attached)
-	err = a.getDomainUsingCertificate()
+	err = a.GetDomainUsingCertificate()
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +79,7 @@ func newALB(loadBalancerName string) (*ALB, error) {
 }
 
 // get the listeners for the loadbalancer
-func newALBAndCreate(loadBalancerName, ipAddressType string, scheme string, securityGroups []string, subnets []string, lbType string) (*ALB, error) {
+func NewALBAndCreate(loadBalancerName, ipAddressType string, scheme string, securityGroups []string, subnets []string, lbType string) (*ALB, error) {
 	a := ALB{}
 	svc := elbv2.New(session.New())
 	input := &elbv2.CreateLoadBalancerInput{
@@ -103,12 +104,12 @@ func newALBAndCreate(loadBalancerName, ipAddressType string, scheme string, secu
 		return nil, errors.New("No loadbalancers returned")
 	}
 	a.loadBalancerArn = aws.StringValue(result.LoadBalancers[0].LoadBalancerArn)
-	a.dnsName = aws.StringValue(result.LoadBalancers[0].DNSName)
-	a.vpcId = aws.StringValue(result.LoadBalancers[0].VpcId)
+	a.DnsName = aws.StringValue(result.LoadBalancers[0].DNSName)
+	a.VpcId = aws.StringValue(result.LoadBalancers[0].VpcId)
 	return &a, nil
 }
 
-func (a *ALB) deleteLoadBalancer() error {
+func (a *ALB) DeleteLoadBalancer() error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DeleteLoadBalancerInput{
 		LoadBalancerArn: aws.String(a.loadBalancerArn),
@@ -125,7 +126,7 @@ func (a *ALB) deleteLoadBalancer() error {
 	return nil
 }
 
-func (a *ALB) createListener(protocol string, port int64, targetGroupArn string) error {
+func (a *ALB) CreateListener(protocol string, port int64, targetGroupArn string) error {
 	// only HTTP is supported for now
 	svc := elbv2.New(session.New())
 	input := &elbv2.CreateListenerInput{
@@ -149,10 +150,10 @@ func (a *ALB) createListener(protocol string, port int64, targetGroupArn string)
 	if len(result.Listeners) == 0 {
 		return errors.New("No listeners returned")
 	}
-	a.listeners = append(a.listeners, result.Listeners[0])
+	a.Listeners = append(a.Listeners, result.Listeners[0])
 	return nil
 }
-func (a *ALB) deleteListener(listenerArn string) error {
+func (a *ALB) DeleteListener(listenerArn string) error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DeleteListenerInput{
 		ListenerArn: aws.String(listenerArn),
@@ -171,7 +172,7 @@ func (a *ALB) deleteListener(listenerArn string) error {
 }
 
 // get the listeners for the loadbalancer
-func (a *ALB) getListeners() error {
+func (a *ALB) GetListeners() error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DescribeListenersInput{LoadBalancerArn: aws.String(a.loadBalancerArn)}
 
@@ -192,15 +193,15 @@ func (a *ALB) getListeners() error {
 		return errors.New("Could not get Listeners for loadbalancer")
 	}
 	for _, l := range result.Listeners {
-		a.listeners = append(a.listeners, l)
+		a.Listeners = append(a.Listeners, l)
 	}
 	return nil
 }
 
 // get the domain using certificates
-func (a *ALB) getDomainUsingCertificate() error {
+func (a *ALB) GetDomainUsingCertificate() error {
 	svc := acm.New(session.New())
-	for _, l := range a.listeners {
+	for _, l := range a.Listeners {
 		for _, c := range l.Certificates {
 			albLogger.Debugf("ALB Certificate found with arn: %v", *c.CertificateArn)
 			input := &acm.DescribeCertificateInput{
@@ -226,7 +227,7 @@ func (a *ALB) getDomainUsingCertificate() error {
 			albLogger.Debugf("Domain found through ALB certificate: %v", *result.Certificate.DomainName)
 			s := strings.Split(*result.Certificate.DomainName, ".")
 			if len(s) >= 2 {
-				a.domain = s[len(s)-2] + "." + s[len(s)-1]
+				a.Domain = s[len(s)-2] + "." + s[len(s)-1]
 			}
 			return nil
 		}
@@ -234,11 +235,11 @@ func (a *ALB) getDomainUsingCertificate() error {
 	return nil
 }
 
-func (a *ALB) createTargetGroup(serviceName string, d Deploy) (*string, error) {
+func (a *ALB) CreateTargetGroup(serviceName string, d service.Deploy) (*string, error) {
 	svc := elbv2.New(session.New())
 	input := &elbv2.CreateTargetGroupInput{
 		Name:     aws.String(serviceName),
-		VpcId:    aws.String(a.vpcId),
+		VpcId:    aws.String(a.VpcId),
 		Port:     aws.Int64(d.ServicePort),
 		Protocol: aws.String(d.ServiceProtocol),
 	}
@@ -294,7 +295,7 @@ func (a *ALB) createTargetGroup(serviceName string, d Deploy) (*string, error) {
 	}
 	return result.TargetGroups[0].TargetGroupArn, nil
 }
-func (a *ALB) deleteTargetGroup(targetGroupArn string) error {
+func (a *ALB) DeleteTargetGroup(targetGroupArn string) error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DeleteTargetGroupInput{
 		TargetGroupArn: aws.String(targetGroupArn),
@@ -311,11 +312,11 @@ func (a *ALB) deleteTargetGroup(targetGroupArn string) error {
 	return nil
 }
 
-func (a *ALB) getHighestRule() (int64, error) {
+func (a *ALB) GetHighestRule() (int64, error) {
 	var highest int64
 	svc := elbv2.New(session.New())
 
-	for _, listener := range a.listeners {
+	for _, listener := range a.Listeners {
 		input := &elbv2.DescribeRulesInput{ListenerArn: listener.ListenerArn}
 
 		c := true // parse more pages if c is true
@@ -360,10 +361,10 @@ func (a *ALB) getHighestRule() (int64, error) {
 	return highest, nil
 }
 
-func (a *ALB) createRuleForAllListeners(ruleType string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
+func (a *ALB) CreateRuleForAllListeners(ruleType string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
 	var listeners []string
-	for _, l := range a.listeners {
-		err := a.createRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
+	for _, l := range a.Listeners {
+		err := a.CreateRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
 		if err != nil {
 			return nil, err
 		}
@@ -372,12 +373,12 @@ func (a *ALB) createRuleForAllListeners(ruleType string, targetGroupArn string, 
 	return listeners, nil
 }
 
-func (a *ALB) createRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
+func (a *ALB) CreateRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
 	var retListeners []string
-	for _, l := range a.listeners {
+	for _, l := range a.Listeners {
 		for _, l2 := range listeners {
 			if l.Protocol != nil && strings.ToLower(*l.Protocol) == strings.ToLower(l2) {
-				err := a.createRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
+				err := a.CreateRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
 				if err != nil {
 					return nil, err
 				}
@@ -388,7 +389,7 @@ func (a *ALB) createRuleForListeners(ruleType string, listeners []string, target
 	return retListeners, nil
 }
 
-func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn string, rules []string, priority int64) error {
+func (a *ALB) CreateRule(ruleType string, listenerArn string, targetGroupArn string, rules []string, priority int64) error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.CreateRuleInput{
 		Actions: []*elbv2.Action{
@@ -414,7 +415,7 @@ func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn str
 		if len(rules) != 1 {
 			return errors.New("Wrong number of rules (expected 1, got " + strconv.Itoa(len(rules)) + ")")
 		}
-		hostname := rules[0] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.domain)
+		hostname := rules[0] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.Domain)
 		input.SetConditions([]*elbv2.RuleCondition{
 			{
 				Field:  aws.String("host-header"),
@@ -425,7 +426,7 @@ func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn str
 		if len(rules) != 2 {
 			return errors.New("Wrong number of rules (expected 2, got " + strconv.Itoa(len(rules)) + ")")
 		}
-		hostname := rules[1] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.domain)
+		hostname := rules[1] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.Domain)
 		input.SetConditions([]*elbv2.RuleCondition{
 			{
 				Field:  aws.String("path-pattern"),
@@ -478,11 +479,11 @@ func (a *ALB) createRule(ruleType string, listenerArn string, targetGroupArn str
 }
 
 // get rules by listener
-func (a *ALB) getRulesForAllListeners() error {
-	a.rules = make(map[string][]*elbv2.Rule)
+func (a *ALB) GetRulesForAllListeners() error {
+	a.Rules = make(map[string][]*elbv2.Rule)
 	svc := elbv2.New(session.New())
 
-	for _, l := range a.listeners {
+	for _, l := range a.Listeners {
 		input := &elbv2.DescribeRulesInput{ListenerArn: aws.String(*l.ListenerArn)}
 
 		result, err := svc.DescribeRules(input)
@@ -502,7 +503,7 @@ func (a *ALB) getRulesForAllListeners() error {
 			return errors.New("Could not get Listeners for loadbalancer")
 		}
 		for _, r := range result.Rules {
-			a.rules[*l.ListenerArn] = append(a.rules[*l.ListenerArn], r)
+			a.Rules[*l.ListenerArn] = append(a.Rules[*l.ListenerArn], r)
 			if len(r.Conditions) != 0 && len(r.Conditions[0].Values) != 0 {
 				albLogger.Debugf("Importing rule: %+v (prio: %v)", *r.Conditions[0].Values[0], *r.Priority)
 			}
@@ -510,7 +511,7 @@ func (a *ALB) getRulesForAllListeners() error {
 	}
 	return nil
 }
-func (a *ALB) getTargetGroupArn(serviceName string) (*string, error) {
+func (a *ALB) GetTargetGroupArn(serviceName string) (*string, error) {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DescribeTargetGroupsInput{
 		Names: []*string{aws.String(serviceName)},
@@ -542,15 +543,15 @@ func (a *ALB) getTargetGroupArn(serviceName string) (*string, error) {
 		}
 	}
 }
-func (a *ALB) getDomain() string {
-	return util.GetEnv("LOADBALANCER_DOMAIN", a.domain)
+func (a *ALB) GetDomain() string {
+	return util.GetEnv("LOADBALANCER_DOMAIN", a.Domain)
 }
-func (a *ALB) findRule(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, *string, error) {
+func (a *ALB) FindRule(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, *string, error) {
 	if len(conditionField) != len(conditionValue) {
 		return nil, nil, errors.New("conditionField length not equal to conditionValue length")
 	}
 	// examine rules
-	if rules, ok := a.rules[listener]; ok {
+	if rules, ok := a.Rules[listener]; ok {
 		for _, r := range rules {
 			for _, a := range r.Actions {
 				if *a.Type == "forward" && *a.TargetGroupArn == targetGroupArn {
@@ -583,7 +584,7 @@ func (a *ALB) findRule(listener string, targetGroupArn string, conditionField []
 	return nil, nil, errors.New("Priority not found for rule: listener " + listener + ", targetGroupArn: " + targetGroupArn + ", Field: " + strings.Join(conditionField, ",") + ", Value: " + strings.Join(conditionValue, ","))
 }
 
-func (a *ALB) updateHealthCheck(targetGroupArn string, healthCheck DeployHealthCheck) error {
+func (a *ALB) UpdateHealthCheck(targetGroupArn string, healthCheck service.DeployHealthCheck) error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.ModifyTargetGroupInput{
 		TargetGroupArn: aws.String(targetGroupArn),
@@ -624,7 +625,7 @@ func (a *ALB) updateHealthCheck(targetGroupArn string, healthCheck DeployHealthC
 	return nil
 }
 
-func (a *ALB) modifyTargetGroupAttributes(targetGroupArn string, d Deploy) error {
+func (a *ALB) ModifyTargetGroupAttributes(targetGroupArn string, d service.Deploy) error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.ModifyTargetGroupAttributesInput{
 		TargetGroupArn: aws.String(targetGroupArn),

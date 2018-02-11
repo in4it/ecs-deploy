@@ -1,4 +1,4 @@
-package ecsdeploy
+package ecs
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 	"os"
@@ -25,11 +26,11 @@ type Parameter struct {
 
 // Paramstore struct
 type Paramstore struct {
-	parameters      map[string]Parameter
-	ssmAssumingRole *ssm.SSM
+	Parameters      map[string]Parameter
+	SsmAssumingRole *ssm.SSM
 }
 
-func (p *Paramstore) isEnabled() bool {
+func (p *Paramstore) IsEnabled() bool {
 	if util.GetEnv("PARAMSTORE_ENABLED", "no") == "yes" {
 		return true
 	} else {
@@ -37,7 +38,7 @@ func (p *Paramstore) isEnabled() bool {
 	}
 }
 
-func (p *Paramstore) getPrefix() string {
+func (p *Paramstore) GetPrefix() string {
 	if util.GetEnv("AWS_ENV_PATH", "") != "" {
 		return util.GetEnv("AWS_ENV_PATH", "")
 	} else {
@@ -48,40 +49,40 @@ func (p *Paramstore) getPrefix() string {
 		}
 	}
 }
-func (p *Paramstore) getPrefixForService(serviceName string) string {
+func (p *Paramstore) GetPrefixForService(serviceName string) string {
 	if util.GetEnv("PARAMSTORE_PREFIX", "") == "" {
 		return ""
 	} else {
 		return "/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + serviceName + "/"
 	}
 }
-func (p *Paramstore) assumeRole(roleArn, roleSessionName, prevCreds string) (string, error) {
+func (p *Paramstore) AssumeRole(roleArn, roleSessionName, prevCreds string) (string, error) {
 	iam := IAM{}
-	creds, jsonCreds, err := iam.assumeRole(roleArn, roleSessionName, prevCreds)
+	creds, jsonCreds, err := iam.AssumeRole(roleArn, roleSessionName, prevCreds)
 	if err != nil {
 		return "", err
 	}
 	// assume role
 	sess := session.Must(session.NewSession())
-	p.ssmAssumingRole = ssm.New(sess, &aws.Config{Credentials: creds})
-	if p.ssmAssumingRole == nil {
+	p.SsmAssumingRole = ssm.New(sess, &aws.Config{Credentials: creds})
+	if p.SsmAssumingRole == nil {
 		return "", errors.New("Could not assume role")
 	}
 	paramstoreLogger.Debugf("Assumed role %v with roleSessionName %v", roleArn, roleSessionName)
 
 	return jsonCreds, nil
 }
-func (p *Paramstore) getParameters(prefix string, withDecryption bool) error {
+func (p *Paramstore) GetParameters(prefix string, withDecryption bool) error {
 	var svc *ssm.SSM
-	p.parameters = make(map[string]Parameter)
+	p.Parameters = make(map[string]Parameter)
 	if prefix == "" {
 		// no valid prefix - parameter store not in use
 		return nil
 	}
-	if p.ssmAssumingRole == nil {
+	if p.SsmAssumingRole == nil {
 		svc = ssm.New(session.New())
 	} else {
-		svc = p.ssmAssumingRole
+		svc = p.SsmAssumingRole
 	}
 	input := &ssm.GetParametersByPathInput{
 		Path:           aws.String(prefix),
@@ -101,7 +102,7 @@ func (p *Paramstore) getParameters(prefix string, withDecryption bool) error {
 				} else {
 					value = "***"
 				}
-				p.parameters[paramName] = Parameter{
+				p.Parameters[paramName] = Parameter{
 					Name:    *param.Name,
 					Type:    *param.Type,
 					Value:   value,
@@ -121,8 +122,8 @@ func (p *Paramstore) getParameters(prefix string, withDecryption bool) error {
 	}
 	return nil
 }
-func (p *Paramstore) getParameterValue(name string) (*string, error) {
-	if param, ok := p.parameters[name]; ok {
+func (p *Paramstore) GetParameterValue(name string) (*string, error) {
+	if param, ok := p.Parameters[name]; ok {
 		if param.Value != "" {
 			return &param.Value, nil
 		}
@@ -133,7 +134,7 @@ func (p *Paramstore) getParameterValue(name string) (*string, error) {
 	// val not found, but does exist, retrieve
 	svc := ssm.New(session.New())
 	input := &ssm.GetParameterInput{
-		Name:           aws.String(p.getPrefix() + name),
+		Name:           aws.String(p.GetPrefix() + name),
 		WithDecryption: aws.Bool(true),
 	}
 
@@ -155,10 +156,10 @@ func (p *Paramstore) getParameterValue(name string) (*string, error) {
 	return result.Parameter.Value, nil
 }
 
-func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) string {
+func (p *Paramstore) GetParamstoreIAMPolicy(serviceName string) string {
 	iam := IAM{}
-	err := iam.getAccountId()
-	accountId := iam.accountId
+	err := iam.GetAccountId()
+	accountId := iam.AccountId
 	if err != nil {
 		accountId = ""
 	}
@@ -190,16 +191,16 @@ func (p *Paramstore) getParamstoreIAMPolicy(serviceName string) string {
   }`
 	return policy
 }
-func (p *Paramstore) putParameter(serviceName string, parameter DeployServiceParameter) (*int64, error) {
+func (p *Paramstore) PutParameter(serviceName string, parameter service.DeployServiceParameter) (*int64, error) {
 	var svc *ssm.SSM
-	if p.ssmAssumingRole == nil {
+	if p.SsmAssumingRole == nil {
 		svc = ssm.New(session.New())
 	} else {
-		svc = p.ssmAssumingRole
+		svc = p.SsmAssumingRole
 	}
 
 	input := &ssm.PutParameterInput{
-		Name:      aws.String(p.getPrefixForService(serviceName) + parameter.Name),
+		Name:      aws.String(p.GetPrefixForService(serviceName) + parameter.Name),
 		Value:     aws.String(parameter.Value),
 		Overwrite: aws.Bool(true),
 	}
@@ -221,16 +222,16 @@ func (p *Paramstore) putParameter(serviceName string, parameter DeployServicePar
 	}
 	return result.Version, nil
 }
-func (p *Paramstore) deleteParameter(serviceName, parameter string) error {
+func (p *Paramstore) DeleteParameter(serviceName, parameter string) error {
 	var svc *ssm.SSM
-	if p.ssmAssumingRole == nil {
+	if p.SsmAssumingRole == nil {
 		svc = ssm.New(session.New())
 	} else {
-		svc = p.ssmAssumingRole
+		svc = p.SsmAssumingRole
 	}
 
 	input := &ssm.DeleteParameterInput{
-		Name: aws.String(p.getPrefixForService(serviceName) + parameter),
+		Name: aws.String(p.GetPrefixForService(serviceName) + parameter),
 	}
 
 	_, err := svc.DeleteParameter(input)
@@ -245,22 +246,22 @@ func (p *Paramstore) deleteParameter(serviceName, parameter string) error {
 	return nil
 }
 
-func (p *Paramstore) bootstrap(serviceName, prefix string, environment string, parameters []DeployServiceParameter) error {
+func (p *Paramstore) Bootstrap(serviceName, prefix string, environment string, parameters []service.DeployServiceParameter) error {
 	os.Setenv("PARAMSTORE_PREFIX", prefix)
 	os.Setenv("AWS_ACCOUNT_ENV", environment)
 	for _, v := range parameters {
-		p.putParameter(serviceName, v)
+		p.PutParameter(serviceName, v)
 	}
 	return nil
 }
 
 func (p *Paramstore) RetrieveKeys() error {
-	if p.isEnabled() {
-		err := p.getParameters(p.getPrefix(), true)
+	if p.IsEnabled() {
+		err := p.GetParameters(p.GetPrefix(), true)
 		if err != nil {
 			return err
 		}
-		for k, v := range p.parameters {
+		for k, v := range p.Parameters {
 			os.Setenv(k, v.Value)
 		}
 	}

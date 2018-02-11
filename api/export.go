@@ -1,8 +1,10 @@
-package ecsdeploy
+package api
 
 import (
 	"encoding/base64"
 	"errors"
+	"github.com/in4it/ecs-deploy/provider/ecs"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 	"io/ioutil"
@@ -18,9 +20,9 @@ type ExportedApps map[string]string
 
 type Export struct {
 	templateMap map[string]string
-	deployData  *Deploy
-	alb         map[string]*ALB
-	p           Paramstore
+	deployData  *service.Deploy
+	alb         map[string]*ecs.ALB
+	p           ecs.Paramstore
 }
 
 type RulePriority []int64
@@ -46,25 +48,25 @@ type ListenerRuleCondition struct {
 
 func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	// retrieve data
-	iam := IAM{}
-	err := iam.getAccountId()
+	iam := ecs.IAM{}
+	err := iam.GetAccountId()
 	if err != nil {
 		return err
 	}
 	// retrieve data
 	if _, ok := e.alb[clusterName]; !ok {
-		e.alb[clusterName], err = newALB(clusterName)
+		e.alb[clusterName], err = ecs.NewALB(clusterName)
 		if err != nil {
 			return err
 		}
 		// get rules for all listener
-		err = e.alb[clusterName].getRulesForAllListeners()
+		err = e.alb[clusterName].GetRulesForAllListeners()
 		if err != nil {
 			return err
 		}
 	}
 	// get target group
-	targetGroup, err := e.alb[clusterName].getTargetGroupArn(serviceName)
+	targetGroup, err := e.alb[clusterName].GetTargetGroupArn(serviceName)
 	if err != nil {
 		return err
 	}
@@ -72,11 +74,11 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 		return errors.New("No target group found for " + serviceName)
 	}
 	// get deployment obj
-	s := newService()
-	s.serviceName = serviceName
-	s.clusterName = clusterName
+	s := service.NewService()
+	s.ServiceName = serviceName
+	s.ClusterName = clusterName
 
-	dd, err := s.getLastDeploy()
+	dd, err := s.GetLastDeploy()
 	if err != nil {
 		return err
 	}
@@ -104,11 +106,11 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.templateMap["${SERVICE_PORT}"] = strconv.FormatInt(e.deployData.ServicePort, 10)
 	e.templateMap["${SERVICE_PROTOCOL}"] = e.deployData.ServiceProtocol
 	e.templateMap["${AWS_REGION}"] = util.GetEnv("AWS_REGION", "")
-	e.templateMap["${ACCOUNT_ID}"] = iam.accountId
+	e.templateMap["${ACCOUNT_ID}"] = iam.AccountId
 	e.templateMap["${PARAMSTORE_PREFIX}"] = util.GetEnv("PARAMSTORE_PREFIX", "")
 	e.templateMap["${AWS_ACCOUNT_ENV}"] = util.GetEnv("AWS_ACCOUNT_ENV", "")
 	e.templateMap["${PARAMSTORE_KMS_ARN}"] = util.GetEnv("PARAMSTORE_KMS_ARN", "")
-	e.templateMap["${VPC_ID}"] = e.alb[clusterName].vpcId
+	e.templateMap["${VPC_ID}"] = e.alb[clusterName].VpcId
 	if e.deployData.HealthCheck.HealthyThreshold != 0 {
 		b, err := ioutil.ReadFile("templates/export/alb_targetgroup_healthcheck.tf")
 		if err != nil {
@@ -159,7 +161,7 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 // check first whether the template is in the parameter store
 // if not, use the default template from the template path
 func (e *Export) getTemplate(template string) (*string, error) {
-	parameter, ok := e.p.parameters["TEMPLATES_EXPORT_"+strings.Replace(strings.ToUpper(template), ".", "_", -1)]
+	parameter, ok := e.p.Parameters["TEMPLATES_EXPORT_"+strings.Replace(strings.ToUpper(template), ".", "_", -1)]
 	str := parameter.Value
 	if !ok {
 		b, err := ioutil.ReadFile("templates/export/" + template)
@@ -180,15 +182,15 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	// get all services
 	export := make(map[string]ExportedApps)
 	export["apps"] = make(ExportedApps)
-	e.alb = make(map[string]*ALB)
+	e.alb = make(map[string]*ecs.ALB)
 
-	var ds DynamoServices
+	var ds service.DynamoServices
 	// get possible parameters
-	e.p = Paramstore{}
-	e.p.getParameters(e.p.getPrefix(), true)
+	e.p = ecs.Paramstore{}
+	e.p.GetParameters(e.p.GetPrefix(), true)
 	// get services
-	s := newService()
-	err := s.getServices(&ds)
+	s := service.NewService()
+	err := s.GetServices(&ds)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +203,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 		exportLogger.Debugf("Retrieved template map: %+v", e.templateMap)
 
 		toProcess := []string{"ecr", "ecs", "iam", "alb_targetgroup"}
-		if e.p.isEnabled() {
+		if e.p.IsEnabled() {
 			toProcess = append(toProcess, "iam_paramstore")
 		}
 		for _, v := range toProcess {
@@ -239,7 +241,7 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 			a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", l, -1)
 			for _, v := range []string{"/" + serviceName, "/" + serviceName + "/*"} {
 				// get priority
-				ruleArn, priority, err := e.alb[clusterName].findRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
+				ruleArn, priority, err := e.alb[clusterName].FindRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
 				if err != nil {
 					return nil, err
 				}
@@ -254,7 +256,7 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 	} else {
 		exportLogger.Debugf("Found rule conditions in deploy, examining conditions")
 		for _, y := range e.deployData.RuleConditions {
-			for _, l := range e.alb[clusterName].listeners {
+			for _, l := range e.alb[clusterName].Listeners {
 				for _, l2 := range y.Listeners {
 					if l.Protocol != nil && strings.ToLower(*l.Protocol) == strings.ToLower(l2) {
 						a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", *l.ListenerArn, -1)
@@ -269,12 +271,12 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 						}
 						if y.Hostname != "" {
 							f = append(f, "host-header")
-							v = append(v, y.Hostname+"."+e.alb[clusterName].getDomain())
+							v = append(v, y.Hostname+"."+e.alb[clusterName].GetDomain())
 							cc = strings.Replace(*condition, "${LISTENER_CONDITION_FIELD}", "host-header", -1)
-							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb[clusterName].getDomain(), -1)
+							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb[clusterName].GetDomain(), -1)
 						}
 						// get priority
-						ruleArn, priority, err := e.alb[clusterName].findRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
+						ruleArn, priority, err := e.alb[clusterName].FindRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
 						if err != nil {
 							return nil, err
 						}
@@ -291,15 +293,15 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 }
 
 func (e *Export) getTargetGroupArn(serviceName string) (*string, error) {
-	a := ALB{}
-	return a.getTargetGroupArn(serviceName)
+	a := ecs.ALB{}
+	return a.GetTargetGroupArn(serviceName)
 }
 func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*string, error) {
 	var clusterName string
 	var listenerRuleArn string
-	var ds DynamoServices
-	s := newService()
-	s.getServices(&ds)
+	var ds service.DynamoServices
+	s := service.NewService()
+	s.GetServices(&ds)
 	for _, service := range ds.Services {
 		if service.S == serviceName {
 			clusterName = service.C
@@ -308,16 +310,16 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 	if clusterName == "" {
 		return nil, errors.New("Service not found: " + serviceName)
 	}
-	a, err := newALB(clusterName)
+	a, err := ecs.NewALB(clusterName)
 	if err != nil {
 		return nil, err
 	}
-	targetGroupArn, err := a.getTargetGroupArn(serviceName)
+	targetGroupArn, err := a.GetTargetGroupArn(serviceName)
 	if err != nil {
 		return nil, err
 	}
-	a.getRulesForAllListeners()
-	for _, rules := range a.rules {
+	a.GetRulesForAllListeners()
+	for _, rules := range a.Rules {
 		for _, rule := range rules {
 			if *rule.Priority == rulePriority {
 				if listenerRuleArn != "" {
@@ -337,12 +339,12 @@ func (e *Export) getListenerRuleArn(serviceName string, rulePriority string) (*s
 }
 func (e *Export) getListenerRuleArns(serviceName string) (*ListenerRuleExport, error) {
 	var clusterName string
-	var ds DynamoServices
+	var ds service.DynamoServices
 	var result *ListenerRuleExport
 	var exportRuleKeys RulePriority
 	exportRules := make(map[int64]ListenerRule)
-	s := newService()
-	s.getServices(&ds)
+	s := service.NewService()
+	s.GetServices(&ds)
 	for _, service := range ds.Services {
 		if service.S == serviceName {
 			clusterName = service.C
@@ -351,16 +353,16 @@ func (e *Export) getListenerRuleArns(serviceName string) (*ListenerRuleExport, e
 	if clusterName == "" {
 		return nil, errors.New("Service not found: " + serviceName)
 	}
-	a, err := newALB(clusterName)
+	a, err := ecs.NewALB(clusterName)
 	if err != nil {
 		return nil, err
 	}
-	targetGroupArn, err := a.getTargetGroupArn(serviceName)
+	targetGroupArn, err := a.GetTargetGroupArn(serviceName)
 	if err != nil {
 		return nil, err
 	}
-	a.getRulesForAllListeners()
-	for _, rules := range a.rules {
+	a.GetRulesForAllListeners()
+	for _, rules := range a.Rules {
 		for _, rule := range rules {
 			if len(rule.Actions) > 0 && *rule.Actions[0].TargetGroupArn == *targetGroupArn {
 				priority, err := strconv.ParseInt(*rule.Priority, 10, 64)

@@ -14,7 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/in4it/ecs-deploy"
+	"github.com/in4it/ecs-deploy/api"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/spf13/pflag"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -38,12 +39,12 @@ type DeployFlags struct {
 }
 
 type DeployResponse struct {
-	Errors   map[string]string        `json:"errors" binding:"required"`
-	Failures int64                    `json:"failures" binding:"required"`
-	Messages []ecsdeploy.DeployResult `json:"messages"`
+	Errors   map[string]string      `json:"errors" binding:"required"`
+	Failures int64                  `json:"failures" binding:"required"`
+	Messages []service.DeployResult `json:"messages"`
 }
 type DeployStatusResponse struct {
-	Service ecsdeploy.DeployResult `json:"service" binding:"required"`
+	Service service.DeployResult `json:"service" binding:"required"`
 }
 
 func addLoginFlags(f *LoginFlags, fs *pflag.FlagSet) {
@@ -157,31 +158,33 @@ func waitForDeploy(session Session, response []byte) (map[string]string, error) 
 	for _, v := range deployResponse.Messages {
 		deployed[v.ServiceName] = "running"
 	}
-	finished += deployResponse.Failures
 	for k, v := range deployResponse.Errors {
-		fmt.Printf("Service %v: %v", k, v)
+		fmt.Printf("Service %v: %v\n", k, v)
 		deployed[k] = "error"
+		finished++
 	}
 	if int64(len(deployed)) == finished {
 		deploymentsFinished = true
 	}
 	for i := 0; i < (maxWait/15) && !deploymentsFinished; i++ {
+		time.Sleep(15 * time.Second)
 		for _, v := range deployResponse.Messages {
-			status, err := checkDeployStatus(session, v.ServiceName, v.DeploymentTime.Format("2006-01-02T15:04:05.999999999Z"))
-			if err != nil {
-				return deployed, err
-			}
-			fmt.Printf(".")
-			if status != "running" {
-				deployed[v.ServiceName] = status
-				fmt.Printf("%v=%v", v.ServiceName, status)
-				finished++
+			if deployed[v.ServiceName] == "running" {
+				status, err := checkDeployStatus(session, v.ServiceName, v.DeploymentTime.Format("2006-01-02T15:04:05.999999999Z"))
+				if err != nil {
+					return deployed, err
+				}
+				fmt.Printf(".")
+				if status != "running" {
+					deployed[v.ServiceName] = status
+					fmt.Printf("%v=%v", v.ServiceName, status)
+					finished++
+				}
 			}
 		}
 		if int64(len(deployed)) == finished {
 			deploymentsFinished = true
 		}
-		time.Sleep(15 * time.Second)
 	}
 	return deployed, nil
 }
@@ -251,7 +254,7 @@ func doDeployAPICall(session Session, deployData string) ([]byte, error) {
 func getDeployData(session Session, deployFlags *DeployFlags) (string, error) {
 	var deployData string
 	var readDir string
-	controller := ecsdeploy.Controller{}
+	controller := api.Controller{}
 	if deployFlags.ServiceName != "" {
 		// servicename is set
 		if deployFlags.Filename != "" {
@@ -274,9 +277,9 @@ func getDeployData(session Session, deployFlags *DeployFlags) (string, error) {
 				fs = append(fs, f.Name())
 			}
 		}
-		var deployServices ecsdeploy.DeployServices
+		var deployServices service.DeployServices
 		for _, f := range fs {
-			var deploy ecsdeploy.Deploy
+			var deploy service.Deploy
 			controller.SetDeployDefaults(&deploy)
 
 			content, err := ioutil.ReadFile(filepath.Join(readDir, f))

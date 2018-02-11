@@ -1,4 +1,4 @@
-package ecsdeploy
+package api
 
 type Flags struct {
 	Bootstrap             bool

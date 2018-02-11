@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/in4it/ecs-deploy"
+	"github.com/in4it/ecs-deploy/api"
+	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 	"github.com/spf13/pflag"
@@ -16,7 +17,7 @@ func startup_checks() {
 		"JWT_SECRET",
 		"DEPLOY_PASSWORD",
 	}
-	paramstore := ecsdeploy.Paramstore{}
+	paramstore := ecs.Paramstore{}
 	err := paramstore.RetrieveKeys()
 	if err != nil {
 		fmt.Printf("Couldn't retrieve variables from parameter store\n")
@@ -29,7 +30,7 @@ func startup_checks() {
 		}
 	}
 	// start controller, check database and pick up any remaining work
-	controller := ecsdeploy.Controller{}
+	controller := api.Controller{}
 	err = controller.Resume()
 	if err != nil {
 		fmt.Printf("Couldn't start controller: %v\n", err.Error())
@@ -37,7 +38,7 @@ func startup_checks() {
 	}
 }
 
-func addFlags(f *ecsdeploy.Flags, fs *pflag.FlagSet) {
+func addFlags(f *api.Flags, fs *pflag.FlagSet) {
 	fs.BoolVar(&f.Bootstrap, "bootstrap", f.Bootstrap, "bootstrap ECS cluster")
 	fs.StringVar(&f.Profile, "profile", f.Profile, "AWS Profile")
 	fs.StringVar(&f.Region, "region", f.Region, "AWS Region")
@@ -79,7 +80,7 @@ func main() {
 	}
 
 	// parse flags
-	flags := ecsdeploy.NewFlags()
+	flags := api.NewFlags()
 	addFlags(flags, pflag.CommandLine)
 	pflag.Parse()
 
@@ -92,7 +93,7 @@ func main() {
 	}
 	if flags.Bootstrap {
 		if ok, _ := util.AskForConfirmation("Bootstrap ECS Cluster?"); ok {
-			controller := ecsdeploy.Controller{}
+			controller := api.Controller{}
 			err := controller.Bootstrap(flags)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err.Error())
@@ -100,7 +101,7 @@ func main() {
 		}
 	} else if flags.DeleteCluster != "" {
 		if ok, _ := util.AskForConfirmation("This will delete cluster " + flags.DeleteCluster); ok {
-			controller := ecsdeploy.Controller{}
+			controller := api.Controller{}
 			err := controller.DeleteCluster(flags)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err.Error())
@@ -111,7 +112,7 @@ func main() {
 		startup_checks()
 
 		// Launch API
-		api := ecsdeploy.API{}
+		api := api.API{}
 		err := api.Launch()
 		if err != nil {
 			panic(err)

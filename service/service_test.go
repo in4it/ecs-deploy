@@ -1,4 +1,4 @@
-package ecsdeploy
+package service
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ func TestGetLastDeploy(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := newService()
+	service := service.NewService()
 	service.serviceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
 	dd, err := service.getLastDeploy()
 	if err != nil {
@@ -33,7 +33,7 @@ func TestGetDeploymentByMonth(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	limit := 20
-	service := newService()
+	service := service.NewService()
 	dds, err := service.getDeploys("byMonth", int64(limit))
 	if err != nil {
 		t.Errorf("getDeploys byMonth: %v", err)
@@ -48,7 +48,7 @@ func TestGetDeploymentByDay(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	limit := 20
-	service := newService()
+	service := service.NewService()
 	dds, err := service.getDeploys("byDay", int64(limit))
 	if err != nil {
 		t.Errorf("getDeploys byDay: %v", err)
@@ -62,7 +62,7 @@ func TestGetDeploymentSecondToLast(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := newService()
+	service := service.NewService()
 	service.serviceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
 	dds, err := service.getDeploys("secondToLast", 1)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestGetServices(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := newService()
+	service := service.NewService()
 	var ds DynamoServices
 	err := service.getServices(&ds)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestGetClusterInfo(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := newService()
+	service := service.NewService()
 	dc, err := service.getClusterInfo()
 	if err != nil {
 		t.Errorf("ClusterInfo: %v", err)
@@ -107,7 +107,7 @@ func TestGetScalingActivity(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := newService()
+	service := service.NewService()
 
 	clusterName := util.GetEnv("TEST_CLUSTERNAME", "testcluster")
 	startTime := time.Now().Add(-5 * time.Minute)

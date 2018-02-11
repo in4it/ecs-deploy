@@ -1,8 +1,9 @@
-package ecsdeploy
+package test
 
 import (
 	"testing"
 
+	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 )
@@ -17,12 +18,12 @@ func init() {
 		loggo.ConfigureLoggers(`<root>=DEBUG`)
 	}
 	// check AWS access first
-	iam := IAM{}
-	err := iam.getAccountId()
+	iam := ecs.IAM{}
+	err := iam.GetAccountId()
 	if err != nil {
 		return
 	}
-	accountId = &iam.accountId
+	accountId = &iam.AccountId
 }
 
 func TestGetEnv(t *testing.T) {
