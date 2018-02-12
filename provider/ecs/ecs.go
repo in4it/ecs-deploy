@@ -328,11 +328,20 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 			containerDefinition.Essential = aws.Bool(container.Essential)
 		}
 
+		// environment variables
+		var environment []*ecs.KeyValuePair
+		if len(container.Environment) > 0 {
+			for _, v := range container.Environment {
+				environment = append(environment, &ecs.KeyValuePair{Name: aws.String(v.Name), Value: aws.String(v.Value)})
+			}
+		}
 		if util.GetEnv("PARAMSTORE_ENABLED", "no") == "yes" {
-			containerDefinition.SetEnvironment([]*ecs.KeyValuePair{
-				{Name: aws.String("AWS_REGION"), Value: aws.String(util.GetEnv("AWS_REGION", ""))},
-				{Name: aws.String("AWS_ENV_PATH"), Value: aws.String("/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + e.ServiceName + "/")},
-			})
+			environment = append(environment, &ecs.KeyValuePair{Name: aws.String("AWS_REGION"), Value: aws.String(util.GetEnv("AWS_REGION", ""))})
+			environment = append(environment, &ecs.KeyValuePair{Name: aws.String("AWS_ENV_PATH"), Value: aws.String("/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + e.ServiceName + "/")})
+		}
+
+		if len(environment) > 0 {
+			containerDefinition.SetEnvironment(environment)
 		}
 
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, containerDefinition)
