@@ -9,6 +9,14 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
 * SAML supported Web UI to redeploy/rollback versions, add/update/delete parameters, examine event/container logs, scale, and run manual tasks
 * Support to scale out and scale in ECS Container Instances
 
+## The UI
+
+<p align="center">
+  <a href="https://d3jb1lt6v0nddd.cloudfront.net/ecs-deploy/ecs-deploy-ui.gif">
+    <img src="https://d3jb1lt6v0nddd.cloudfront.net/ecs-deploy/ecs-deploy-ui.gif" />
+  </a>
+</p>
+
 ## Usage
 
 ### Download
