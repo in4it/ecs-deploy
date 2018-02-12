@@ -965,7 +965,18 @@ func (c *Controller) Bootstrap(b *Flags) error {
 				Essential:         true,
 				MemoryReservation: 128,
 				CPUReservation:    64,
+				Environment: []*service.DeployContainerEnvironment{
+					{
+						Name:  "PARAMSTORE_ENABLED",
+						Value: "yes",
+					},
+				},
 			},
+		},
+		HealthCheck: service.DeployHealthCheck{
+			HealthyThreshold:   3,
+			UnhealthyThreshold: 3,
+			Path:               "/ecs-deploy/health",
 		},
 	}
 	e := ecs.ECS{}
@@ -1120,6 +1131,23 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	if !b.DisableEcsDeploy {
+		iamRoleArn, err := iam.RoleExists("ecs-ecs-deploy")
+		if err == nil && iamRoleArn == nil {
+			_, err := iam.CreateRole("ecs-ecs-deploy", iam.GetEcsTaskIAMTrust())
+			if err != nil {
+				return err
+			}
+		}
+		r, err := ioutil.ReadFile("templates/iam/ecs-deploy-task.json")
+		if err != nil {
+			return err
+		}
+		ecsDeployRolePolicy := strings.Replace(string(r), "${ACCOUNT_ID}", iam.AccountId, -1)
+		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${AWS_REGION}", b.Region, -1)
+		err = iam.PutRolePolicy("ecs-ecs-deploy", "ecs-deploy", ecsDeployRolePolicy)
+		if err != nil {
+			return err
+		}
 		_, err = c.Deploy(ecsDeploy.ServiceName, ecsDeploy)
 		s.ServiceName = ecsDeploy.ServiceName
 		var deployed bool

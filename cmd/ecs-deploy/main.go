@@ -102,6 +102,7 @@ func main() {
 	} else if flags.DeleteCluster != "" {
 		if ok, _ := util.AskForConfirmation("This will delete cluster " + flags.DeleteCluster); ok {
 			controller := api.Controller{}
+			flags.ClusterName = flags.DeleteCluster
 			err := controller.DeleteCluster(flags)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err.Error())
