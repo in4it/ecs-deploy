@@ -1,5 +1,3 @@
-ARG SOURCE_COMMIT
-
 #
 # build angular project
 #
@@ -37,6 +35,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ecs-deploy cmd/ec
 #
 FROM alpine:latest  
 
+ARG SOURCE_COMMIT=unknown
+
 ENV GIN_MODE release
 
 RUN apk --no-cache add ca-certificates bash curl && mkdir -p /app/webapp
@@ -47,7 +47,7 @@ COPY . .
 COPY --from=go-builder /go/src/github.com/in4it/ecs-deploy/ecs-deploy .
 COPY --from=webapp-builder /webapp/dist webapp/dist
 
-RUN echo $SOURCE_COMMIT > source_commit
+RUN echo ${SOURCE_COMMIT} > source_commit
 
 # remove unnecessary source files
 RUN rm -rf *.go webapp/src
