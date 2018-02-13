@@ -39,7 +39,8 @@
         "autoscaling:DescribeAutoScalingNotificationTypes",
         "autoscaling:UpdateAutoScalingGroup",
         "autoscaling:CompleteLifecycleAction",
-        "logs:GetLogEvents"
+        "logs:GetLogEvents",
+        "ec2:DescribeTags"
       ],
       "Resource": "*"
     },
