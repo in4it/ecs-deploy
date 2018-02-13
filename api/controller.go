@@ -865,9 +865,12 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 		totalFreeMemory := make(map[string]int64)
 		hasFreeResources := make(map[string]bool)
 		hasFreeResourcesGlobal := true
+		hasFreeResourcesGlobalAZ := ""
 		for _, dcci := range dc.ContainerInstances {
-			totalFreeCpu[dcci.AvailabilityZone] += dcci.FreeCpu
-			totalFreeMemory[dcci.AvailabilityZone] += dcci.FreeMemory
+			if dcci.Status != "DRAINING" {
+				totalFreeCpu[dcci.AvailabilityZone] += dcci.FreeCpu
+				totalFreeMemory[dcci.AvailabilityZone] += dcci.FreeMemory
+			}
 		}
 		for k, _ := range totalFreeCpu {
 			controllerLogger.Debugf("%v: Have %d cpu available, need %d", k, totalFreeCpu[k], clusterCpuNeeded)
@@ -881,8 +884,9 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 				}
 			}
 		}
-		for _, v := range hasFreeResources {
+		for k, v := range hasFreeResources {
 			if !v {
+				hasFreeResourcesGlobalAZ = k
 				hasFreeResourcesGlobal = false
 			}
 		}
@@ -893,7 +897,7 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 				return err
 			}
 			if lastScalingOp == "no" {
-				controllerLogger.Infof("Starting scaling down operation (cpu: %d >= %d, mem: %d >= %d", totalFreeCpu, clusterCpuNeeded, totalFreeMemory, clusterMemoryNeeded)
+				controllerLogger.Infof("Starting scaling down operation (cpu: %d >= %d, mem: %d >= %d", totalFreeCpu[hasFreeResourcesGlobalAZ], clusterCpuNeeded, totalFreeMemory[hasFreeResourcesGlobalAZ], clusterMemoryNeeded)
 				scalingOp = "down"
 				autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 				if err != nil {
