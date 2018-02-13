@@ -69,6 +69,7 @@ type DynamoCluster struct {
 	ContainerInstances []DynamoClusterContainerInstance
 	ScalingOperation   DynamoClusterScalingOperation
 	ExpirationTime     time.Time
+	ExpirationTimeTTL  int64
 }
 type DynamoClusterScalingOperation struct {
 	ClusterName string
@@ -518,6 +519,7 @@ func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action st
 	dc.Identifier = "__CLUSTERS"
 	dc.Time = time.Now()
 	dc.ExpirationTime = time.Now().AddDate(0, 0, 30)
+	dc.ExpirationTimeTTL = dc.ExpirationTime.Unix()
 	err := s.table.Put(dc).Run()
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
