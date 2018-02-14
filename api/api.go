@@ -156,6 +156,12 @@ func (a *API) createRoutes() {
 
 		// cloudwatch logs
 		auth.GET("/service/log/:service/get/:taskarn/:container/:start/:end", a.getServiceLogsHandler)
+
+		// service autoscaling
+		auth.POST("/service/autoscaling/:service/put", a.putServiceAutoscalingHandler)
+		auth.GET("/service/autoscaling/:service/get", a.getServiceAutoscalingHandler)
+		auth.POST("/service/autoscaling/:service/delete/:policyname", a.deleteServiceAutoscalingPolicyHandler)
+		auth.POST("/service/autoscaling/:service/delete", a.deleteServiceAutoscalingHandler)
 	}
 
 	// run API
@@ -553,9 +559,11 @@ func (a *API) listServiceParametersHandler(c *gin.Context) {
 	var creds string
 	claims := jwt.ExtractClaims(c)
 	controller := Controller{}
-	session := session.RetrieveSession(c)
-	if c, ok := session.Get("paramstore_creds").(string); ok {
-		creds = c
+	session, sessionExists := session.RetrieveSession(c)
+	if sessionExists {
+		if c, ok := session.Get("paramstore_creds").(string); ok {
+			creds = c
+		}
 	}
 	parameters, creds, err := controller.getServiceParameters(c.Param("service"), claims["id"].(string), creds)
 	session.Set("paramstore_creds", creds)
@@ -575,9 +583,11 @@ func (a *API) putServiceParameterHandler(c *gin.Context) {
 	var creds string
 	claims := jwt.ExtractClaims(c)
 	controller := Controller{}
-	session := session.RetrieveSession(c)
-	if c, ok := session.Get("paramstore_creds").(string); ok {
-		creds = c
+	session, sessionExists := session.RetrieveSession(c)
+	if sessionExists {
+		if c, ok := session.Get("paramstore_creds").(string); ok {
+			creds = c
+		}
 	}
 	if err := c.ShouldBindJSON(&json); err == nil {
 		res, creds, err := controller.putServiceParameter(c.Param("service"), claims["id"].(string), creds, json)
@@ -602,9 +612,11 @@ func (a *API) deleteServiceParameterHandler(c *gin.Context) {
 	var creds string
 	claims := jwt.ExtractClaims(c)
 	controller := Controller{}
-	session := session.RetrieveSession(c)
-	if c, ok := session.Get("paramstore_creds").(string); ok {
-		creds = c
+	session, sessionExists := session.RetrieveSession(c)
+	if sessionExists {
+		if c, ok := session.Get("paramstore_creds").(string); ok {
+			creds = c
+		}
 	}
 	creds, err := controller.deleteServiceParameter(c.Param("service"), claims["id"].(string), creds, c.Param("parameter"))
 	session.Set("paramstore_creds", creds)
@@ -763,5 +775,55 @@ func (a *API) getServiceLogsHandler(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"error": err.Error(),
 		})
+	}
+}
+func (a *API) putServiceAutoscalingHandler(c *gin.Context) {
+	var json service.Autoscaling
+	controller := Controller{}
+	if err := c.ShouldBindJSON(&json); err == nil {
+		result, err := controller.putServiceAutoscaling(c.Param("service"), json)
+		if err == nil {
+			c.JSON(200, gin.H{
+				"autoscaling": result,
+			})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+}
+func (a *API) getServiceAutoscalingHandler(c *gin.Context) {
+	controller := Controller{}
+	result, err := controller.getServiceAutoscaling(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"autoscaling": result,
+		})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+}
+func (a *API) deleteServiceAutoscalingPolicyHandler(c *gin.Context) {
+	controller := Controller{}
+	err := controller.deleteServiceAutoscalingPolicy(c.Param("service"), c.Param("policyname"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"autoscaling": "deleted",
+		})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	}
+}
+
+func (a *API) deleteServiceAutoscalingHandler(c *gin.Context) {
+	controller := Controller{}
+	err := controller.deleteServiceAutoscaling(c.Param("service"))
+	if err == nil {
+		c.JSON(200, gin.H{
+			"autoscaling": "deleted",
+		})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 }

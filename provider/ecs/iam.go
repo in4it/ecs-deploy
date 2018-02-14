@@ -35,6 +35,9 @@ func (e *IAM) GetEcsServiceIAMTrust() string {
 func (e *IAM) GetEC2IAMTrust() string {
 	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "ec2.amazonaws.com" }, "Effect": "Allow" } ] }`
 }
+func (e *IAM) GetEcsAppAutoscalingIAMTrust() string {
+	return `{ "Version": "2012-10-17", "Statement": [ { "Action": "sts:AssumeRole", "Principal": { "Service": "application-autoscaling.amazonaws.com" }, "Effect": "Allow" } ] }`
+}
 func (e *IAM) GetEcsServicePolicy() string {
 	return `arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole`
 }

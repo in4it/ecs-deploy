@@ -44,9 +44,7 @@ func SessionHandler(name, secret string) gin.HandlerFunc {
 		s := &session{name, c.Request, store, nil, false, c.Writer}
 		s.session, err = s.store.Get(s.request, s.name)
 		if err != nil {
-			sessionLogger.Errorf("Couldn't initialize session handler")
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+			sessionLogger.Errorf("Couldn't initialize session handler (previous cookie present?): %v", err)
 		}
 		c.Set(DefaultKey, s)
 		defer context.Clear(c.Request)
@@ -55,8 +53,9 @@ func SessionHandler(name, secret string) gin.HandlerFunc {
 }
 
 // function to retrieve the session in gin-gonic
-func RetrieveSession(c *gin.Context) Session {
-	return c.MustGet(DefaultKey).(Session)
+func RetrieveSession(c *gin.Context) (Session, bool) {
+	value, exists := c.Get(DefaultKey)
+	return value.(Session), exists
 }
 
 func (s *session) Get(key interface{}) interface{} {

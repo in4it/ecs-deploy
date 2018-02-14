@@ -42,6 +42,12 @@ type DynamoDeployment struct {
 
 type DynamoDeploymentScaling struct {
 	DesiredCount int64
+	Autoscaling  DynamoDeploymentAutoscaling
+}
+
+type DynamoDeploymentAutoscaling struct {
+	ResourceId  string
+	PolicyNames []string
 }
 
 // dynamo services struct
@@ -429,9 +435,35 @@ func (s *Service) GetClusterName() (string, error) {
 }
 func (s *Service) SetScalingProperty(desiredCount int64) error {
 	dd, err := s.GetLastDeploy()
+	dd.Version = dd.Version + 1
 	dd.Scaling.DesiredCount = desiredCount
 
-	err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
+	if dd.Version > 1 {
+		err = s.table.Put(dd).If("$ = ?", "Version", (dd.Version - 1)).Run()
+	} else {
+		// version was not set, don't use version conditional
+		err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
+	}
+
+	if err != nil {
+		serviceLogger.Errorf("Error during put: %v", err.Error())
+		return err
+	}
+	return nil
+}
+func (s *Service) SetAutoscalingProperties(desiredCount int64, resourceId string, policyNames []string) error {
+	dd, err := s.GetLastDeploy()
+	dd.Version = dd.Version + 1
+	dd.Scaling.DesiredCount = desiredCount
+	dd.Scaling.Autoscaling.ResourceId = resourceId
+	dd.Scaling.Autoscaling.PolicyNames = policyNames
+
+	if dd.Version > 1 {
+		err = s.table.Put(dd).If("$ = ?", "Version", (dd.Version - 1)).Run()
+	} else {
+		// version was not set, don't use version conditional
+		err = s.table.Put(dd).If("$ = ?", "Status", dd.Status).Run()
+	}
 
 	if err != nil {
 		serviceLogger.Errorf("Error during put: %v", err.Error())

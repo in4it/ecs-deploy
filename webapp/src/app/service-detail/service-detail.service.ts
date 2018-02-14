@@ -71,4 +71,16 @@ export class ServiceDetailService {
   getServiceLog(params) {
     return this.http.get('/ecs-deploy/api/v1/service/log/'+this.sl.serviceName+'/get/'+params.taskArn+'/'+params.containerName+'/'+params.start+'/'+params.end, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
   }
+  putAutoscaling(data) {
+    return this.http.post('/ecs-deploy/api/v1/service/autoscaling/'+this.sl.serviceName+'/put', data, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  getAutoscaling() {
+    return this.http.get('/ecs-deploy/api/v1/service/autoscaling/'+this.sl.serviceName+'/get', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  deleteAutoscalingPolicy(serviceName, selectedItem) {
+    return this.http.post('/ecs-deploy/api/v1/service/autoscaling/'+serviceName+'/delete/'+selectedItem, {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
+  disableAutoscaling(serviceName) {
+    return this.http.post('/ecs-deploy/api/v1/service/autoscaling/'+serviceName+'/delete', {}, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+  }
 }
