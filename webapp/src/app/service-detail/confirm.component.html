@@ -6,10 +6,10 @@
     </button>
   </div>
   <div class="modal-body">
-    Are you sure you delete parameter <strong>{{selectedParameter}}</strong>?
+    Are you sure you delete {{confirmType}} <strong>{{selectedItem}}</strong>?
   </div>
   <div class="modal-footer">
     <button type="button" class="btn btn-outline-dark" (click)="c('Close click')">Cancel</button>
-    <button type="button" class="btn btn-outline-dark btn-danger" (click)="c('DeleteParameter')">Delete</button>
+    <button type="button" class="btn btn-outline-dark btn-danger" (click)="c('DeleteItem')">Delete</button>
   </div>
 </ng-template>

@@ -5,5 +5,5 @@
 
 export const environment = {
   production: false,
-  samlEnabled: true,
+  samlEnabled: false,
 };

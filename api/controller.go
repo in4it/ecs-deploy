@@ -1281,3 +1281,272 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 	}
 	return nil
 }
+
+func (c *Controller) putServiceAutoscaling(serviceName string, autoscaling service.Autoscaling) (string, error) {
+	var result string
+	var writeChanges bool
+	// validation
+	if autoscaling.MinimumCount == 0 && autoscaling.MaximumCount == 0 {
+		return result, errors.New("minimumCount / maximumCount missing")
+	}
+	// autoscaling
+	as := ecs.AutoScaling{}
+	cloudwatch := ecs.CloudWatch{}
+	iam := ecs.IAM{}
+	s := service.NewService()
+	s.ServiceName = serviceName
+	clusterName, err := s.GetClusterName()
+	if err != nil {
+		return result, err
+	}
+	dd, err := s.GetLastDeploy()
+	if err != nil {
+		return result, err
+	}
+	resourceId := "service/" + clusterName + "/" + serviceName
+	// check whether iam role exists
+	var autoscalingRoleArn *string
+	autoscalingRoleName := "ecs-app-autoscaling-role"
+	autoscalingRoleArn, err = iam.RoleExists(autoscalingRoleName)
+	if err != nil {
+		return result, err
+	}
+	if err == nil && autoscalingRoleArn == nil {
+		autoscalingRoleArn, err = iam.CreateRole(autoscalingRoleName, iam.GetEcsAppAutoscalingIAMTrust())
+		if err != nil {
+			return result, err
+		}
+		err = iam.AttachRolePolicy(autoscalingRoleName, "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole")
+		if err != nil {
+			return result, err
+		}
+	}
+	// register scalable target
+	if dd.Scaling.Autoscaling.ResourceId == "" {
+		err = as.RegisterScalableTarget(autoscaling.MinimumCount, autoscaling.MaximumCount, resourceId, *autoscalingRoleArn)
+		if err != nil {
+			return result, err
+		}
+	} else {
+		// describe -> check difference, apply difference
+		a, err := as.DescribeScalableTargets([]string{resourceId})
+		if err != nil {
+			return result, err
+		}
+		if len(a) == 0 {
+			return result, errors.New("Couldn't describe scalable target")
+		}
+		if a[0].MinimumCount != autoscaling.MinimumCount || a[0].MaximumCount != autoscaling.MaximumCount {
+			err = as.RegisterScalableTarget(autoscaling.MinimumCount, autoscaling.MaximumCount, resourceId, *autoscalingRoleArn)
+			if err != nil {
+				return result, err
+			}
+		}
+	}
+	// change desired count if necessary
+	if dd.Scaling.DesiredCount != autoscaling.DesiredCount {
+		e := ecs.ECS{}
+		e.ManualScaleService(clusterName, serviceName, autoscaling.DesiredCount)
+		writeChanges = true
+	}
+	// Add Autoscaling policy
+	if len(autoscaling.Policies) > 0 {
+		for _, p := range autoscaling.Policies {
+			// autoscaling up or down?
+			var autoscalingType string
+			if p.ScalingAdjustment > 0 {
+				autoscalingType = "up"
+			} else {
+				autoscalingType = "down"
+			}
+			// metric name
+			var metricName, metricNamespace string
+			if p.Metric == "cpu" {
+				metricName = "CPUUtilization"
+				metricNamespace = "AWS/ECS"
+			} else {
+				metricName = "MemoryUtilization"
+				metricNamespace = "AWS/ECS"
+			}
+			// autoscaling policies
+			autoscalingPolicyArns := make(map[string]struct{})
+			for _, v := range dd.Scaling.Autoscaling.PolicyNames {
+				autoscalingPolicyArns[v] = struct{}{}
+			}
+			// set policy name
+			policyName := serviceName + "-" + p.Metric + "-" + autoscalingType
+			if _, exists := autoscalingPolicyArns[policyName]; !exists {
+				// put scaling policy
+				scalingPolicyArn, err := as.PutScalingPolicy(policyName, resourceId, 300, p.ScalingAdjustment)
+				if err != nil {
+					return result, err
+				}
+				// put metric alarm
+				err = cloudwatch.PutMetricAlarm(serviceName, clusterName, policyName, []string{scalingPolicyArn}, policyName, p.DatapointsToAlarm, metricName, metricNamespace, p.Period, p.Threshold, strings.Title(p.ComparisonOperator), strings.Title(p.ThresholdStatistic), p.EvaluationPeriods)
+				if err != nil {
+					return result, err
+				}
+				// write changes to the database
+				writeChanges = true
+				dd.Scaling.Autoscaling.PolicyNames = append(dd.Scaling.Autoscaling.PolicyNames, policyName)
+			}
+		}
+	}
+
+	if writeChanges {
+		err = s.SetAutoscalingProperties(autoscaling.DesiredCount, resourceId, dd.Scaling.Autoscaling.PolicyNames)
+		if err != nil {
+			return result, err
+		}
+	}
+
+	return "OK", nil
+}
+func (c *Controller) getServiceAutoscaling(serviceName string) (service.Autoscaling, error) {
+	var a service.Autoscaling
+	e := ecs.ECS{}
+	s := service.NewService()
+	s.ServiceName = serviceName
+	clusterName, err := s.GetClusterName()
+	autoscaling := ecs.AutoScaling{}
+	cloudwatch := ecs.CloudWatch{}
+
+	// get last deploy
+	dd, err := s.GetLastDeploy()
+	if err != nil {
+		return a, err
+	}
+
+	if dd.Scaling.Autoscaling.ResourceId == "" {
+		return a, nil
+	}
+
+	// get min, max capacity
+	as, err := autoscaling.DescribeScalableTargets([]string{dd.Scaling.Autoscaling.ResourceId})
+	if err != nil {
+		return a, err
+	}
+	if len(as) == 0 {
+		return a, errors.New("No scalable target returned")
+	}
+	a = as[0]
+
+	// get desiredCount
+	runningService, err := e.DescribeService(clusterName, serviceName, false, false, false)
+	if err != nil {
+		return a, err
+	}
+	a.DesiredCount = runningService.DesiredCount
+
+	// get policy
+	apsPolicy, err := autoscaling.DescribeScalingPolicies(dd.Scaling.Autoscaling.PolicyNames, dd.Scaling.Autoscaling.ResourceId)
+	if err != nil {
+		return a, err
+	}
+	// get alarm
+	aps, err := cloudwatch.DescribeAlarms(dd.Scaling.Autoscaling.PolicyNames)
+	if err != nil {
+		return a, err
+	}
+
+	for k, v := range aps {
+		for _, v2 := range apsPolicy {
+			if v.PolicyName == v2.PolicyName {
+				aps[k].ScalingAdjustment = v2.ScalingAdjustment
+			}
+		}
+	}
+
+	a.Policies = aps
+
+	return a, nil
+}
+func (c *Controller) deleteServiceAutoscalingPolicy(serviceName, policyName string) error {
+	s := service.NewService()
+	s.ServiceName = serviceName
+	autoscaling := ecs.AutoScaling{}
+	cloudwatch := ecs.CloudWatch{}
+
+	// get last deploy
+	dd, err := s.GetLastDeploy()
+	if err != nil {
+		return err
+	}
+
+	if dd.Scaling.Autoscaling.ResourceId == "" {
+		return errors.New("Autoscaling not active for service")
+	}
+
+	var newPolicyNames []string
+	var found bool
+	for _, v := range dd.Scaling.Autoscaling.PolicyNames {
+		if v == policyName {
+			found = true
+		} else {
+			newPolicyNames = append(newPolicyNames, v)
+		}
+	}
+	if !found {
+		return fmt.Errorf("Autoscaling policy %v not found", policyName)
+	}
+
+	err = autoscaling.DeleteScalingPolicy(policyName, dd.Scaling.Autoscaling.ResourceId)
+	if err != nil {
+		return err
+	}
+
+	err = cloudwatch.DeleteAlarms([]string{policyName})
+	if err != nil {
+		return err
+	}
+
+	// write changes to db
+	err = s.SetAutoscalingProperties(dd.Scaling.DesiredCount, dd.Scaling.Autoscaling.ResourceId, newPolicyNames)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Controller) deleteServiceAutoscaling(serviceName string) error {
+	s := service.NewService()
+	s.ServiceName = serviceName
+	autoscaling := ecs.AutoScaling{}
+	cloudwatch := ecs.CloudWatch{}
+
+	// get last deploy
+	dd, err := s.GetLastDeploy()
+	if err != nil {
+		return err
+	}
+
+	if dd.Scaling.Autoscaling.ResourceId == "" {
+		return errors.New("Autoscaling not active for service")
+	}
+
+	for _, policyName := range dd.Scaling.Autoscaling.PolicyNames {
+		err = autoscaling.DeleteScalingPolicy(policyName, dd.Scaling.Autoscaling.ResourceId)
+		if err != nil {
+			return err
+		}
+
+		err = cloudwatch.DeleteAlarms([]string{policyName})
+		if err != nil {
+			return err
+		}
+	}
+
+	err = autoscaling.DeregisterScalableTarget(dd.Scaling.Autoscaling.ResourceId)
+	if err != nil {
+		return err
+	}
+
+	// write changes to db
+	err = s.SetAutoscalingProperties(dd.Scaling.DesiredCount, "", []string{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

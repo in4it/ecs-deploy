@@ -4,7 +4,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/applicationautoscaling"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/juju/loggo"
 
 	"encoding/base64"
@@ -294,4 +296,172 @@ func (a *AutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, erro
 		return result, errors.New("ClusterNotFound: Could not find cluster by tag key=Cluster,Value=" + clusterName)
 	}
 	return result, nil
+}
+
+func (a *AutoScaling) RegisterScalableTarget(minCapacity, maxCapacity int64, resourceId, roleArn string) error {
+	svc := applicationautoscaling.New(session.New())
+	input := &applicationautoscaling.RegisterScalableTargetInput{
+		MinCapacity:       aws.Int64(minCapacity),
+		MaxCapacity:       aws.Int64(maxCapacity),
+		ResourceId:        aws.String(resourceId), // serviceName/clusterName/app
+		RoleARN:           aws.String(roleArn),
+		ScalableDimension: aws.String("ecs:service:DesiredCount"),
+		ServiceNamespace:  aws.String("ecs"),
+	}
+	_, err := svc.RegisterScalableTarget(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (a *AutoScaling) DeregisterScalableTarget(resourceId string) error {
+	svc := applicationautoscaling.New(session.New())
+	input := &applicationautoscaling.DeregisterScalableTargetInput{
+		ResourceId:        aws.String(resourceId), // serviceName/clusterName/app
+		ScalableDimension: aws.String("ecs:service:DesiredCount"),
+		ServiceNamespace:  aws.String("ecs"),
+	}
+	_, err := svc.DeregisterScalableTarget(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+	return nil
+}
+func (a *AutoScaling) PutScalingPolicy(policyName, resourceId string, cooldown, scalingAdjustment int64) (string, error) {
+	svc := applicationautoscaling.New(session.New())
+	input := &applicationautoscaling.PutScalingPolicyInput{
+		PolicyName:        aws.String(policyName),
+		PolicyType:        aws.String("StepScaling"),
+		ResourceId:        aws.String(resourceId), // serviceName/clusterName/app
+		ScalableDimension: aws.String("ecs:service:DesiredCount"),
+		ServiceNamespace:  aws.String("ecs"),
+		StepScalingPolicyConfiguration: &applicationautoscaling.StepScalingPolicyConfiguration{
+			AdjustmentType: aws.String("ChangeInCapacity"),
+			Cooldown:       aws.Int64(cooldown),
+			StepAdjustments: []*applicationautoscaling.StepAdjustment{
+				{
+					MetricIntervalLowerBound: aws.Float64(0),
+					ScalingAdjustment:        aws.Int64(scalingAdjustment),
+				},
+			},
+		},
+	}
+	result, err := svc.PutScalingPolicy(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return "", err
+	}
+	return aws.StringValue(result.PolicyARN), nil
+}
+
+func (a *AutoScaling) DescribeScalableTargets(resourceIds []string) ([]service.Autoscaling, error) {
+	var as []service.Autoscaling
+	var scalableTargets []*applicationautoscaling.ScalableTarget
+	svc := applicationautoscaling.New(session.New())
+	input := &applicationautoscaling.DescribeScalableTargetsInput{
+		ResourceIds:       aws.StringSlice(resourceIds), // serviceName/clusterName/app
+		ScalableDimension: aws.String("ecs:service:DesiredCount"),
+		ServiceNamespace:  aws.String("ecs"),
+	}
+	pageNum := 0
+	err := svc.DescribeScalableTargetsPages(input,
+		func(page *applicationautoscaling.DescribeScalableTargetsOutput, lastPage bool) bool {
+			pageNum++
+			scalableTargets = append(scalableTargets, page.ScalableTargets...)
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return as, err
+	}
+
+	for _, v := range scalableTargets {
+		a := service.Autoscaling{}
+		a.MinimumCount = aws.Int64Value(v.MinCapacity)
+		a.MaximumCount = aws.Int64Value(v.MaxCapacity)
+		as = append(as, a)
+	}
+
+	return as, nil
+}
+func (a *AutoScaling) DescribeScalingPolicies(policyNames []string, resourceId string) ([]service.AutoscalingPolicy, error) {
+	var aps []service.AutoscalingPolicy
+	var scalingPolicies []*applicationautoscaling.ScalingPolicy
+	svc := applicationautoscaling.New(session.New())
+	input := &applicationautoscaling.DescribeScalingPoliciesInput{
+		PolicyNames:       aws.StringSlice(policyNames),
+		ResourceId:        aws.String(resourceId), // serviceName/clusterName/app
+		ScalableDimension: aws.String("ecs:service:DesiredCount"),
+		ServiceNamespace:  aws.String("ecs"),
+	}
+	pageNum := 0
+	err := svc.DescribeScalingPoliciesPages(input,
+		func(page *applicationautoscaling.DescribeScalingPoliciesOutput, lastPage bool) bool {
+			pageNum++
+			scalingPolicies = append(scalingPolicies, page.ScalingPolicies...)
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return aps, err
+	}
+
+	for _, v := range scalingPolicies {
+		ap := service.AutoscalingPolicy{}
+		ap.PolicyName = aws.StringValue(v.PolicyName)
+		if len(v.StepScalingPolicyConfiguration.StepAdjustments) > 0 {
+			ap.ScalingAdjustment = aws.Int64Value(v.StepScalingPolicyConfiguration.StepAdjustments[0].ScalingAdjustment)
+		}
+		aps = append(aps, ap)
+	}
+
+	return aps, nil
+}
+
+func (a *AutoScaling) DeleteScalingPolicy(policyName, resourceId string) error {
+	svc := applicationautoscaling.New(session.New())
+
+	input := &applicationautoscaling.DeleteScalingPolicyInput{
+		PolicyName:        aws.String(policyName),
+		ResourceId:        aws.String(resourceId), // serviceName/clusterName/app
+		ScalableDimension: aws.String("ecs:service:DesiredCount"),
+		ServiceNamespace:  aws.String("ecs"),
+	}
+
+	_, err := svc.DeleteScalingPolicy(input)
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
+		return err
+	}
+
+	return nil
 }

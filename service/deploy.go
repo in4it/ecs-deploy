@@ -158,3 +158,23 @@ type RunTaskContainerOverride struct {
 	Name    string   `json:"name"`
 	Command []string `json:"command"`
 }
+
+// create Autoscaling Policy
+type Autoscaling struct {
+	MinimumCount int64               `json:"minimumCount"`
+	DesiredCount int64               `json:"desiredCount"`
+	MaximumCount int64               `json:"maximumCount"`
+	Policies     []AutoscalingPolicy `json:"policies"`
+}
+type AutoscalingPolicy struct {
+	PolicyName           string  `json:"policyName"`
+	ComparisonOperator   string  `json:"comparisonOperator"`
+	Metric               string  `json:"metric"`
+	NewAutoscalingPolicy bool    `json:"newAutoscalingPolicy"`
+	Threshold            float64 `json:"threshold"`
+	ScalingAdjustment    int64   `json:"scalingAdjustment"`
+	ThresholdStatistic   string  `json:"thresholdStatistic"`
+	DatapointsToAlarm    int64   `json:"datapointsToAlarm"`
+	EvaluationPeriods    int64   `json:"evaluationPeriods"`
+	Period               int64   `json:"period"`
+}

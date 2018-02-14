@@ -35,3 +35,17 @@ div.logs {
     max-height: 500px;
     overflow-y: auto; 
 }
+
+span.middle {
+  padding-top: 4px;
+  display: inline-block;
+  vertical-align: middle;
+}
+td.button {
+  padding: 5px;
+  margin: 5px;
+}
+button.middle {
+  display: inline-block;
+  vertical-align: middle;
+}

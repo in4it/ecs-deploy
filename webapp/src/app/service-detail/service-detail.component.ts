@@ -34,6 +34,7 @@ export class ServiceDetailComponent implements OnInit {
 
   editManualScaling: boolean = false;
   scalingInput: any = {};
+  scalingInputPolicy: any = {};
 
   runTaskInput: any = {};
   runTaskConfig: any = { "maxExecutionTime": 900};
@@ -84,6 +85,49 @@ export class ServiceDetailComponent implements OnInit {
   }
   onClickScaling() {
     this.tab = "scaling"
+    this.loading = true
+    this.sds.getAutoscaling().subscribe(data => {
+      this.loading = false
+      if(data["autoscaling"]["minimumCount"] != 0 && data["autoscaling"]["maximumCount"] != 0) {
+        this.scalingInput.minimumCount = data["autoscaling"]["minimumCount"]
+        this.scalingInput.maximumCount = data["autoscaling"]["maximumCount"]
+        if(data["autoscaling"]["policies"] && data["autoscaling"]["policies"].constructor === Array) {
+          this.scalingInput.policyCount = data["autoscaling"]["policies"].length
+        } else {
+          this.scalingInput.policyCount = 0
+        }
+        this.scalingInput.desiredCount = this.service.desiredCount
+        this.scalingInput.autoscaling = true
+        if(data["autoscaling"]["policies"]) {
+          this.scalingInput.policies = data["autoscaling"]["policies"]
+          this.scalingInput.policies.forEach((policy, index) => {
+            if(policy["scalingAdjustment"] > 0) {
+              this.scalingInput.policies[index]["scalingAdjustment"] = "Up (+"+policy["scalingAdjustment"]+")"
+            } else {
+              this.scalingInput.policies[index]["scalingAdjustment"] = "Down ("+policy["scalingAdjustment"]+")"
+            }
+            switch(policy["comparisonOperator"]) {
+              case "GreaterThanOrEqualToThreshold": {
+                this.scalingInput.policies[index]["comparisonOperator"] = ">="
+                break;
+              }
+              case "LessThanOrEqualToThreshold": {
+                this.scalingInput.policies[index]["comparisonOperator"] = "<="
+                break;
+              }
+              case "GreaterThanThreshold": {
+                this.scalingInput.policies[index]["comparisonOperator"] = ">"
+                break;
+              }
+              case "LessThanThreshold": {
+                this.scalingInput.policies[index]["comparisonOperator"] = "<"
+                break;
+              }
+            }
+          })
+        }
+      }
+    })
   }
   onClickRunTask() {
     this.tab = "runTask"
@@ -279,21 +323,6 @@ export class ServiceDetailComponent implements OnInit {
     }
   }
   
-  deletingParameter(loading) {
-    if(loading) {
-      this.loading = loading
-    }
-  }
-  deletedParameter(selectedParameter) {
-    this.loading = true
-    delete this.parameters["map"][selectedParameter]
-    this.parameters["keys"] = []
-    for (let key in this.parameters["map"]) {
-      this.parameters["keys"].push(key)
-    }
-    this.loading = false
-  }
-  
   editDesiredCount() {
     this.scalingInput.desiredCount = this.service.desiredCount
     this.editManualScaling = true
@@ -308,7 +337,6 @@ export class ServiceDetailComponent implements OnInit {
         this.service["desiredCount"] = this.scalingInput["desiredCount"]
         this.saving = false
         this.editManualScaling = false
-        this.scalingInput = {}
       });
     }
   }
@@ -318,7 +346,6 @@ export class ServiceDetailComponent implements OnInit {
       "containerOverrides": []
     }
     let enabledContainers = []
-    console.log(this.runTaskInput)
     this.service["taskDefinition"]["containerDefinitions"].forEach((v, i) => {
       let containerName = v.name
       let container = this.runTaskInput[containerName]
@@ -357,7 +384,7 @@ export class ServiceDetailComponent implements OnInit {
       this.saving = true
       this.sds.runTask(runTaskData).subscribe(data => {
         if("taskArn" in data) {
-          console.log("Taskarn: ", data["taskArn"])
+          //console.log("Taskarn: ", data["taskArn"])
         } else {
           this.alertService.error(data["error"]);
         }
@@ -426,5 +453,110 @@ export class ServiceDetailComponent implements OnInit {
   }
   compareByID(v1, v2) {
     return v1 && v2 && v1["id"] == v2["id"];
+  }
+
+  newAutoscalingPolicy() {
+    this.scalingInput.newAutoscalingPolicy = true
+    this.scalingInputPolicy.metric = "cpu"
+    this.scalingInputPolicy.comparisonOperator = "greaterThanOrEqualToThreshold"
+    this.scalingInputPolicy.thresholdStatistic = "average"
+    this.scalingInputPolicy.evaluationPeriods = "3"
+    this.scalingInputPolicy.period = "60"
+    this.scalingInputPolicy.scalingAdjustment = "1"
+  }
+
+  addAutoscalingPolicy() {
+    this.loading = true
+    this.scalingInput.serviceName = this.service.serviceName
+    this.scalingInput.minimumCount = Number(this.scalingInput.minimumCount) || 0
+    this.scalingInput.desiredCount = Number(this.scalingInput.desiredCount) || 0
+    this.scalingInput.maximumCount = Number(this.scalingInput.maximumCount) || 0
+    this.scalingInput.policies = []
+    this.scalingInput.policies[0] = this.scalingInputPolicy
+    this.scalingInput.policies[0].datapointsToAlarm = Number(this.scalingInputPolicy.datapointsToAlarm) || 0
+    this.scalingInput.policies[0].evaluationPeriods = Number(this.scalingInputPolicy.datapointsToAlarm) || 0 // same evaluationperiods as datapointsToAlarm
+    this.scalingInput.policies[0].period = Number(this.scalingInputPolicy.period)
+    this.scalingInput.policies[0].scalingAdjustment = Number(this.scalingInputPolicy.scalingAdjustment)
+    this.scalingInput.policies[0].threshold = Number(this.scalingInputPolicy.threshold) || 0
+    this.sds.putAutoscaling(this.scalingInput).subscribe(
+      data => {
+        this.loading = false
+        this.scalingInput.newAutoscalingPolicy = false
+        this.onClickScaling()
+      },
+      err => {
+        this.loading = false
+        this.alertService.error(err["error"]["error"])
+      }
+    );
+  }
+  saveAutoscalingPolicy() {
+    this.loading = true
+    let putData = this.scalingInput
+    putData.serviceName = this.service.serviceName
+    putData.minimumCount = Number(this.scalingInput.minimumCount) || 0
+    putData.desiredCount = Number(this.scalingInput.desiredCount) || 0
+    putData.maximumCount = Number(this.scalingInput.maximumCount) || 0
+    putData.policies = []
+    this.sds.putAutoscaling(putData).subscribe(
+      data => {
+        this.loading = false
+        this.scalingInput.newAutoscalingPolicy = false
+        console.log(data)
+        this.alertService.success("Succesfully applied autoscaling settings", 5)
+      },
+      err => {
+        this.loading = false
+        this.alertService.error(err["error"]["error"])
+      }
+    );
+  }
+  
+  enableAutoscaling() {
+    this.scalingInput.autoscaling = true
+  }
+  deletingAutoscalingPolicy(loading) {
+    if(loading) {
+      this.loading = loading
+    }
+  }
+  
+  deletingItem(loading) {
+    if(loading) {
+      this.loading = loading
+    }
+  }
+  deletedItem(data) {
+    if(data.action == 'deleteParameter') {
+      let selectedParameter = data.selectedItem
+      this.loading = true
+      delete this.parameters["map"][selectedParameter]
+      this.parameters["keys"] = []
+      for (let key in this.parameters["map"]) {
+        this.parameters["keys"].push(key)
+      }
+      this.loading = false
+    } else if(data.action == 'deleteAutoscalingPolicy') {
+      let selectedAutoscalingPolicy = data.selectedItem
+      this.loading = true
+      let index = -1
+      this.scalingInput.policies.forEach((policy, i) => {
+        if(policy.policyName == selectedAutoscalingPolicy) {
+          index = i
+        }
+      })
+      if (index > -1) {
+         this.scalingInput.policies.splice(index, 1);
+      }
+      this.scalingInput.policyCount--
+      this.loading = false
+    } else if(data.action == 'disableAutoscaling') {
+      this.scalingInput.autoscaling = false
+      this.scalingInput.newAutoscalingPolicy = false
+      this.scalingInput.policies = []
+      this.scalingInput.policyCount = 0
+      this.loading = false
+      this.alertService.success("Succesfully disabled autoscaling", 5)
+    }
   }
 }

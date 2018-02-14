@@ -11,14 +11,16 @@ import * as moment from 'moment';
 export class ConfirmChildComponent implements OnInit {
 
   closeResult: string;
-  selectedParameter: string;
+  selectedItem: string;
   loading: boolean = false;
   serviceName: string;
+  confirmType: string;
 
   @ViewChild('confirm') confirmModal : NgbModal;
 
-  @Output() deletedParameter: EventEmitter<any> = new EventEmitter<any>();
-  @Output() deletingParameter: EventEmitter<any> = new EventEmitter<any>();
+  @Output() deletedItem: EventEmitter<any> = new EventEmitter<any>();
+  @Output() deletingItem: EventEmitter<any> = new EventEmitter<any>();
+
 
   constructor(
     private modalService: NgbModal,
@@ -29,23 +31,42 @@ export class ConfirmChildComponent implements OnInit {
 
   }
 
-  open(action, serviceName, selectedParameter) {
-    if(!selectedParameter) {
+  open(action, confirmType, serviceName, selectedItem) {
+    if(!selectedItem) {
       return
     }
     this.loading = true
     this.serviceName = serviceName
-    this.selectedParameter = selectedParameter
+    this.selectedItem = selectedItem
+    this.confirmType = confirmType
     this.modalService.open(this.confirmModal, { windowClass: 'confirm-modal' } ).result.then((result) => {
       this.closeResult = `Closed with: ${result}`;
-      if(result == "DeleteParameter") {
-        this.loading = true
-        this.deletingParameter.emit(true)
-        this.sds.deleteParameter(this.serviceName, selectedParameter).subscribe(data => {
-          this.loading = false
-          this.deletingParameter.emit(false)
-          this.deletedParameter.emit(selectedParameter)
-        })
+      if(result == "DeleteItem") {
+        if(action == 'deleteParameter') {
+          this.loading = true
+          this.deletingItem.emit(true)
+          this.sds.deleteParameter(this.serviceName, selectedItem).subscribe(data => {
+            this.loading = false
+            this.deletingItem.emit(false)
+            this.deletedItem.emit({ "action": action, "selectedItem": selectedItem })
+          })
+        } else if(action == 'deleteAutoscalingPolicy') {
+          this.loading = true
+          this.deletingItem.emit(true)
+          this.sds.deleteAutoscalingPolicy(this.serviceName, selectedItem).subscribe(data => {
+            this.loading = false
+            this.deletingItem.emit(false)
+            this.deletedItem.emit({ "action": action, "selectedItem": selectedItem })
+          })
+        } else if(action == 'disableAutoscaling') {
+          this.loading = true
+          this.deletingItem.emit(true)
+          this.sds.disableAutoscaling(this.serviceName).subscribe(data => {
+            this.loading = false
+            this.deletingItem.emit(false)
+            this.deletedItem.emit({ "action": action, "selectedItem": "" })
+          })
+        }
       }
     }, (reason) => {
       this.closeResult = `Dismissed ${this.getDismissReason(reason)}`;
