@@ -537,25 +537,7 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		if strings.ToUpper(d.LaunchType) == "FARGATE" {
 			input.SetLaunchType("FARGATE")
 		}
-		var sns []*string
-		var sgs []*string
-		var aIp string
-		nc := &ecs.NetworkConfiguration{AwsvpcConfiguration: &ecs.AwsVpcConfiguration{}}
-		for i, _ := range d.NetworkConfiguration.Subnets {
-			sns = append(sns, &d.NetworkConfiguration.Subnets[i])
-		}
-		nc.AwsvpcConfiguration.SetSubnets(sns)
-		for i, _ := range d.NetworkConfiguration.SecurityGroups {
-			sgs = append(sgs, &d.NetworkConfiguration.SecurityGroups[i])
-		}
-		nc.AwsvpcConfiguration.SetSecurityGroups(sgs)
-		if d.NetworkConfiguration.AssignPublicIp == "" {
-			aIp = "DISABLED"
-		} else {
-			aIp = d.NetworkConfiguration.AssignPublicIp
-		}
-		nc.AwsvpcConfiguration.SetAssignPublicIp(aIp)
-		input.SetNetworkConfiguration(nc)
+		input.SetNetworkConfiguration(e.getNetworkConfiguration(d))
 	} else {
 		// only set role if network mode is not awsvpc (it will be set automatically)
 		if strings.ToLower(d.ServiceProtocol) != "none" { // only set the role if there's a loadbalancer necessary
@@ -1092,8 +1074,30 @@ func (e *ECS) ManualScaleService(clusterName, serviceName string, desiredCount i
 	return nil
 }
 
+func (e *ECS) getNetworkConfiguration(d service.Deploy) *ecs.NetworkConfiguration {
+	var sns []*string
+	var sgs []*string
+	var aIp string
+	nc := &ecs.NetworkConfiguration{AwsvpcConfiguration: &ecs.AwsVpcConfiguration{}}
+	for i, _ := range d.NetworkConfiguration.Subnets {
+		sns = append(sns, &d.NetworkConfiguration.Subnets[i])
+	}
+	nc.AwsvpcConfiguration.SetSubnets(sns)
+	for i, _ := range d.NetworkConfiguration.SecurityGroups {
+		sgs = append(sgs, &d.NetworkConfiguration.SecurityGroups[i])
+	}
+	nc.AwsvpcConfiguration.SetSecurityGroups(sgs)
+	if d.NetworkConfiguration.AssignPublicIp == "" {
+		aIp = "DISABLED"
+	} else {
+		aIp = d.NetworkConfiguration.AssignPublicIp
+	}
+	nc.AwsvpcConfiguration.SetAssignPublicIp(aIp)
+	return nc
+}
+
 // run one-off task
-func (e *ECS) RunTask(clusterName, taskDefinition string, runTask service.RunTask) (string, error) {
+func (e *ECS) RunTask(clusterName, taskDefinition string, runTask service.RunTask, d service.Deploy) (string, error) {
 	var taskArn string
 	svc := ecs.New(session.New())
 	input := &ecs.RunTaskInput{
@@ -1112,6 +1116,14 @@ func (e *ECS) RunTask(clusterName, taskDefinition string, runTask service.RunTas
 	}
 	taskOverride.SetContainerOverrides(containerOverrides)
 	input.SetOverrides(taskOverride)
+
+	// network configuration
+	if d.NetworkMode == "awsvpc" && len(d.NetworkConfiguration.Subnets) > 0 {
+		if strings.ToUpper(d.LaunchType) == "FARGATE" {
+			input.SetLaunchType("FARGATE")
+		}
+		input.SetNetworkConfiguration(e.getNetworkConfiguration(d))
+	}
 
 	ecsLogger.Debugf("Running ad-hoc task using taskdef %s and taskoverride: %+v", taskDefinition, taskOverride)
 
