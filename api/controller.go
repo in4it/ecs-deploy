@@ -534,12 +534,16 @@ func (c *Controller) runTask(serviceName string, runTask service.RunTask) (strin
 	if err != nil {
 		return taskArn, err
 	}
+	dd, err := s.GetLastDeploy()
+	if err != nil {
+		return taskArn, err
+	}
 	e := ecs.ECS{}
 	taskDefinition, err := e.GetTaskDefinition(clusterName, serviceName)
 	if err != nil {
 		return taskArn, err
 	}
-	taskArn, err = e.RunTask(clusterName, taskDefinition, runTask)
+	taskArn, err = e.RunTask(clusterName, taskDefinition, runTask, *dd.DeployData)
 	if err != nil {
 		return taskArn, err
 	}
