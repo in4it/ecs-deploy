@@ -840,7 +840,11 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 			}
 		}
 		if !resourcesFitGlobal {
-			startTime := time.Now().Add(-5 * time.Minute)
+			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
+			if err != nil {
+				return err
+			}
+			startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
 			lastScalingOp, err := s.GetScalingActivity(clusterName, startTime)
 			if err != nil {
 				return err
@@ -895,7 +899,11 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 			}
 		}
 		if hasFreeResourcesGlobal {
-			startTime := time.Now().Add(-5 * time.Minute)
+			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
+			if err != nil {
+				return err
+			}
+			startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
 			lastScalingOp, err := s.GetScalingActivity(clusterName, startTime)
 			if err != nil {
 				return err
