@@ -815,21 +815,23 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 	var scalingOp = "no"
 	if desiredCapacity < maxSize {
 		for _, dcci := range dc.ContainerInstances {
-			if dcci.Status != "DRAINING" && dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
-				resourcesFit[dcci.AvailabilityZone] = true
-				controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v (%v) with %v cpu and %v memory",
-					clusterName,
-					cpuNeeded[clusterName],
-					memoryNeeded[clusterName],
-					dcci.ContainerInstanceId,
-					dcci.AvailabilityZone,
-					dcci.FreeCpu,
-					dcci.FreeMemory,
-				)
-			} else {
-				// set resourcesFit[az] in case it's not set to true
-				if _, ok := resourcesFit[dcci.AvailabilityZone]; !ok {
-					resourcesFit[dcci.AvailabilityZone] = false
+			if clusterName == dcci.ClusterName {
+				if dcci.Status != "DRAINING" && dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
+					resourcesFit[dcci.AvailabilityZone] = true
+					controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v (%v) with %v cpu and %v memory",
+						clusterName,
+						cpuNeeded[clusterName],
+						memoryNeeded[clusterName],
+						dcci.ContainerInstanceId,
+						dcci.AvailabilityZone,
+						dcci.FreeCpu,
+						dcci.FreeMemory,
+					)
+				} else {
+					// set resourcesFit[az] in case it's not set to true
+					if _, ok := resourcesFit[dcci.AvailabilityZone]; !ok {
+						resourcesFit[dcci.AvailabilityZone] = false
+					}
 				}
 			}
 		}
@@ -875,9 +877,11 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 		hasFreeResourcesGlobal := true
 		hasFreeResourcesGlobalAZ := ""
 		for _, dcci := range dc.ContainerInstances {
-			if dcci.Status != "DRAINING" {
-				totalFreeCpu[dcci.AvailabilityZone] += dcci.FreeCpu
-				totalFreeMemory[dcci.AvailabilityZone] += dcci.FreeMemory
+			if clusterName == dcci.ClusterName {
+				if dcci.Status != "DRAINING" {
+					totalFreeCpu[dcci.AvailabilityZone] += dcci.FreeCpu
+					totalFreeMemory[dcci.AvailabilityZone] += dcci.FreeMemory
+				}
 			}
 		}
 		for k, _ := range totalFreeCpu {
