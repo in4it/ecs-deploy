@@ -899,6 +899,7 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 			}
 		}
 		if hasFreeResourcesGlobal {
+			// check cooldown period
 			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
 			if err != nil {
 				return err
@@ -908,7 +909,19 @@ func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
 			if err != nil {
 				return err
 			}
-			if lastScalingOp == "no" {
+			// check whether there is a deploy running
+			var deployRunning bool
+			lastDeploys, err := s.GetDeploys("byDay", 50)
+			if err != nil {
+				return err
+			}
+			for _, v := range lastDeploys {
+				if v.Status == "running" {
+					deployRunning = true
+				}
+			}
+			// scale down if the cooldown period is not active and if there are no deploys currently running
+			if lastScalingOp == "no" && !deployRunning {
 				controllerLogger.Infof("Starting scaling down operation (cpu: %d >= %d, mem: %d >= %d", totalFreeCpu[hasFreeResourcesGlobalAZ], clusterCpuNeeded, totalFreeMemory[hasFreeResourcesGlobalAZ], clusterMemoryNeeded)
 				scalingOp = "down"
 				autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
