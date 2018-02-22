@@ -653,16 +653,16 @@ func (a *API) scaleServiceHandler(c *gin.Context) {
 }
 
 func (a *API) webhookHandler(c *gin.Context) {
-	controller := Controller{}
+	asController := AutoscalingController{}
 	var err error
 
 	snsMessageType := c.GetHeader("x-amz-sns-message-type")
-	apiLogger.Debugf("Checking message type: %v", snsMessageType)
+	apiLogger.Tracef("Checking message type: %v", snsMessageType)
 	var snsPayload sns.Payload
 	if err = c.ShouldBindJSON(&snsPayload); err == nil {
 		err = snsPayload.VerifyPayload()
 		if err == nil {
-			apiLogger.Debugf("Verified Payload.")
+			apiLogger.Tracef("Verified Payload.")
 			if snsMessageType == "SubscriptionConfirmation" {
 				apiLogger.Debugf("Subscribing...")
 				_, err = snsPayload.Subscribe()
@@ -670,18 +670,18 @@ func (a *API) webhookHandler(c *gin.Context) {
 				apiLogger.Debugf("Incoming Notification")
 				var genericMessage ecs.SNSPayloadGeneric
 				if err = json.Unmarshal([]byte(snsPayload.Message), &genericMessage); err == nil {
-					apiLogger.Debugf("Message detail type: %v", genericMessage.DetailType)
+					apiLogger.Tracef("Message detail type: %v", genericMessage.DetailType)
 					if genericMessage.DetailType == "ECS Container Instance State Change" {
 						var ecsMessage ecs.SNSPayloadEcs
 						if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
-							apiLogger.Debugf("ECS Message: %v", snsPayload.Message)
-							err = controller.processEcsMessage(ecsMessage)
+							apiLogger.Tracef("ECS Message: %v", snsPayload.Message)
+							err = asController.processEcsMessage(ecsMessage)
 						}
 					} else if genericMessage.DetailType == "EC2 Instance-terminate Lifecycle Action" {
 						var lifecycleMessage ecs.SNSPayloadLifecycle
 						if err = json.Unmarshal([]byte(snsPayload.Message), &lifecycleMessage); err == nil {
 							apiLogger.Debugf("Lifecycle Message: %v", snsPayload.Message)
-							err = controller.processLifecycleMessage(lifecycleMessage)
+							err = asController.processLifecycleMessage(lifecycleMessage)
 						}
 					}
 				}

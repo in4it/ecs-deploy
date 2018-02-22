@@ -1216,27 +1216,36 @@ func (e *ECS) IsEqualContainerLimits(d1 service.Deploy, d2 service.Deploy) bool 
 	}
 }
 
-func (e *ECS) GetFreeResources(clusterName string) ([]FreeInstanceResource, error) {
+func (e *ECS) GetInstanceResources(clusterName string) ([]FreeInstanceResource, []RegisteredInstanceResource, error) {
 	var firs []FreeInstanceResource
+	var rirs []RegisteredInstanceResource
 	ciArns, err := e.ListContainerInstances(clusterName)
 	if err != nil {
-		return firs, err
+		return firs, rirs, err
 	}
 	cis, err := e.DescribeContainerInstances(clusterName, ciArns)
 	if err != nil {
-		return firs, err
+		return firs, rirs, err
 	}
 	for _, ci := range cis {
+		// free resources
 		fir, err := e.ConvertResourceToFir(ci.RemainingResources)
 		if err != nil {
-			return firs, err
+			return firs, rirs, err
 		}
 		fir.InstanceId = ci.Ec2InstanceId
 		fir.AvailabilityZone = ci.AvailabilityZone
 		fir.Status = ci.Status
 		firs = append(firs, fir)
+		// registered resources
+		rir, err := e.ConvertResourceToRir(ci.RegisteredResources)
+		if err != nil {
+			return firs, rirs, err
+		}
+		rir.InstanceId = ci.Ec2InstanceId
+		rirs = append(rirs, rir)
 	}
-	return firs, nil
+	return firs, rirs, nil
 }
 func (e *ECS) ConvertResourceToFir(cir []ContainerInstanceResource) (FreeInstanceResource, error) {
 	var fir FreeInstanceResource
