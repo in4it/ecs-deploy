@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -650,6 +649,16 @@ func (c *Controller) Resume() error {
 			}
 		}
 		if !clusterNotFound {
+			// get cluster info
+			ciArns, err := e.ListContainerInstances(clusterName)
+			if err != nil {
+				return err
+			}
+			cis, err := e.DescribeContainerInstances(clusterName, ciArns)
+			if err != nil {
+				return err
+			}
+			// check for lifecycle hook
 			var lifecycleHookNotFound bool
 			hn, err := autoscaling.GetLifecycleHookNames(autoScalingGroupName, "autoscaling:EC2_INSTANCE_TERMINATING")
 			if err != nil || len(hn) == 0 {
@@ -657,14 +666,6 @@ func (c *Controller) Resume() error {
 				lifecycleHookNotFound = true
 			}
 			if !lifecycleHookNotFound {
-				ciArns, err := e.ListContainerInstances(clusterName)
-				if err != nil {
-					return err
-				}
-				cis, err := e.DescribeContainerInstances(clusterName, ciArns)
-				if err != nil {
-					return err
-				}
 				dc, err := s.GetClusterInfo()
 				if err != nil {
 					return err
@@ -682,7 +683,7 @@ func (c *Controller) Resume() error {
 							}
 						}
 						if writeRecord {
-							s.PutClusterInfo(*dc, clusterName, "no")
+							s.PutClusterInfo(*dc, clusterName, "no", "")
 						}
 						// launch wait for drained
 						controllerLogger.Infof("Launching waitForDrainedNode for cluster=%v, instance=%v, autoscalingGroupName=%v", clusterName, ci.Ec2InstanceId, autoScalingGroupName)
@@ -690,294 +691,31 @@ func (c *Controller) Resume() error {
 					}
 				}
 			}
+			// TODO: check for pending autoscaling actions
+			if len(cis) == 0 {
+				return errors.New("Couldn't retrieve any EC2 Container instances")
+			}
+			f, err := e.ConvertResourceToRir(cis[0].RegisteredResources)
+			if err != nil {
+				return err
+			}
+			asc := AutoscalingController{}
+			registeredInstanceCpu := f.RegisteredCpu
+			registeredInstanceMemory := f.RegisteredMemory
+			period, interval := asc.getAutoscalingPeriodInterval()
+			startTime := time.Now().Add(-1 * time.Duration(period) * time.Duration(interval) * time.Second)
+			_, pendingAction, err := s.GetScalingActivity(clusterName, startTime)
+			if err != nil {
+				return err
+			}
+			if pendingAction != "" && pendingAction != "no" {
+				controllerLogger.Infof("Launching ")
+				go asc.launchProcessPendingScalingOp(clusterName, registeredInstanceCpu, registeredInstanceMemory)
+			}
 		}
 	}
 	controllerLogger.Debugf("Finished controller resume. Checked %d services", len(dds))
 	return err
-}
-
-// Process ECS event message and determine to scale or not
-func (c *Controller) processEcsMessage(message ecs.SNSPayloadEcs) error {
-	apiLogger.Debugf("found ecs notification")
-	s := service.NewService()
-	e := ecs.ECS{}
-	autoscaling := ecs.AutoScaling{}
-	// determine cluster name
-	sp := strings.Split(message.Detail.ClusterArn, "/")
-	if len(sp) != 2 {
-		return errors.New("Could not determine cluster name from message (arn: " + message.Detail.ClusterArn + ")")
-	}
-	clusterName := sp[1]
-	// determine max reservation
-	dss, _ := c.getServices()
-	memoryNeeded := make(map[string]int64)
-	cpuNeeded := make(map[string]int64)
-	for _, ds := range dss {
-		if val, ok := memoryNeeded[ds.C]; ok {
-			if ds.MemoryReservation > val {
-				memoryNeeded[ds.C] = ds.MemoryReservation
-			}
-		} else {
-			memoryNeeded[ds.C] = ds.MemoryReservation
-		}
-		if val, ok := cpuNeeded[ds.C]; ok {
-			if ds.CpuReservation > val {
-				cpuNeeded[ds.C] = ds.CpuReservation
-			}
-		} else {
-			cpuNeeded[ds.C] = ds.CpuReservation
-		}
-	}
-	if _, ok := memoryNeeded[clusterName]; !ok {
-		return errors.New("Minimal Memory needed for clusterName " + clusterName + " not found")
-	}
-	if _, ok := cpuNeeded[clusterName]; !ok {
-		return errors.New("Minimal CPU needed for clusterName " + clusterName + " not found")
-	}
-	// determine minimum reservations
-	dc, err := s.GetClusterInfo()
-	if err != nil {
-		return err
-	}
-	if dc == nil || dc.Time.Before(time.Now().Add(-4*time.Minute /* 4 minutes cache */)) {
-		// no cache, need to retrieve everything
-		controllerLogger.Debugf("No cache found, need to retrieve using API calls")
-		dc = &service.DynamoCluster{}
-		for k, _ := range memoryNeeded {
-			firs, err := e.GetFreeResources(k)
-			if err != nil {
-				return err
-			}
-			for _, f := range firs {
-				var dcci service.DynamoClusterContainerInstance
-				dcci.ClusterName = k
-				dcci.ContainerInstanceId = f.InstanceId
-				dcci.AvailabilityZone = f.AvailabilityZone
-				dcci.FreeMemory = f.FreeMemory
-				dcci.FreeCpu = f.FreeCpu
-				dcci.Status = f.Status
-				dc.ContainerInstances = append(dc.ContainerInstances, dcci)
-			}
-		}
-	}
-	var found bool
-	for k, v := range dc.ContainerInstances {
-		if v.ContainerInstanceId == message.Detail.Ec2InstanceId {
-			found = true
-			dc.ContainerInstances[k].ClusterName = clusterName
-			// get resources
-			f, err := e.ConvertResourceToFir(message.Detail.RemainingResources)
-			if err != nil {
-				return err
-			}
-			dc.ContainerInstances[k].FreeMemory = f.FreeMemory
-			dc.ContainerInstances[k].FreeCpu = f.FreeCpu
-			// get az
-			for _, v := range message.Detail.Attributes {
-				if v.Name == "ecs.availability-zone" {
-					dc.ContainerInstances[k].AvailabilityZone = v.Value
-				}
-			}
-		}
-	}
-	if !found {
-		// add element
-		var dcci service.DynamoClusterContainerInstance
-		dcci.ClusterName = clusterName
-		dcci.ContainerInstanceId = message.Detail.Ec2InstanceId
-		f, err := e.ConvertResourceToFir(message.Detail.RemainingResources)
-		if err != nil {
-			return err
-		}
-		dcci.FreeMemory = f.FreeMemory
-		dcci.FreeCpu = f.FreeCpu
-		dcci.Status = f.Status
-		// get az
-		for _, v := range message.Detail.Attributes {
-			if v.Name == "ecs.availability-zone" {
-				dcci.AvailabilityZone = v.Value
-			}
-		}
-		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
-	}
-	// check whether at min/max capacity
-	autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
-	if err != nil {
-		return err
-	}
-	minSize, desiredCapacity, maxSize, err := autoscaling.GetClusterNodeDesiredCount(autoScalingGroupName)
-	if err != nil {
-		return err
-	}
-	// make scaling (up) decision
-	resourcesFit := make(map[string]bool)
-	resourcesFitGlobal := true
-	var scalingOp = "no"
-	if desiredCapacity < maxSize {
-		for _, dcci := range dc.ContainerInstances {
-			if clusterName == dcci.ClusterName {
-				if dcci.Status != "DRAINING" && dcci.FreeCpu > cpuNeeded[clusterName] && dcci.FreeMemory > memoryNeeded[clusterName] {
-					resourcesFit[dcci.AvailabilityZone] = true
-					controllerLogger.Debugf("Cluster %v needs at least %v cpu and %v memory. Found instance %v (%v) with %v cpu and %v memory",
-						clusterName,
-						cpuNeeded[clusterName],
-						memoryNeeded[clusterName],
-						dcci.ContainerInstanceId,
-						dcci.AvailabilityZone,
-						dcci.FreeCpu,
-						dcci.FreeMemory,
-					)
-				} else {
-					// set resourcesFit[az] in case it's not set to true
-					if _, ok := resourcesFit[dcci.AvailabilityZone]; !ok {
-						resourcesFit[dcci.AvailabilityZone] = false
-					}
-				}
-			}
-		}
-		for k, v := range resourcesFit {
-			if !v {
-				resourcesFitGlobal = false
-				controllerLogger.Infof("No instance found in %v with %v cpu and %v memory free", k, cpuNeeded[clusterName], memoryNeeded[clusterName])
-			}
-		}
-		if !resourcesFitGlobal {
-			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
-			if err != nil {
-				return err
-			}
-			startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
-			lastScalingOp, err := s.GetScalingActivity(clusterName, startTime)
-			if err != nil {
-				return err
-			}
-			if lastScalingOp == "no" {
-				controllerLogger.Infof("Initiating scaling activity")
-				scalingOp = "up"
-				err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	// make scaling (down) decision
-	if desiredCapacity > minSize && resourcesFitGlobal {
-		// calculate registered resources
-		f, err := e.ConvertResourceToRir(message.Detail.RegisteredResources)
-		if err != nil {
-			return err
-		}
-		var clusterMemoryNeeded = f.RegisteredMemory + memoryNeeded[clusterName]        // capacity of full container node + biggest task
-		clusterMemoryNeeded += int64(math.Ceil(float64(memoryNeeded[clusterName]) / 2)) // + buffer
-		var clusterCpuNeeded = f.RegisteredCpu + cpuNeeded[clusterName]
-		totalFreeCpu := make(map[string]int64)
-		totalFreeMemory := make(map[string]int64)
-		hasFreeResources := make(map[string]bool)
-		hasFreeResourcesGlobal := true
-		hasFreeResourcesGlobalAZ := ""
-		for _, dcci := range dc.ContainerInstances {
-			if clusterName == dcci.ClusterName {
-				if dcci.Status != "DRAINING" {
-					totalFreeCpu[dcci.AvailabilityZone] += dcci.FreeCpu
-					totalFreeMemory[dcci.AvailabilityZone] += dcci.FreeMemory
-				}
-			}
-		}
-		for k, _ := range totalFreeCpu {
-			controllerLogger.Debugf("%v: Have %d cpu available, need %d", k, totalFreeCpu[k], clusterCpuNeeded)
-			controllerLogger.Debugf("%v: Have %d memory available, need %d", k, totalFreeMemory[k], clusterMemoryNeeded)
-			if totalFreeCpu[k] >= clusterCpuNeeded && totalFreeMemory[k] >= clusterMemoryNeeded {
-				hasFreeResources[k] = true
-			} else {
-				// set hasFreeResources[k] in case the map key hasn't been set to true
-				if _, ok := hasFreeResources[k]; !ok {
-					hasFreeResources[k] = false
-				}
-			}
-		}
-		for k, v := range hasFreeResources {
-			if !v {
-				hasFreeResourcesGlobalAZ = k
-				hasFreeResourcesGlobal = false
-			}
-		}
-		if hasFreeResourcesGlobal {
-			// check cooldown period
-			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
-			if err != nil {
-				return err
-			}
-			startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
-			lastScalingOp, err := s.GetScalingActivity(clusterName, startTime)
-			if err != nil {
-				return err
-			}
-			// check whether there is a deploy running
-			var deployRunning bool
-			lastDeploys, err := s.GetDeploys("byDay", 50)
-			if err != nil {
-				return err
-			}
-			for _, v := range lastDeploys {
-				if v.Status == "running" {
-					deployRunning = true
-				}
-			}
-			// scale down if the cooldown period is not active and if there are no deploys currently running
-			if lastScalingOp == "no" && !deployRunning {
-				controllerLogger.Infof("Starting scaling down operation (cpu: %d >= %d, mem: %d >= %d", totalFreeCpu[hasFreeResourcesGlobalAZ], clusterCpuNeeded, totalFreeMemory[hasFreeResourcesGlobalAZ], clusterMemoryNeeded)
-				scalingOp = "down"
-				autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
-				if err != nil {
-					return err
-				}
-				err = autoscaling.ScaleClusterNodes(autoScalingGroupName, -1)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	// write object
-	s.PutClusterInfo(*dc, clusterName, scalingOp)
-	return nil
-}
-func (c *Controller) processLifecycleMessage(message ecs.SNSPayloadLifecycle) error {
-	e := ecs.ECS{}
-	clusterName, err := e.GetClusterNameByInstanceId(message.Detail.EC2InstanceId)
-	if err != nil {
-		return err
-	}
-	containerInstanceArn, err := e.GetContainerInstanceArnByInstanceId(clusterName, message.Detail.EC2InstanceId)
-	if err != nil {
-		return err
-	}
-	err = e.DrainNode(clusterName, containerInstanceArn)
-	if err != nil {
-		return err
-	}
-	s := service.NewService()
-	dc, err := s.GetClusterInfo()
-	if err != nil {
-		return err
-	}
-	// write new record to switch container instance to draining
-	var writeRecord bool
-	if dc != nil {
-		for i, dcci := range dc.ContainerInstances {
-			if clusterName == dcci.ClusterName && message.Detail.EC2InstanceId == dcci.ContainerInstanceId {
-				dc.ContainerInstances[i].Status = "DRAINING"
-				writeRecord = true
-			}
-		}
-	}
-	if writeRecord {
-		s.PutClusterInfo(*dc, clusterName, "no")
-	}
-	// monitor drained node
-	go e.LaunchWaitForDrainedNode(clusterName, containerInstanceArn, message.Detail.EC2InstanceId, message.Detail.AutoScalingGroupName, message.Detail.LifecycleHookName, message.Detail.LifecycleActionToken)
-	return nil
 }
 
 func (c *Controller) Bootstrap(b *Flags) error {

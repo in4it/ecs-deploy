@@ -78,8 +78,9 @@ type DynamoCluster struct {
 	ExpirationTimeTTL  int64
 }
 type DynamoClusterScalingOperation struct {
-	ClusterName string
-	Action      string
+	ClusterName   string
+	Action        string
+	PendingAction string
 }
 type DynamoClusterContainerInstance struct {
 	ClusterName         string
@@ -546,8 +547,8 @@ func (s *Service) GetClusterInfo() (*DynamoCluster, error) {
 	}
 	return &dc, nil
 }
-func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action string) (*DynamoCluster, error) {
-	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action}
+func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error) {
+	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action, PendingAction: pendingAction}
 	dc.Identifier = "__CLUSTERS"
 	dc.Time = time.Now()
 	dc.ExpirationTime = time.Now().AddDate(0, 0, 30)
@@ -566,25 +567,45 @@ func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action st
 	}
 	return &dc, nil
 }
-func (s *Service) GetScalingActivity(clusterName string, startTime time.Time) (string, error) {
+func (s *Service) GetScalingActivity(clusterName string, startTime time.Time) (string, string, error) {
 	var dcs []DynamoCluster
 	err := s.table.Get("ServiceName", "__CLUSTERS").Range("Time", dynamo.GreaterOrEqual, startTime).All(&dcs)
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
-			return "", nil
+			return "", "", nil
 		}
 		if aerr, ok := err.(awserr.Error); ok {
 			serviceLogger.Errorf(aerr.Error())
 		} else {
 			serviceLogger.Errorf(err.Error())
 		}
-		return "", err
+		return "", "", err
 	}
 	for _, dc := range dcs {
+		// check actions
 		if dc.ScalingOperation.ClusterName == clusterName && dc.ScalingOperation.Action != "no" {
 			serviceLogger.Debugf("Found a previous scaling operation (action %v, start time: %v)", dc.ScalingOperation.Action, startTime.UTC().Format("2006-01-02T15:04:05-0700"))
-			return dc.ScalingOperation.Action, nil
+			return dc.ScalingOperation.Action, "", nil
+		}
+		// check pending actions
+		if dc.ScalingOperation.ClusterName == clusterName && dc.ScalingOperation.PendingAction != "" {
+			serviceLogger.Debugf("Found a previous pending scaling operation (action %v, start time: %v)", dc.ScalingOperation.PendingAction, startTime.UTC().Format("2006-01-02T15:04:05-0700"))
+			return "no", dc.ScalingOperation.PendingAction, nil
 		}
 	}
-	return "no", nil
+	return "no", "", nil
+}
+
+func (s *Service) IsDeployRunning() (bool, error) {
+	var deployRunning bool
+	lastDeploys, err := s.GetDeploys("byDay", 50)
+	if err != nil {
+		return false, err
+	}
+	for _, v := range lastDeploys {
+		if v.Status == "running" {
+			deployRunning = true
+		}
+	}
+	return deployRunning, nil
 }
