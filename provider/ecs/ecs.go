@@ -17,7 +17,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -688,22 +687,6 @@ func (e *ECS) LaunchWaitUntilServicesStable(dd *service.DynamoDeployment) error 
 			return err
 		}
 		return nil
-	}
-	for _, t := range runningService.Tasks {
-		if t.TaskDefinitionArn == *dd.TaskDefinitionArn && t.LastStatus != "RUNNING" {
-			reason := fmt.Sprintf("Deployment failed: found task with taskdefinition %v and status %v (expected RUNNING)", t.TaskDefinitionArn, t.LastStatus)
-			ecsLogger.Debugf(reason)
-			err := s.SetDeploymentStatusWithReason(dd, "failed", reason)
-			if err != nil {
-				return err
-			}
-			err = e.Rollback(dd.DeployData.Cluster, dd.ServiceName)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-		ecsLogger.Debugf("Found task with taskdefinition %v and status %v", t.TaskDefinitionArn, t.LastStatus)
 	}
 	if failed {
 		s.SetDeploymentStatusWithReason(dd, "failed", "Deployment timed out")
