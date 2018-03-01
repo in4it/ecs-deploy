@@ -11,7 +11,7 @@ func TestWaitUntilServicesStable(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	ecs := ECS{}
-	err := ecs.waitUntilServicesStable(util.GetEnv("TEST_CLUSTERNAME", "test-cluster"), util.GetEnv("TEST_SERVICENAME", "ecs-deploy"), 10)
+	err := ecs.WaitUntilServicesStable(util.GetEnv("TEST_CLUSTERNAME", "test-cluster"), util.GetEnv("TEST_SERVICENAME", "ecs-deploy"), 10)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 		return

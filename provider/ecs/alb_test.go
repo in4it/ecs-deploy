@@ -11,12 +11,12 @@ func TestGetHighestRule(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	a, err := newALB(util.GetEnv("TEST_CLUSTERNAME", "test-cluster"))
+	a, err := NewALB(util.GetEnv("TEST_CLUSTERNAME", "test-cluster"))
 	if err != nil {
 		t.Errorf("Error: %v", err)
 		return
 	}
-	highest, err := a.getHighestRule()
+	highest, err := a.GetHighestRule()
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
