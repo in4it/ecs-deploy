@@ -248,6 +248,20 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 		e.TaskDefinition.SetPlacementConstraints(pcs)
 	}
 
+	// volumes
+	if len(d.Volumes) > 0 {
+		var volumes []*ecs.Volume
+		for _, vol := range d.Volumes {
+			volumes = append(volumes, &ecs.Volume{
+				Name: aws.String(vol.Name),
+				Host: &ecs.HostVolumeProperties{
+					SourcePath: aws.String(vol.Host.SourcePath),
+				},
+			})
+		}
+		e.TaskDefinition.SetVolumes(volumes)
+	}
+
 	// loop over containers
 	for _, container := range d.Containers {
 
@@ -341,6 +355,19 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 
 		if len(environment) > 0 {
 			containerDefinition.SetEnvironment(environment)
+		}
+
+		// MountPoints
+		if len(container.MountPoints) > 0 {
+			var mps []*ecs.MountPoint
+			for _, mp := range container.MountPoints {
+				mps = append(mps, &ecs.MountPoint{
+					ContainerPath: aws.String(mp.ContainerPath),
+					SourceVolume:  aws.String(mp.SourceVolume),
+					ReadOnly:      aws.Bool(mp.ReadOnly),
+				})
+			}
+			containerDefinition.SetMountPoints(mps)
 		}
 
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, containerDefinition)
