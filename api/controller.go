@@ -608,7 +608,12 @@ func (c *Controller) Resume() error {
 	// check api version of database
 	dbApiVersion, err := s.GetApiVersion()
 	if err != nil {
-		return err
+		if err.Error() == "dynamo: no item found" {
+			controllerLogger.Infof("Database is empty - starting app for the first time")
+			return nil
+		} else {
+			return err
+		}
 	}
 	if dbApiVersion != migration.getApiVersion() {
 		err := migration.run(dbApiVersion)

@@ -125,7 +125,7 @@ EOF
 resource "aws_iam_role_policy" "ecs-deploy-policy" {
   name   = "ecs-deploy-policy"
   role   = "${aws_iam_role.ecs-deploy.id}"
-  policy = "${file("iam-policy.json")}"
+  policy = "${file("../templates/iam/ecs-deploy-task.json")}"
 }
 
 #
