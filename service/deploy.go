@@ -25,6 +25,7 @@ type Deploy struct {
 	LaunchType            string                      `json:"launchType"`
 	DeregistrationDelay   int64                       `json:"deregistrationDelay"`
 	Stickiness            DeployStickiness            `json:"stickiness"`
+	Volumes               []DeployVolume              `json:"volumes"`
 }
 type DeployContainer struct {
 	ContainerName     string                        `json:"containerName" binding:"required"`
@@ -39,10 +40,16 @@ type DeployContainer struct {
 	CPU               int64                         `json:"cpu"`
 	CPUReservation    int64                         `json:"cpuReservation"`
 	Environment       []*DeployContainerEnvironment `json:"environment"`
+	MountPoints       []*DeployContainerMountPoint  `json:"mountPoints"`
 }
 type DeployContainerEnvironment struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+type DeployContainerMountPoint struct {
+	ContainerPath string `json:"containerPath"`
+	SourceVolume  string `json:"sourceVolume"`
+	ReadOnly      bool   `json:"readonly"`
 }
 type DeployNetworkConfiguration struct {
 	AssignPublicIp string   `json:"assignPublicIp"`
@@ -72,6 +79,13 @@ type DeployRuleConditions struct {
 type DeployStickiness struct {
 	Enabled  bool  `json:"enabled"`
 	Duration int64 `json:"duration"`
+}
+type DeployVolume struct {
+	Host DeployVolumeHost `json:"host"`
+	Name string           `json:"name"`
+}
+type DeployVolumeHost struct {
+	SourcePath string `json:"sourcePath"`
 }
 
 type DeployResult struct {
