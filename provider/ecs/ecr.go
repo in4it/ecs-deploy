@@ -62,3 +62,38 @@ func (e *ECR) ListImagesWithTag(repositoryName string) (map[string]string, error
 	}
 	return images, nil
 }
+
+func (e *ECR) RepositoryExists(repositoryName string) (bool, error) {
+	svc := ecr.New(session.New())
+
+	var exists bool
+
+	input := &ecr.DescribeRepositoriesInput{
+		RepositoryNames: aws.StringSlice([]string{repositoryName}),
+	}
+
+	pageNum := 0
+	err := svc.DescribeRepositoriesPages(input,
+		func(page *ecr.DescribeRepositoriesOutput, lastPage bool) bool {
+			pageNum++
+			if len(page.Repositories) > 0 {
+				exists = true
+			}
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case ecr.ErrCodeRepositoryNotFoundException:
+				return false, nil
+			default:
+				ecrLogger.Errorf(aerr.Error())
+			}
+		} else {
+			ecrLogger.Errorf(err.Error())
+		}
+		return exists, err
+	}
+	return exists, nil
+}

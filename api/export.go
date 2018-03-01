@@ -65,14 +65,6 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 			return err
 		}
 	}
-	// get target group
-	targetGroup, err := e.alb[clusterName].GetTargetGroupArn(serviceName)
-	if err != nil {
-		return err
-	}
-	if targetGroup == nil {
-		return errors.New("No target group found for " + serviceName)
-	}
 	// get deployment obj
 	s := service.NewService()
 	s.ServiceName = serviceName
@@ -87,11 +79,26 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	}
 	e.deployData = dd.DeployData
 	exportLogger.Debugf("got: %+v", e.deployData)
+
+	// get target group (if service has loadbalancer)
+	var targetGroup *string
+	if strings.ToLower(e.deployData.ServiceProtocol) != "none" {
+		targetGroup, err = e.alb[clusterName].GetTargetGroupArn(serviceName)
+		if err != nil {
+			return err
+		}
+		if targetGroup == nil {
+			return errors.New("No target group found for " + serviceName)
+		}
+	}
+
 	// init map
 	e.templateMap = make(map[string]string)
 	e.templateMap["${SERVICE}"] = serviceName
 	e.templateMap["${CLUSTERNAME}"] = clusterName
-	e.templateMap["${TARGET_GROUP_ARN}"] = *targetGroup
+	if targetGroup != nil {
+		e.templateMap["${TARGET_GROUP_ARN}"] = *targetGroup
+	}
 	e.templateMap["${SERVICE_DESIREDCOUNT}"] = strconv.FormatInt(e.deployData.DesiredCount, 10)
 	if e.deployData.MinimumHealthyPercent == 0 {
 		e.templateMap["${SERVICE_MINIMUMHEALTHYPERCENT}"] = "// no minimum healthy percent set"
@@ -188,6 +195,8 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	// get possible parameters
 	e.p = ecs.Paramstore{}
 	e.p.GetParameters(e.p.GetPrefix(), true)
+	// ecr obj
+	ecr := ecs.ECR{}
 	// get services
 	s := service.NewService()
 	err := s.GetServices(&ds)
@@ -202,7 +211,27 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 		}
 		exportLogger.Debugf("Retrieved template map: %+v", e.templateMap)
 
-		toProcess := []string{"ecr", "ecs", "iam", "alb_targetgroup"}
+		// check if we have targetGroup
+		var processTargetGroup bool
+		if _, ok := e.templateMap["${TARGET_GROUP_ARN}"]; ok {
+			processTargetGroup = true
+		}
+		// check whether to process ecr
+		processEcr, err := ecr.RepositoryExists(service.S)
+		if err != nil {
+			return nil, err
+		}
+
+		var toProcess []string
+
+		if processEcr {
+			toProcess = append(toProcess, "ecr")
+		}
+		if processTargetGroup {
+			toProcess = append(toProcess, []string{"ecs", "iam", "alb_targetgroup"}...)
+		} else {
+			toProcess = append(toProcess, []string{"ecs", "iam"}...)
+		}
 		if e.p.IsEnabled() {
 			toProcess = append(toProcess, "iam_paramstore")
 		}
@@ -214,11 +243,14 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 			ret += *t
 		}
 
-		t, err := e.getListenerRules(service.S, service.C, service.L)
-		if err != nil {
-			return nil, err
+		// get listener rules
+		if processTargetGroup {
+			t, err := e.getListenerRules(service.S, service.C, service.L)
+			if err != nil {
+				return nil, err
+			}
+			ret += *t
 		}
-		ret += *t
 		export["apps"][service.S] = base64.StdEncoding.EncodeToString([]byte(ret))
 	}
 	return &export, nil
