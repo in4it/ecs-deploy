@@ -357,6 +357,19 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 			containerDefinition.SetEnvironment(environment)
 		}
 
+		// ulimits
+		if len(container.Ulimits) > 0 {
+			var us []*ecs.Ulimit
+			for _, u := range container.Ulimits {
+				us = append(us, &ecs.Ulimit{
+					Name:      aws.String(u.Name),
+					SoftLimit: aws.Int64(u.SoftLimit),
+					HardLimit: aws.Int64(u.HardLimit),
+				})
+			}
+			containerDefinition.SetUlimits(us)
+		}
+
 		// MountPoints
 		if len(container.MountPoints) > 0 {
 			var mps []*ecs.MountPoint

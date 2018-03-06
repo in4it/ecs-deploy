@@ -41,6 +41,12 @@ type DeployContainer struct {
 	CPUReservation    int64                         `json:"cpuReservation"`
 	Environment       []*DeployContainerEnvironment `json:"environment"`
 	MountPoints       []*DeployContainerMountPoint  `json:"mountPoints"`
+	Ulimits           []*DeployContainerUlimit      `json:"ulimits"`
+}
+type DeployContainerUlimit struct {
+	Name      string `json:"name"`
+	SoftLimit int64  `json:"softLimit"`
+	HardLimit int64  `json:"hardLimit"`
 }
 type DeployContainerEnvironment struct {
 	Name  string `json:"name"`
