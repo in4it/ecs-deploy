@@ -53,18 +53,6 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	if err != nil {
 		return err
 	}
-	// retrieve data
-	if _, ok := e.alb[clusterName]; !ok {
-		e.alb[clusterName], err = ecs.NewALB(clusterName)
-		if err != nil {
-			return err
-		}
-		// get rules for all listener
-		err = e.alb[clusterName].GetRulesForAllListeners()
-		if err != nil {
-			return err
-		}
-	}
 	// get deployment obj
 	s := service.NewService()
 	s.ServiceName = serviceName
@@ -80,10 +68,29 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.deployData = dd.DeployData
 	exportLogger.Debugf("got: %+v", e.deployData)
 
+	// retrieve alb data
+	var loadBalancer string
+	if e.deployData.LoadBalancer == "" {
+		loadBalancer = clusterName
+	} else {
+		loadBalancer = e.deployData.LoadBalancer
+	}
+	if _, ok := e.alb[loadBalancer]; !ok {
+		e.alb[loadBalancer], err = ecs.NewALB(loadBalancer)
+		if err != nil {
+			return err
+		}
+		// get rules for all listener
+		err = e.alb[loadBalancer].GetRulesForAllListeners()
+		if err != nil {
+			return err
+		}
+	}
+
 	// get target group (if service has loadbalancer)
 	var targetGroup *string
 	if strings.ToLower(e.deployData.ServiceProtocol) != "none" {
-		targetGroup, err = e.alb[clusterName].GetTargetGroupArn(serviceName)
+		targetGroup, err = e.alb[loadBalancer].GetTargetGroupArn(serviceName)
 		if err != nil {
 			return err
 		}
@@ -96,6 +103,7 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.templateMap = make(map[string]string)
 	e.templateMap["${SERVICE}"] = serviceName
 	e.templateMap["${CLUSTERNAME}"] = clusterName
+	e.templateMap["${LOADBALANCER}"] = loadBalancer
 	if targetGroup != nil {
 		e.templateMap["${TARGET_GROUP_ARN}"] = *targetGroup
 	}
@@ -117,7 +125,7 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.templateMap["${PARAMSTORE_PREFIX}"] = util.GetEnv("PARAMSTORE_PREFIX", "")
 	e.templateMap["${AWS_ACCOUNT_ENV}"] = util.GetEnv("AWS_ACCOUNT_ENV", "")
 	e.templateMap["${PARAMSTORE_KMS_ARN}"] = util.GetEnv("PARAMSTORE_KMS_ARN", "")
-	e.templateMap["${VPC_ID}"] = e.alb[clusterName].VpcId
+	e.templateMap["${VPC_ID}"] = e.alb[loadBalancer].VpcId
 	if e.deployData.HealthCheck.HealthyThreshold != 0 {
 		b, err := ioutil.ReadFile("templates/export/alb_targetgroup_healthcheck.tf")
 		if err != nil {
@@ -245,7 +253,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 
 		// get listener rules
 		if processTargetGroup {
-			t, err := e.getListenerRules(service.S, service.C, service.L)
+			t, err := e.getListenerRules(service.S, service.C, service.L, e.templateMap["${LOADBALANCER}"])
 			if err != nil {
 				return nil, err
 			}
@@ -256,7 +264,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 	return &export, nil
 }
 
-func (e *Export) getListenerRules(serviceName string, clusterName string, listeners []string) (*string, error) {
+func (e *Export) getListenerRules(serviceName string, clusterName string, listeners []string, loadBalancer string) (*string, error) {
 	var ret string
 	// listeners
 	albListenerRule, err := e.getTemplate("alb_listenerrule.tf")
@@ -273,7 +281,7 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 			a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", l, -1)
 			for _, v := range []string{"/" + serviceName, "/" + serviceName + "/*"} {
 				// get priority
-				ruleArn, priority, err := e.alb[clusterName].FindRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
+				ruleArn, priority, err := e.alb[loadBalancer].FindRule(l, e.templateMap["${TARGET_GROUP_ARN}"], []string{"path-pattern"}, []string{v})
 				if err != nil {
 					return nil, err
 				}
@@ -288,7 +296,7 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 	} else {
 		exportLogger.Debugf("Found rule conditions in deploy, examining conditions")
 		for _, y := range e.deployData.RuleConditions {
-			for _, l := range e.alb[clusterName].Listeners {
+			for _, l := range e.alb[loadBalancer].Listeners {
 				for _, l2 := range y.Listeners {
 					if l.Protocol != nil && strings.ToLower(*l.Protocol) == strings.ToLower(l2) {
 						a := strings.Replace(*albListenerRule, "${LISTENER_ARN}", *l.ListenerArn, -1)
@@ -303,12 +311,12 @@ func (e *Export) getListenerRules(serviceName string, clusterName string, listen
 						}
 						if y.Hostname != "" {
 							f = append(f, "host-header")
-							v = append(v, y.Hostname+"."+e.alb[clusterName].GetDomain())
+							v = append(v, y.Hostname+"."+e.alb[loadBalancer].GetDomain())
 							cc = strings.Replace(*condition, "${LISTENER_CONDITION_FIELD}", "host-header", -1)
-							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb[clusterName].GetDomain(), -1)
+							cc = strings.Replace(cc, "${LISTENER_CONDITION_VALUE}", y.Hostname+"."+e.alb[loadBalancer].GetDomain(), -1)
 						}
 						// get priority
-						ruleArn, priority, err := e.alb[clusterName].FindRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
+						ruleArn, priority, err := e.alb[loadBalancer].FindRule(*l.ListenerArn, e.templateMap["${TARGET_GROUP_ARN}"], f, v)
 						if err != nil {
 							return nil, err
 						}

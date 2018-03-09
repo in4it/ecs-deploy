@@ -10,6 +10,7 @@ type DeployServices struct {
 }
 type Deploy struct {
 	Cluster               string                      `json:"cluster" binding:"required"`
+	LoadBalancer          string                      `json:"loadBalancer"`
 	ServiceName           string                      `json:"serviceName"`
 	ServicePort           int64                       `json:"servicePort"`
 	ServiceProtocol       string                      `json:"serviceProtocol" binding:"required"`
