@@ -193,7 +193,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 		}
 	}
 	// make scaling (down) decision
-	if desiredCapacity > minSize && resourcesFitGlobal {
+	if desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
 		hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, dc.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 		if hasFreeResourcesGlobal {
 			// check cooldown period
