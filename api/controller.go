@@ -86,7 +86,6 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 		return nil, err
 	}
 	controllerLogger.Debugf("Created task definition: %v", *taskDefArn)
-	// check desired instances in dynamodb
 
 	// update service with new task (update desired instance in case of difference)
 	controllerLogger.Debugf("Updating service: %v with taskdefarn: %v", serviceName, *taskDefArn)
@@ -101,40 +100,7 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 	} else if err != nil {
 		return nil, errors.New("Error during checking whether service exists")
 	} else {
-		// compare with previous deployment if there is one
-		if ddLast != nil {
-			if strings.ToLower(d.ServiceProtocol) != "none" {
-				alb, err := ecs.NewALB(d.Cluster)
-				targetGroupArn, err := alb.GetTargetGroupArn(serviceName)
-				if err != nil {
-					return nil, err
-				}
-				// update healthchecks if changed
-				if !cmp.Equal(ddLast.DeployData.HealthCheck, d.HealthCheck) {
-					controllerLogger.Debugf("Updating ecs healthcheck: %v", serviceName)
-					alb.UpdateHealthCheck(*targetGroupArn, d.HealthCheck)
-				}
-				// update target group attributes if changed
-				if !cmp.Equal(ddLast.DeployData.Stickiness, d.Stickiness) || ddLast.DeployData.DeregistrationDelay != d.DeregistrationDelay {
-					err = alb.ModifyTargetGroupAttributes(*targetGroupArn, d)
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
-			// update memory limits if changed
-			if !e.IsEqualContainerLimits(d, *ddLast.DeployData) {
-				cpuReservation, cpuLimit, memoryReservation, memoryLimit := e.GetContainerLimits(d)
-				s.UpdateServiceLimits(s.ClusterName, s.ServiceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
-			}
-		}
-		// update service
-		_, err = e.UpdateService(serviceName, taskDefArn, d)
-		controllerLogger.Debugf("Updating ecs service: %v", serviceName)
-		if err != nil {
-			controllerLogger.Errorf("Could not update service %v: %v", serviceName, err)
-			return nil, err
-		}
+		c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
 	}
 
 	// Mark previous deployment as aborted if still running
@@ -164,6 +130,122 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 	}
 	return ret, nil
 }
+
+func (c *Controller) updateDeployment(d service.Deploy, ddLast *service.DynamoDeployment, serviceName string, taskDefArn *string, iamRoleArn *string) error {
+	s := service.NewService()
+	s.ServiceName = serviceName
+	s.ClusterName = d.Cluster
+	e := ecs.ECS{ServiceName: serviceName, IamRoleArn: *iamRoleArn, ClusterName: d.Cluster, TaskDefArn: taskDefArn}
+	updateECSService := true
+	// compare with previous deployment if there is one
+	if ddLast != nil {
+		if strings.ToLower(d.ServiceProtocol) != "none" {
+			var alb *ecs.ALB
+			var err error
+			if d.LoadBalancer == "" {
+				alb, err = ecs.NewALB(d.Cluster)
+			} else {
+				alb, err = ecs.NewALB(d.LoadBalancer)
+			}
+			targetGroupArn, err := alb.GetTargetGroupArn(serviceName)
+			if err != nil {
+				return err
+			}
+			// update healthchecks if changed
+			if !cmp.Equal(ddLast.DeployData.HealthCheck, d.HealthCheck) {
+				controllerLogger.Debugf("Updating ecs healthcheck: %v", serviceName)
+				alb.UpdateHealthCheck(*targetGroupArn, d.HealthCheck)
+			}
+			// update target group attributes if changed
+			if !cmp.Equal(ddLast.DeployData.Stickiness, d.Stickiness) || ddLast.DeployData.DeregistrationDelay != d.DeregistrationDelay {
+				err = alb.ModifyTargetGroupAttributes(*targetGroupArn, d)
+				if err != nil {
+					return err
+				}
+			}
+			// update loadbalancer if changed
+			var noLBChange bool
+			if ddLast.DeployData.LoadBalancer == "" && strings.ToLower(d.LoadBalancer) == strings.ToLower(d.Cluster) {
+				noLBChange = true
+			}
+			if strings.ToLower(d.LoadBalancer) != strings.ToLower(ddLast.DeployData.LoadBalancer) && !noLBChange && strings.ToLower(d.ServiceProtocol) != "none" {
+				controllerLogger.Infof("LoadBalancer change detected for service %s", serviceName)
+				// delete old loadbalancer rules
+				var oldAlb *ecs.ALB
+				if ddLast.DeployData.LoadBalancer == "" {
+					oldAlb, err = ecs.NewALB(ddLast.DeployData.Cluster)
+				} else {
+					oldAlb, err = ecs.NewALB(ddLast.DeployData.LoadBalancer)
+				}
+				err = c.deleteRulesForTarget(serviceName, d, targetGroupArn, oldAlb)
+				if err != nil {
+
+				}
+				// delete target group
+				controllerLogger.Debugf("Deleting target group for service: %v", serviceName)
+				err = oldAlb.DeleteTargetGroup(*targetGroupArn)
+				if err != nil {
+					return err
+				}
+				// create new target group
+				controllerLogger.Debugf("Creating target group for service: %v", serviceName)
+				newTargetGroupArn, err := alb.CreateTargetGroup(serviceName, d)
+				if err != nil {
+					return err
+				}
+				// modify target group attributes
+				if d.DeregistrationDelay != -1 || d.Stickiness.Enabled {
+					err = alb.ModifyTargetGroupAttributes(*newTargetGroupArn, d)
+					if err != nil {
+						return err
+					}
+				}
+				// create new rules
+				listeners, err := c.createRulesForTarget(serviceName, d, newTargetGroupArn, alb)
+				s.Listeners = listeners
+				if err != nil {
+					return err
+				}
+				// recreating ecs service
+				controllerLogger.Infof("Recreating ecs service: %v", serviceName)
+				err = e.DeleteService(d.Cluster, serviceName)
+				if err != nil {
+					return err
+				}
+				err = e.WaitUntilServicesInactive(d.Cluster, serviceName)
+				if err != nil {
+					return err
+				}
+				// create ecs service
+				e.TargetGroupArn = newTargetGroupArn
+				err = e.CreateService(d)
+				if err != nil {
+					return err
+				}
+				// update listeners
+				s.UpdateServiceListeners(s.ClusterName, s.ServiceName, listeners)
+				// don't update ecs service later
+				updateECSService = false
+			}
+		}
+		// update memory limits if changed
+		if !e.IsEqualContainerLimits(d, *ddLast.DeployData) {
+			cpuReservation, cpuLimit, memoryReservation, memoryLimit := e.GetContainerLimits(d)
+			s.UpdateServiceLimits(s.ClusterName, s.ServiceName, cpuReservation, cpuLimit, memoryReservation, memoryLimit)
+		}
+	}
+	// update service
+	if updateECSService {
+		var err error
+		_, err = e.UpdateService(serviceName, taskDefArn, d)
+		controllerLogger.Debugf("Updating ecs service: %v", serviceName)
+		if err != nil {
+			controllerLogger.Errorf("Could not update service %v: %v", serviceName, err)
+			return err
+		}
+	}
+	return nil
+}
 func (c *Controller) redeploy(serviceName, time string) (*service.DeployResult, error) {
 	s := service.NewService()
 	dd, err := s.GetDeployment(serviceName, time)
@@ -187,7 +269,13 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 	iam := ecs.IAM{}
 	var targetGroupArn *string
 	var listeners []string
-	alb, err := ecs.NewALB(d.Cluster)
+	var alb *ecs.ALB
+	var err error
+	if d.LoadBalancer != "" {
+		alb, err = ecs.NewALB(d.LoadBalancer)
+	} else {
+		alb, err = ecs.NewALB(d.Cluster)
+	}
 	if err != nil {
 		return err
 	}
@@ -247,13 +335,26 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 	s.ClusterName = d.Cluster
 	s.Listeners = listeners
 
-	dsEl := &service.DynamoServicesElement{S: s.ServiceName, C: s.ClusterName, L: s.Listeners}
+	dsEl := &service.DynamoServicesElement{S: s.ServiceName, C: s.ClusterName, Listeners: s.Listeners}
 	dsEl.CpuReservation, dsEl.CpuLimit, dsEl.MemoryReservation, dsEl.MemoryLimit = e.GetContainerLimits(d)
 
 	err = s.CreateService(dsEl)
 	if err != nil {
 		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
 		return err
+	}
+	return nil
+}
+
+// Deploy rules for a specific targetGroup
+func (c *Controller) deleteRulesForTarget(serviceName string, d service.Deploy, targetGroupArn *string, alb *ecs.ALB) error {
+	err := alb.GetRulesForAllListeners()
+	if err != nil {
+		return err
+	}
+	ruleArns := alb.GetRulesByTargetGroupArn(*targetGroupArn)
+	for _, ruleArn := range ruleArns {
+		alb.DeleteRule(ruleArn)
 	}
 	return nil
 }
@@ -861,19 +962,32 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	if b.AlbSecurityGroups == "" || b.EcsSubnets == "" {
 		return errors.New("Incorrect test arguments supplied")
 	}
-
+	if len(b.LoadBalancers) == 0 {
+		b.LoadBalancers = []service.LoadBalancer{
+			{
+				Name:          b.ClusterName,
+				IPAddressType: "ipv4",
+				Scheme:        "internet-facing",
+				Type:          "application",
+			},
+		}
+	}
+	var albs []*ecs.ALB
 	// create load balancer, default target, and listener
-	alb, err := ecs.NewALBAndCreate(b.ClusterName, "ipv4", "internet-facing", strings.Split(b.AlbSecurityGroups, ","), strings.Split(b.EcsSubnets, ","), "application")
-	if err != nil {
-		return err
-	}
-	defaultTargetGroupArn, err := alb.CreateTargetGroup("ecs-deploy", ecsDeploy /* ecs deploy object */)
-	if err != nil {
-		return err
-	}
-	err = alb.CreateListener("HTTP", 80, *defaultTargetGroupArn)
-	if err != nil {
-		return err
+	for _, v := range b.LoadBalancers {
+		alb, err := ecs.NewALBAndCreate(v.Name, v.IPAddressType, v.Scheme, strings.Split(b.AlbSecurityGroups, ","), strings.Split(b.EcsSubnets, ","), v.Type)
+		if err != nil {
+			return err
+		}
+		defaultTargetGroupArn, err := alb.CreateTargetGroup(v.Name+"-ecs-deploy", ecsDeploy /* ecs deploy object */)
+		if err != nil {
+			return err
+		}
+		err = alb.CreateListener("HTTP", 80, *defaultTargetGroupArn)
+		if err != nil {
+			return err
+		}
+		albs = append(albs, alb)
 	}
 	// create env vars
 	if b.ParamstoreEnabled {
@@ -946,7 +1060,9 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	fmt.Println("===============================================")
 	fmt.Println("=== Successfully bootstrapped ecs-deploy    ===")
 	fmt.Println("===============================================")
-	fmt.Printf("     URL: http://%v/ecs-deploy                  \n", alb.DnsName)
+	for _, alb := range albs {
+		fmt.Printf("     URL: http://%v/ecs-deploy                  \n", alb.DnsName)
+	}
 	fmt.Printf("     Login: deploy                              \n")
 	fmt.Printf("     Password: %v                               \n", deployPassword)
 	fmt.Println("===============================================")
@@ -989,41 +1105,50 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 	if err != nil {
 		return err
 	}
-	alb, err := ecs.NewALB(clusterName)
-	if err != nil {
-		return err
+	if len(b.LoadBalancers) == 0 {
+		b.LoadBalancers = []service.LoadBalancer{
+			{
+				Name:          b.ClusterName,
+				IPAddressType: "ipv4",
+				Scheme:        "internet-facing",
+				Type:          "application",
+			},
+		}
 	}
-	for _, v := range alb.Listeners {
-		err = alb.DeleteListener(*v.ListenerArn)
+	for _, v := range b.LoadBalancers {
+		alb, err := ecs.NewALB(v.Name)
 		if err != nil {
 			return err
 		}
-	}
-	serviceArns, err := e.ListServices(clusterName)
-	if err != nil {
-		return err
-	}
-	services, err := e.DescribeServices(clusterName, serviceArns, false, false, false)
-	for _, v := range services {
-		targetGroup, _ := alb.GetTargetGroupArn(v.ServiceName)
-		if targetGroup != nil {
-			err = alb.DeleteTargetGroup(*targetGroup)
+		for _, v := range alb.Listeners {
+			err = alb.DeleteListener(*v.ListenerArn)
 			if err != nil {
 				return err
 			}
 		}
-		err = e.DeleteService(clusterName, v.ServiceName)
+		serviceArns, err := e.ListServices(clusterName)
 		if err != nil {
 			return err
 		}
-		err = e.WaitUntilServicesInactive(clusterName, v.ServiceName)
+		services, err := e.DescribeServices(clusterName, serviceArns, false, false, false)
+		for _, v := range services {
+			targetGroup, _ := alb.GetTargetGroupArn(v.ServiceName)
+			if targetGroup != nil {
+				alb.DeleteTargetGroup(*targetGroup)
+			}
+			err = e.DeleteService(clusterName, v.ServiceName)
+			if err != nil {
+				return err
+			}
+			err = e.WaitUntilServicesInactive(clusterName, v.ServiceName)
+			if err != nil {
+				return err
+			}
+		}
+		err = alb.DeleteLoadBalancer()
 		if err != nil {
 			return err
 		}
-	}
-	err = alb.DeleteLoadBalancer()
-	if err != nil {
-		return err
 	}
 	fmt.Println("Wait for autoscaling group to not exist")
 	err = autoscaling.WaitForAutoScalingGroupNotExists(clusterName)

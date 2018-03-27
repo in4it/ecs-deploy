@@ -253,7 +253,7 @@ func (e *Export) terraform() (*map[string]ExportedApps, error) {
 
 		// get listener rules
 		if processTargetGroup {
-			t, err := e.getListenerRules(service.S, service.C, service.L, e.templateMap["${LOADBALANCER}"])
+			t, err := e.getListenerRules(service.S, service.C, service.Listeners, e.templateMap["${LOADBALANCER}"])
 			if err != nil {
 				return nil, err
 			}

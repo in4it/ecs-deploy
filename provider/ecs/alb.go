@@ -511,6 +511,19 @@ func (a *ALB) GetRulesForAllListeners() error {
 	}
 	return nil
 }
+func (a *ALB) GetRulesByTargetGroupArn(targetGroupArn string) []string {
+	var result []string
+	for _, rules := range a.Rules {
+		for _, rule := range rules {
+			for _, ruleAction := range rule.Actions {
+				if aws.StringValue(ruleAction.TargetGroupArn) == targetGroupArn {
+					result = append(result, aws.StringValue(rule.RuleArn))
+				}
+			}
+		}
+	}
+	return result
+}
 func (a *ALB) GetTargetGroupArn(serviceName string) (*string, error) {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DescribeTargetGroupsInput{
@@ -658,6 +671,24 @@ func (a *ALB) ModifyTargetGroupAttributes(targetGroupArn string, d service.Deplo
 			return aerr
 		}
 		albLogger.Errorf(err.Error())
+		return err
+	}
+	return nil
+}
+func (a *ALB) DeleteRule(ruleArn string) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.DeleteRuleInput{
+		RuleArn: aws.String(ruleArn),
+	}
+
+	albLogger.Debugf("Deleting ALB Rule: %v", ruleArn)
+	_, err := svc.DeleteRule(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf("%v", aerr.Error())
+		} else {
+			ecsLogger.Errorf("%v", err.Error())
+		}
 		return err
 	}
 	return nil

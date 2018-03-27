@@ -1,5 +1,7 @@
 package api
 
+import "github.com/in4it/ecs-deploy/service"
+
 type Flags struct {
 	Bootstrap             bool
 	DisableEcsDeploy      bool
@@ -23,6 +25,7 @@ type Flags struct {
 	LoadbalancerDomain    string
 	Server                bool
 	DeleteCluster         string
+	LoadBalancers         []service.LoadBalancer
 }
 
 func NewFlags() *Flags {
