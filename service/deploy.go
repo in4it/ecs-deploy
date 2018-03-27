@@ -199,3 +199,10 @@ type AutoscalingPolicy struct {
 	EvaluationPeriods    int64   `json:"evaluationPeriods"`
 	Period               int64   `json:"period"`
 }
+
+type LoadBalancer struct {
+	Name          string
+	IPAddressType string
+	Scheme        string
+	Type          string
+}

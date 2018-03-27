@@ -30,6 +30,20 @@ var bootstrapFlags = &api.Flags{
 	EcsDesiredSize:        util.GetEnv("TEST_ECS_DESIREDSIZE", "1"),
 	ParamstoreEnabled:     util.YesNoToBool(util.GetEnv("TEST_PARAMSTORE_ENABLED", "no")),
 	DisableEcsDeploy:      true,
+	LoadBalancers: []service.LoadBalancer{
+		{
+			Name:          util.GetEnv("TEST_CLUSTERNAME", "integrationtest"),
+			IPAddressType: "ipv4",
+			Scheme:        "internet-facing",
+			Type:          "application",
+		},
+		{
+			Name:          util.GetEnv("TEST_CLUSTERNAME", "integrationtest") + "-2",
+			IPAddressType: "ipv4",
+			Scheme:        "internet-facing",
+			Type:          "application",
+		},
+	},
 }
 
 var ecsDefault = service.Deploy{
@@ -78,6 +92,7 @@ var ecsMultiDeploy = service.DeployServices{
 }
 var ecsDefaultWithChanges = service.Deploy{
 	Cluster:               bootstrapFlags.ClusterName,
+	LoadBalancer:          bootstrapFlags.ClusterName + "-2",
 	ServicePort:           80,
 	ServiceProtocol:       "HTTP",
 	DesiredCount:          1,
@@ -191,11 +206,13 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 
 	// deploy (3 times: one time to create, one to update and one with different layout)
 	var deployRes, deployRes2 *service.DeployResult
-	for y := 0; y < 2; y++ {
+	for y := 0; y < 3; y++ {
 		s.ServiceName = "integrationtest-default"
-		if y == 0 || y == 1 {
+		if y == 0 || y == 2 {
+			fmt.Println("==> Deploying first ecs service <==")
 			deployRes, err = controller.Deploy(s.ServiceName, ecsDefault)
 		} else {
+			fmt.Println("==> Deploying ecs service with changes <==")
 			deployRes, err = controller.Deploy(s.ServiceName, ecsDefaultWithChanges)
 		}
 		if err != nil {
@@ -225,6 +242,7 @@ func setupTestCluster(t *testing.T) func(t *testing.T) {
 	}
 
 	// deploy an update with healthchecks that fail and observe rolling back
+	fmt.Println("==> Deploying ecs service that fails <==")
 	deployRes2, err = controller.Deploy(s.ServiceName, ecsDefaultFailingHealthCheck)
 	var deployed bool
 	for i := 0; i < 30 && !deployed; i++ {

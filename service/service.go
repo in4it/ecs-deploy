@@ -61,11 +61,11 @@ type DynamoServices struct {
 type DynamoServicesElement struct {
 	C                 string
 	S                 string
-	MemoryLimit       int64 `dynamo:"ML"`
-	MemoryReservation int64 `dynamo:"MR"`
-	CpuLimit          int64 `dynamo:"CL"`
-	CpuReservation    int64 `dynamo:"CR"`
-	L                 []string
+	MemoryLimit       int64    `dynamo:"ML"`
+	MemoryReservation int64    `dynamo:"MR"`
+	CpuLimit          int64    `dynamo:"CL"`
+	CpuReservation    int64    `dynamo:"CR"`
+	Listeners         []string `dynamo:"L"`
 }
 
 // dynamo cluster struct
@@ -508,6 +508,25 @@ func (s *Service) UpdateServiceLimits(clusterName, serviceName string, cpuReserv
 	}
 	if !found {
 		return errors.New("Couldn't update service limits: Service not found")
+	}
+	dss.Version = dss.Version + 1
+	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
+}
+func (s *Service) UpdateServiceListeners(clusterName, serviceName string, listeners []string) error {
+	var dss DynamoServices
+	var found bool
+	err := s.GetServices(&dss)
+	if err != nil {
+		return err
+	}
+	for i, ds := range dss.Services {
+		if ds.C == clusterName && ds.S == serviceName {
+			found = true
+			dss.Services[i].Listeners = listeners
+		}
+	}
+	if !found {
+		return errors.New("Couldn't update service listener: Service not found")
 	}
 	dss.Version = dss.Version + 1
 	return s.table.Put(dss).If("$ = ?", "Version", dss.Version-1).Run()
