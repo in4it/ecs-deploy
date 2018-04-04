@@ -460,6 +460,11 @@ func (e *ECS) UpdateService(serviceName string, taskDefArn *string, d service.De
 		TaskDefinition: aws.String(*taskDefArn),
 	}
 
+	// network configuration
+	if d.NetworkMode == "awsvpc" && len(d.NetworkConfiguration.Subnets) > 0 {
+		input.SetNetworkConfiguration(e.getNetworkConfiguration(d))
+	}
+
 	// set gracePeriodSeconds
 	if d.HealthCheck.GracePeriodSeconds > 0 {
 		input.SetHealthCheckGracePeriodSeconds(d.HealthCheck.GracePeriodSeconds)
