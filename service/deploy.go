@@ -40,6 +40,7 @@ type DeployContainer struct {
 	MemoryReservation int64                         `json:"memoryReservation"`
 	CPU               int64                         `json:"cpu"`
 	CPUReservation    int64                         `json:"cpuReservation"`
+	DockerLabels      map[string]*string            `json:"dockerLabels"`
 	Environment       []*DeployContainerEnvironment `json:"environment"`
 	MountPoints       []*DeployContainerMountPoint  `json:"mountPoints"`
 	Ulimits           []*DeployContainerUlimit      `json:"ulimits"`
