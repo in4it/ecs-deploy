@@ -63,6 +63,7 @@ var ecsDefault = service.Deploy{
 			Essential:         true,
 			MemoryReservation: 128,
 			CPUReservation:    64,
+			DockerLabels:      map[string]string{"mykey": "myvalue"},
 		},
 	},
 }
