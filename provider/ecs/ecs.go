@@ -291,7 +291,7 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 		containerDefinition := &ecs.ContainerDefinition{
 			Name:  aws.String(container.ContainerName),
 			Image: aws.String(imageUri),
-			DockerLabels: container.DockerLabels,
+			DockerLabels: aws.StringMap(container.DockerLabels),
 		}
 		// set containerPort if not empty
 		if container.ContainerPort > 0 {
