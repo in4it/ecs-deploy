@@ -1138,9 +1138,18 @@ func (e *ECS) RunTask(clusterName, taskDefinition string, runTask service.RunTas
 	taskOverride := &ecs.TaskOverride{}
 	var containerOverrides []*ecs.ContainerOverride
 	for _, co := range runTask.ContainerOverrides {
+		// environment variables
+		var environment []*ecs.KeyValuePair
+		if len(co.Environment) > 0 {
+			for _, v := range co.Environment {
+				environment = append(environment, &ecs.KeyValuePair{Name: aws.String(v.Name), Value: aws.String(v.Value)})
+			}
+		}
+
 		containerOverrides = append(containerOverrides, &ecs.ContainerOverride{
 			Command: aws.StringSlice(co.Command),
 			Name:    aws.String(co.Name),
+			Environment: environment,
 		})
 	}
 	taskOverride.SetContainerOverrides(containerOverrides)

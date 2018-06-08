@@ -103,16 +103,54 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage of %s deploy:\n", os.Args[0])
 			pflag.PrintDefaults()
 		}
-	} else {
+	} else if len(os.Args) > 1 && os.Args[1] == "runtask" {
+		deployFlags := &DeployFlags{}
+		addDeployFlags(deployFlags, pflag.CommandLine)
+
+		if len(os.Args) > 2 && os.Args[2] != "" {
+			pflag.CommandLine.Parse(os.Args[2:])
+			failure, err := runtask(session, deployFlags)
+			if failure {
+				if err != nil {
+					fmt.Printf("%v", err.Error())
+				}
+				os.Exit(1)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Usage of %s runtask:\n", os.Args[0])
+			pflag.PrintDefaults()
+		}
+  } else {
 		fmt.Println("Usage: ")
 		fmt.Printf("%v login        login\n", os.Args[0])
 		fmt.Printf("%v createrepo   create repository\n", os.Args[0])
 		fmt.Printf("%v deploy       deploy services\n", os.Args[0])
+		fmt.Printf("%v runtask      run task on service\n", os.Args[0])
 	}
 	if err != nil {
 		fmt.Printf("%v", err.Error())
 		os.Exit(1)
 	}
+}
+
+func runtask(session Session, deployFlags *DeployFlags) (bool, error) {
+	if deployFlags.Filename == "" {
+		// default for ease
+		deployFlags.Filename = "ecs.json"
+	}
+	if fi, err := os.Stat(deployFlags.Filename); err != nil || fi.IsDir() {
+		return true, errors.New("runtask expects a single json file")
+	}
+	content, err := ioutil.ReadFile(deployFlags.Filename)
+	if err != nil {
+		return true, err
+	}
+	resp, err := doRunTaskAPICall(session, deployFlags.ServiceName, string(content))
+	if err != nil {
+		return true, err
+	}
+	fmt.Printf("Service %v started task: %v\n", deployFlags.ServiceName, string(resp))
+	return false, nil
 }
 
 // deploy with timeouts
@@ -222,9 +260,17 @@ func checkDeployStatus(session Session, serviceName, deploymentTime string) (str
 	status = deployStatusResponse.Service.Status
 	return status, nil
 }
+func doRunTaskAPICall(session Session, service string, deployData string) ([]byte, error) {
+	url := fmt.Sprintf("service/runtask/%v", service)
+	return doAPICall(session, url, deployData)
+}
 func doDeployAPICall(session Session, deployData string) ([]byte, error) {
+	url := "deploy"
+	return doAPICall(session, url, deployData)
+}
+func doAPICall(session Session, url string, deployData string) ([]byte, error) {
 	var body []byte
-	req, err := http.NewRequest("POST", session.Url+"/api/v1/deploy", bytes.NewBuffer([]byte(deployData)))
+	req, err := http.NewRequest("POST", session.Url+"/api/v1/" + url, bytes.NewBuffer([]byte(deployData)))
 	if err != nil {
 		return body, err
 	}
