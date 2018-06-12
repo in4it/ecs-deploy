@@ -177,8 +177,9 @@ type RunTask struct {
 	ContainerOverrides []RunTaskContainerOverride `json:"containerOverrides"`
 }
 type RunTaskContainerOverride struct {
-	Name    string   `json:"name"`
-	Command []string `json:"command"`
+	Name        string                        `json:"name"`
+	Command     []string                      `json:"command"`
+	Environment []*DeployContainerEnvironment `json:"environment"`
 }
 
 // create Autoscaling Policy
