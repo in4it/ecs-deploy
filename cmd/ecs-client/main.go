@@ -120,7 +120,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage of %s runtask:\n", os.Args[0])
 			pflag.PrintDefaults()
 		}
-  } else {
+	} else {
 		fmt.Println("Usage: ")
 		fmt.Printf("%v login        login\n", os.Args[0])
 		fmt.Printf("%v createrepo   create repository\n", os.Args[0])
@@ -270,7 +270,7 @@ func doDeployAPICall(session Session, deployData string) ([]byte, error) {
 }
 func doAPICall(session Session, url string, deployData string) ([]byte, error) {
 	var body []byte
-	req, err := http.NewRequest("POST", session.Url+"/api/v1/" + url, bytes.NewBuffer([]byte(deployData)))
+	req, err := http.NewRequest("POST", session.Url+"/api/v1/"+url, bytes.NewBuffer([]byte(deployData)))
 	if err != nil {
 		return body, err
 	}

@@ -289,8 +289,8 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 
 		// prepare container definition
 		containerDefinition := &ecs.ContainerDefinition{
-			Name:  aws.String(container.ContainerName),
-			Image: aws.String(imageUri),
+			Name:         aws.String(container.ContainerName),
+			Image:        aws.String(imageUri),
 			DockerLabels: aws.StringMap(container.DockerLabels),
 		}
 		// set containerPort if not empty
@@ -1147,8 +1147,8 @@ func (e *ECS) RunTask(clusterName, taskDefinition string, runTask service.RunTas
 		}
 
 		containerOverrides = append(containerOverrides, &ecs.ContainerOverride{
-			Command: aws.StringSlice(co.Command),
-			Name:    aws.String(co.Name),
+			Command:     aws.StringSlice(co.Command),
+			Name:        aws.String(co.Name),
 			Environment: environment,
 		})
 	}
