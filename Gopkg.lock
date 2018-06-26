@@ -21,7 +21,48 @@
 
 [[projects]]
   name = "github.com/aws/aws-sdk-go"
-  packages = ["aws","aws/awserr","aws/awsutil","aws/client","aws/client/metadata","aws/corehandlers","aws/credentials","aws/credentials/ec2rolecreds","aws/credentials/endpointcreds","aws/credentials/stscreds","aws/defaults","aws/ec2metadata","aws/endpoints","aws/request","aws/session","aws/signer/v4","internal/shareddefaults","private/protocol","private/protocol/ec2query","private/protocol/json/jsonutil","private/protocol/jsonrpc","private/protocol/query","private/protocol/query/queryutil","private/protocol/rest","private/protocol/xml/xmlutil","service/acm","service/autoscaling","service/cloudwatchlogs","service/dynamodb","service/dynamodb/dynamodbattribute","service/dynamodb/dynamodbiface","service/ec2","service/ecr","service/ecs","service/elbv2","service/iam","service/ssm","service/sts"]
+  packages = [
+    "aws",
+    "aws/awserr",
+    "aws/awsutil",
+    "aws/client",
+    "aws/client/metadata",
+    "aws/corehandlers",
+    "aws/credentials",
+    "aws/credentials/ec2rolecreds",
+    "aws/credentials/endpointcreds",
+    "aws/credentials/stscreds",
+    "aws/defaults",
+    "aws/ec2metadata",
+    "aws/endpoints",
+    "aws/request",
+    "aws/session",
+    "aws/signer/v4",
+    "internal/shareddefaults",
+    "private/protocol",
+    "private/protocol/ec2query",
+    "private/protocol/json/jsonutil",
+    "private/protocol/jsonrpc",
+    "private/protocol/query",
+    "private/protocol/query/queryutil",
+    "private/protocol/rest",
+    "private/protocol/xml/xmlutil",
+    "service/acm",
+    "service/applicationautoscaling",
+    "service/autoscaling",
+    "service/cloudwatch",
+    "service/cloudwatchlogs",
+    "service/dynamodb",
+    "service/dynamodb/dynamodbattribute",
+    "service/dynamodb/dynamodbiface",
+    "service/ec2",
+    "service/ecr",
+    "service/ecs",
+    "service/elbv2",
+    "service/iam",
+    "service/ssm",
+    "service/sts"
+  ]
   revision = "0cebc639926eb91b0192dae4b28bc808417e764c"
   version = "v1.12.61"
 
@@ -39,7 +80,12 @@
 
 [[projects]]
   name = "github.com/crewjam/saml"
-  packages = [".","logger","samlsp","xmlenc"]
+  packages = [
+    ".",
+    "logger",
+    "samlsp",
+    "xmlenc"
+  ]
   revision = "6b5dd2d26974f7f5e59132ef5921fab7993794d7"
   version = "0.2.0"
 
@@ -64,7 +110,12 @@
 [[projects]]
   branch = "master"
   name = "github.com/gin-gonic/gin"
-  packages = [".","binding","json","render"]
+  packages = [
+    ".",
+    "binding",
+    "json",
+    "render"
+  ]
   revision = "a712f77d7aaec7eb4766a663924aaa4e54d3fe70"
 
 [[projects]]
@@ -105,7 +156,12 @@
 
 [[projects]]
   name = "github.com/google/go-cmp"
-  packages = ["cmp","cmp/internal/diff","cmp/internal/function","cmp/internal/value"]
+  packages = [
+    "cmp",
+    "cmp/internal/diff",
+    "cmp/internal/function",
+    "cmp/internal/value"
+  ]
   revision = "8099a9787ce5dc5984ed879a3bda47dc730a8e97"
   version = "v0.1.0"
 
@@ -130,7 +186,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/guregu/dynamo"
-  packages = [".","internal/exprs"]
+  packages = [
+    ".",
+    "internal/exprs"
+  ]
   revision = "78f36f7876767b1899b4bac7381d109fe5a58539"
 
 [[projects]]
@@ -159,7 +218,11 @@
 [[projects]]
   branch = "master"
   name = "github.com/mailru/easyjson"
-  packages = ["buffer","jlexer","jwriter"]
+  packages = [
+    "buffer",
+    "jlexer",
+    "jwriter"
+  ]
   revision = "32fa128f234d041f196a9f3e0fea5ac9772c08e1"
 
 [[projects]]
@@ -177,7 +240,11 @@
 [[projects]]
   branch = "master"
   name = "github.com/russellhaering/goxmldsig"
-  packages = [".","etreeutils","types"]
+  packages = [
+    ".",
+    "etreeutils",
+    "types"
+  ]
   revision = "b7efc6231e45b10bfd779852831c8bb59b350ec5"
 
 [[projects]]
@@ -189,7 +256,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/swaggo/gin-swagger"
-  packages = [".","swaggerFiles"]
+  packages = [
+    ".",
+    "swaggerFiles"
+  ]
   revision = "0ee1d2817cb324ab3f71e4cbd53e4edf8aeefab3"
 
 [[projects]]
@@ -207,25 +277,52 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160","ssh/terminal"]
+  packages = [
+    "ripemd160",
+    "ssh/terminal"
+  ]
   revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["context","idna","webdav","webdav/internal/xml"]
+  packages = [
+    "context",
+    "idna",
+    "webdav",
+    "webdav/internal/xml"
+  ]
   revision = "5ccada7d0a7ba9aeb5d3aca8d3501b4c2a509fec"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
-  packages = ["unix","windows"]
+  packages = [
+    "unix",
+    "windows"
+  ]
   revision = "810d7000345868fc619eb81f46307107118f4ae1"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/text"
-  packages = ["collate","collate/build","internal/colltab","internal/gen","internal/tag","internal/triegen","internal/ucd","language","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable","width"]
+  packages = [
+    "collate",
+    "collate/build",
+    "internal/colltab",
+    "internal/gen",
+    "internal/tag",
+    "internal/triegen",
+    "internal/ucd",
+    "language",
+    "secure/bidirule",
+    "transform",
+    "unicode/bidi",
+    "unicode/cldr",
+    "unicode/norm",
+    "unicode/rangetable",
+    "width"
+  ]
   revision = "e19ae1496984b1c655b8044a65c0300a3c878dd3"
 
 [[projects]]
@@ -249,6 +346,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "41ef670a403cdccc3abe13fada3308e65d57bd628d508a20f7a308fc1919a03b"
+  inputs-digest = "ad5744022098749e6e427e6e56bc804e13b7707b91c614120250f31da3604e32"
   solver-name = "gps-cdcl"
   solver-version = 1

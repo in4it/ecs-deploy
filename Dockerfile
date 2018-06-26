@@ -27,7 +27,7 @@ WORKDIR /go/src/github.com/in4it/ecs-deploy/
 
 COPY . .
 
-RUN go-wrapper download ./...
+RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && dep ensure
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ecs-deploy cmd/ecs-deploy/main.go
 
 #

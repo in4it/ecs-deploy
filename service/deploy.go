@@ -40,6 +40,7 @@ type DeployContainer struct {
 	MemoryReservation int64                         `json:"memoryReservation"`
 	CPU               int64                         `json:"cpu"`
 	CPUReservation    int64                         `json:"cpuReservation"`
+	DockerLabels      map[string]string             `json:"dockerLabels"`
 	Environment       []*DeployContainerEnvironment `json:"environment"`
 	MountPoints       []*DeployContainerMountPoint  `json:"mountPoints"`
 	Ulimits           []*DeployContainerUlimit      `json:"ulimits"`
@@ -176,8 +177,9 @@ type RunTask struct {
 	ContainerOverrides []RunTaskContainerOverride `json:"containerOverrides"`
 }
 type RunTaskContainerOverride struct {
-	Name    string   `json:"name"`
-	Command []string `json:"command"`
+	Name        string                        `json:"name"`
+	Command     []string                      `json:"command"`
+	Environment []*DeployContainerEnvironment `json:"environment"`
 }
 
 // create Autoscaling Policy
