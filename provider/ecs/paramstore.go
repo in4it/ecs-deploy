@@ -2,6 +2,9 @@ package ecs
 
 import (
 	"errors"
+	"os"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -9,8 +12,6 @@ import (
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
-	"os"
-	"strings"
 )
 
 // logging
@@ -156,7 +157,7 @@ func (p *Paramstore) GetParameterValue(name string) (*string, error) {
 	return result.Parameter.Value, nil
 }
 
-func (p *Paramstore) GetParamstoreIAMPolicy(serviceName string) string {
+func (p *Paramstore) GetParamstoreIAMPolicy(path string) string {
 	iam := IAM{}
 	err := iam.GetAccountId()
 	accountId := iam.AccountId
@@ -174,7 +175,7 @@ func (p *Paramstore) GetParamstoreIAMPolicy(serviceName string) string {
           "ssm:GetParametersByPath"
         ],
         "Resource": [
-          "arn:aws:ssm:` + util.GetEnv("AWS_REGION", "") + `:` + accountId + `:parameter/` + util.GetEnv("PARAMSTORE_PREFIX", "") + `-` + util.GetEnv("AWS_ACCOUNT_ENV", "") + `/` + serviceName + `/*"
+          "arn:aws:ssm:` + util.GetEnv("AWS_REGION", "") + `:` + accountId + `:parameter/` + util.GetEnv("PARAMSTORE_PREFIX", "") + `-` + util.GetEnv("AWS_ACCOUNT_ENV", "") + `/` + path + `/*"
         ],
         "Effect": "Allow"
       },

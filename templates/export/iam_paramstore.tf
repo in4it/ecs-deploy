@@ -13,7 +13,7 @@ resource "aws_iam_role_policy" "ecs-${SERVICE}-paramstore" {
           "ssm:GetParametersByPath"
         ],
         "Resource": [
-          "arn:aws:ssm:${AWS_REGION}:${ACCOUNT_ID}:parameter/${PARAMSTORE_PREFIX}-${AWS_ACCOUNT_ENV}/${SERVICE}/*"
+          "arn:aws:ssm:${AWS_REGION}:${ACCOUNT_ID}:parameter/${PARAMSTORE_PREFIX}-${AWS_ACCOUNT_ENV}/${NAMESPACE}/*"
         ],
         "Effect": "Allow"
       },
