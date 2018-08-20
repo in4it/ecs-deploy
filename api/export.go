@@ -3,14 +3,15 @@ package api
 import (
 	"encoding/base64"
 	"errors"
-	"github.com/in4it/ecs-deploy/provider/ecs"
-	"github.com/in4it/ecs-deploy/service"
-	"github.com/in4it/ecs-deploy/util"
-	"github.com/juju/loggo"
 	"io/ioutil"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/in4it/ecs-deploy/provider/ecs"
+	"github.com/in4it/ecs-deploy/service"
+	"github.com/in4it/ecs-deploy/util"
+	"github.com/juju/loggo"
 )
 
 // logging
@@ -123,6 +124,11 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.templateMap["${AWS_REGION}"] = util.GetEnv("AWS_REGION", "")
 	e.templateMap["${ACCOUNT_ID}"] = iam.AccountId
 	e.templateMap["${PARAMSTORE_PREFIX}"] = util.GetEnv("PARAMSTORE_PREFIX", "")
+	if dd.DeployData.EnvNamespace == "" {
+		e.templateMap["${NAMESPACE}"] = serviceName
+	} else {
+		e.templateMap["${NAMESPACE}"] = dd.DeployData.EnvNamespace
+	}
 	e.templateMap["${AWS_ACCOUNT_ENV}"] = util.GetEnv("AWS_ACCOUNT_ENV", "")
 	e.templateMap["${PARAMSTORE_KMS_ARN}"] = util.GetEnv("PARAMSTORE_KMS_ARN", "")
 	e.templateMap["${VPC_ID}"] = e.alb[loadBalancer].VpcId
