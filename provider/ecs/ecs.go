@@ -350,8 +350,12 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 			}
 		}
 		if util.GetEnv("PARAMSTORE_ENABLED", "no") == "yes" {
+			namespace := d.EnvNamespace
+			if namespace == "" {
+				namespace = e.ServiceName
+			}
 			environment = append(environment, &ecs.KeyValuePair{Name: aws.String("AWS_REGION"), Value: aws.String(util.GetEnv("AWS_REGION", ""))})
-			environment = append(environment, &ecs.KeyValuePair{Name: aws.String("AWS_ENV_PATH"), Value: aws.String("/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + e.ServiceName + "/")})
+			environment = append(environment, &ecs.KeyValuePair{Name: aws.String("AWS_ENV_PATH"), Value: aws.String("/" + util.GetEnv("PARAMSTORE_PREFIX", "") + "-" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "/" + namespace + "/")})
 		}
 
 		if len(environment) > 0 {

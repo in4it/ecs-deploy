@@ -68,8 +68,12 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 		// optionally add a policy
 		ps := ecs.Paramstore{}
 		if ps.IsEnabled() {
-			controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", serviceName)
-			err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+serviceName, ps.GetParamstoreIAMPolicy(serviceName))
+			namespace := d.EnvNamespace
+			if namespace == "" {
+				namespace = serviceName
+			}
+			controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", namespace)
+			err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+namespace, ps.GetParamstoreIAMPolicy(namespace))
 			if err != nil {
 				return nil, err
 			}
@@ -226,6 +230,28 @@ func (c *Controller) updateDeployment(d service.Deploy, ddLast *service.DynamoDe
 				s.UpdateServiceListeners(s.ClusterName, s.ServiceName, listeners)
 				// don't update ecs service later
 				updateECSService = false
+			}
+			ps := ecs.Paramstore{}
+			if ps.IsEnabled() {
+				iam := ecs.IAM{}
+				thisNamespace, lastNamespace := d.EnvNamespace, ddLast.DeployData.EnvNamespace
+				if thisNamespace == "" {
+					thisNamespace = serviceName
+				}
+				if lastNamespace == "" {
+					lastNamespace = serviceName
+				}
+				if thisNamespace != lastNamespace {
+					controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", serviceName)
+					err = iam.DeleteRolePolicy("ecs-"+serviceName, "paramstore-"+lastNamespace)
+					if err != nil {
+						return err
+					}
+					err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+thisNamespace, ps.GetParamstoreIAMPolicy(thisNamespace))
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 		// update memory limits if changed

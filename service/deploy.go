@@ -27,6 +27,7 @@ type Deploy struct {
 	DeregistrationDelay   int64                       `json:"deregistrationDelay"`
 	Stickiness            DeployStickiness            `json:"stickiness"`
 	Volumes               []DeployVolume              `json:"volumes"`
+	EnvNamespace          string                      `json:"envNamespace"`
 }
 type DeployContainer struct {
 	ContainerName     string                        `json:"containerName" binding:"required"`
