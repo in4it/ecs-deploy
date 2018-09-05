@@ -59,11 +59,21 @@ Alternatively you can use terraform to deploy the ecs cluster. See examples/ecs-
 
 To deploy the examples (an nginx server and a echoserver), use ecs-client:
 
+Login interactively:
 ```
 ./ecs-client login --url http://yourdomain/ecs-cluster
+```
+
+Login with environment variables:
+```
+ECS_DEPLOY_LOGIN=deploy ECS_DEPLOY_PASSWORD=password ./ecs-client login --url http://yourdomain/ecs-cluster
+```
+
+Deploy:
 ./ecs-client deploy -f examples/services/multiple-services/multiple-services.json
 
 ```
+
 
 ## Configuration (Environment variables)
 
@@ -83,6 +93,7 @@ These will be used when deploying services
 * PARAMSTORE\_ENABLED=yes
 * PARAMSTORE\_PREFIX=mycompany 
 * PARAMSTORE\_KMS\_ARN=
+* AWS\_ACCOUNT\_ENV=dev|staging|testing|qa|prod
 * CLOUDWATCH\_LOGS\_ENABLED=yes
 * CLOUDWATCH\_LOGS\_PREFIX=mycompany
 * LOADBALANCER\_DOMAIN=mycompany.com
