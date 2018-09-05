@@ -70,8 +70,8 @@ ECS_DEPLOY_LOGIN=deploy ECS_DEPLOY_PASSWORD=password ./ecs-client login --url ht
 ```
 
 Deploy:
+```
 ./ecs-client deploy -f examples/services/multiple-services/multiple-services.json
-
 ```
 
 
