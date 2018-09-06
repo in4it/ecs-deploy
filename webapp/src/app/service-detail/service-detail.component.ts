@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Observable } from 'rxjs/Observable';
+import { Observable } from 'rxjs';
 
 import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 import { InspectChildComponent }  from './inspect.component';

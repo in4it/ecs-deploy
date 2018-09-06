@@ -1,7 +1,7 @@
-import 'rxjs/add/observable/of';
-import 'rxjs/add/operator/map';
-import 'rxjs/add/operator/catch';
-import { BehaviorSubject } from 'rxjs/BehaviorSubject';
+
+
+
+import { BehaviorSubject } from 'rxjs';
 import {HttpClient, HttpHeaders } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../environments/environment';

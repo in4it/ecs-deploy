@@ -1,10 +1,12 @@
+
+import {filter} from 'rxjs/operators';
 import { Component, OnInit } from '@angular/core';
 
 import { Router, ActivatedRoute } from '@angular/router';
 
 import { AuthService } from '../services/index';
 
-import 'rxjs/add/operator/filter';
+
 
 @Component({
   selector: 'app-saml',
@@ -18,8 +20,8 @@ export class LoginSAMLComponent implements OnInit {
    private router: Router) { }
 
   ngOnInit() {
-    this.route.queryParams
-      .filter(params => params.token)
+    this.route.queryParams.pipe(
+      filter(params => params.token))
       .subscribe(params => {
         if(params.token) {
           this.authenticationService.setToken(params.token)

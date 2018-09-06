@@ -1,6 +1,6 @@
 {   
   "/ecs-deploy/api": {
-      "target": "http://localhost:8080",
+      "target": "https://curb.copro.no",
       "secure": false
   }, 
   "/ecs-deploy/saml": {
@@ -8,7 +8,7 @@
       "secure": false
   },
   "/ecs-deploy/login": {
-      "target": "http://localhost:8080",
+      "target": "https://curb.copro.no",
       "secure": false
   } 
 }
