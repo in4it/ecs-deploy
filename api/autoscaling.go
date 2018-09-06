@@ -341,6 +341,10 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 			}
 		}
 	}
+	if len(containerInstances) <= (2 * len(totalFreeCpu)) { // small clusters, reduce memory/cpu needed with full container node
+		clusterMemoryNeeded -= instanceMemory
+		clusterCpuNeeded -= instanceCpu
+	}
 	for k, _ := range totalFreeCpu {
 		asAutoscalingControllerLogger.Debugf("%v: Have %d cpu available, need %d", k, totalFreeCpu[k], clusterCpuNeeded)
 		asAutoscalingControllerLogger.Debugf("%v: Have %d memory available, need %d", k, totalFreeMemory[k], clusterMemoryNeeded)
