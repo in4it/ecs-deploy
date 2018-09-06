@@ -119,17 +119,16 @@ openssl req -x509 -newkey rsa:2048 -keyout myservice.key -out myservice.cert -da
 
 * PARAMSTORE\_ASSUME\_ROLE=arn # arn to assume when querying the parameter store
 
-## License
-Copyright 2017 in4it BVBA
+# Autoscaling (down and up)
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+## Setup
 
-    http://www.apache.org/licenses/LICENSE-2.0
+* Create an SNS topic, add https subscriber with URL https://your-domain.com/ecs-deploy/webhook
+* Create a [CloudWatch Event for ECS tasks/services](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/cloudwatch_event_stream.html)
+* Create an [EC2 Auto Scaling Lifecycle hook](https://docs.aws.amazon.com/autoscaling/ec2/userguide/lifecycle-hooks.html), and a CloudWatch event to capture the Lifecycle hook
+* Let the SNS topic be the trigger for the CloudWatch events
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+## Usage
+
+* Autoscaling (up) will be triggered when the largest container (in respect to mem/cpu) cannot be scheduled on the cluster
+* Autoscaling (down) will be triggered when there is enough capacity available on the cluster to remove an instance (instance size + largest container + buffer)
