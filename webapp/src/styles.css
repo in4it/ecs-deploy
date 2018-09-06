@@ -1,3 +1,7 @@
+@import "~bootstrap/dist/css/bootstrap.css";
+@import "~font-awesome/css/font-awesome.css";
+@import "~awesome-bootstrap-checkbox/awesome-bootstrap-checkbox.css";
+
 body {
   padding-top: 3.5rem;
   font-family: 'Ubuntu', sans-serif;
@@ -42,7 +46,3 @@ h1 {
     margin: 30px auto;
   }
 }
-
-@import "~bootstrap/dist/css/bootstrap.css";
-@import "~font-awesome/css/font-awesome.css";
-@import "~awesome-bootstrap-checkbox/awesome-bootstrap-checkbox.css";

@@ -5,7 +5,7 @@ import { AuthService } from '../services/auth.service';
 import { environment } from '../../environments/environment';
 
 import { Injectable }             from '@angular/core';
-import { Observable }             from 'rxjs/Observable';
+import { Observable }             from 'rxjs';
 import { Router, Resolve, RouterStateSnapshot,
          ActivatedRouteSnapshot } from '@angular/router';
 
