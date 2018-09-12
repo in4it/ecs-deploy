@@ -132,3 +132,18 @@ openssl req -x509 -newkey rsa:2048 -keyout myservice.key -out myservice.cert -da
 
 * Autoscaling (up) will be triggered when the largest container (in respect to mem/cpu) cannot be scheduled on the cluster
 * Autoscaling (down) will be triggered when there is enough capacity available on the cluster to remove an instance (instance size + largest container + buffer)
+
+## Configuration
+
+The defaults are set for the most common use cases, but can be changed by setting environment variables:
+
+| Environment variable       | Default value | Description |
+| ---------------------      | ------------- | ----------- |
+| AUTOSCALING\_DOWN\_STRATEGY  | gracefully | Only gracefully supported now (uses interval and period before executing the scaling down operation) |
+| AUTOSCALING\_UP\_STRATEGY  | immediately | Scale up strategy  (immediatey, gracefully) |
+| AUTOSCALING\_DOWN\_COOLDOWN | 5 | Cooldown period after scaling down |
+| AUTOSCALING\_DOWN\_INTERVAL | 60 | Seconds between intervals to check resource usage before scaling, after a scaling down operation is detected |
+| AUTOSCALING\_DOWN\_PERIOD | 5 | Periods to check before scaling |
+| AUTOSCALING\_UP\_COOLDOWN | 5 | Cooldown period after scaling up |
+| AUTOSCALING\_UP\_INTERVAL | 60 | Seconds between intervals to check resource usage before scaling, after a scaling up operation is detected |
+| AUTOSCALING\_UP\_PERIOD | 5 | Periods to check before scaling |

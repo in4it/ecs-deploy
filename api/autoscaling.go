@@ -183,11 +183,15 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 				return err
 			}
 			if lastScalingOp == "no" {
-				asAutoscalingControllerLogger.Infof("Initiating scaling activity")
-				scalingOp = "up"
-				err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
-				if err != nil {
-					return err
+				if util.GetEnv("AUTOSCALING_UP_STRATEGY", "immediately") == "gracefully" {
+					pendingScalingOp = "up"
+				} else {
+					asAutoscalingControllerLogger.Infof("Initiating scaling activity")
+					scalingOp = "up"
+					err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -223,30 +227,54 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 		return err
 	}
 	if pendingScalingOp != "" {
-		asAutoscalingControllerLogger.Infof("Scaling operation: scaling down pending")
-		go c.launchProcessPendingScalingOp(clusterName, registeredInstanceCpu, registeredInstanceMemory)
+		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
+		go c.launchProcessPendingScalingOp(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory)
 	}
 	return nil
 }
-func (c *AutoscalingController) getAutoscalingPeriodInterval() (int64, int64) {
-	period, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_PERIOD", "5"), 10, 64)
-	if err != nil {
-		period = 5
-	}
-	interval, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_INTERVAL", "60"), 10, 64)
-	if err != nil {
-		interval = 60
+func (c *AutoscalingController) getAutoscalingPeriodInterval(scalingOp string) (int64, int64) {
+	var period, interval int64
+	var err error
+	if scalingOp == "down" {
+		period, err = strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_PERIOD", "5"), 10, 64)
+		if err != nil {
+			period = 5
+		}
+		interval, err = strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_INTERVAL", "60"), 10, 64)
+		if err != nil {
+			interval = 60
+		}
+	} else if scalingOp == "up" {
+		period, err = strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_PERIOD", "2"), 10, 64)
+		if err != nil {
+			period = 5
+		}
+		interval, err = strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_INTERVAL", "60"), 10, 64)
+		if err != nil {
+			interval = 60
+		}
+	} else {
+		return 5, 60
 	}
 	return period, interval
 }
-func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName string, registeredInstanceCpu, registeredInstanceMemory int64) error {
+func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64) error {
 	var err error
 	var dcNew *service.DynamoCluster
+	var sizeChange int64
 	s := service.NewService()
 
-	period, interval := c.getAutoscalingPeriodInterval()
+	if scalingOp == "up" {
+		sizeChange = 1
+	} else if scalingOp == "down" {
+		sizeChange = -1
+	} else {
+		return errors.New("Scalingop " + scalingOp + " not recognized")
+	}
 
-	var abort, deployRunning, hasFreeResourcesGlobal bool
+	period, interval := c.getAutoscalingPeriodInterval(scalingOp)
+
+	var abort, deployRunning, hasFreeResourcesGlobal, resourcesFit bool
 	var i int64
 	for i = 0; i < period && !abort; i++ {
 		time.Sleep(time.Duration(interval) * time.Second)
@@ -258,37 +286,46 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName string
 		if err != nil {
 			return err
 		}
-		hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, dcNew.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
-		if hasFreeResourcesGlobal {
-			deployRunning, err = s.IsDeployRunning()
-			if err != nil {
-				return err
-			}
-			if deployRunning {
+		// pending scaling down logic
+		if scalingOp == "down" {
+			hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, dcNew.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
+			if hasFreeResourcesGlobal {
+				deployRunning, err = s.IsDeployRunning()
+				if err != nil {
+					return err
+				}
+				if deployRunning {
+					abort = true
+				}
+			} else {
 				abort = true
 			}
 		} else {
-			abort = true
+			// pendign scaling up logic
+			resourcesFit = c.scaleUpDecision(clusterName, dcNew.ContainerInstances, cpuNeeded, memoryNeeded)
+			if resourcesFit {
+				abort = true
+			}
 		}
 	}
 
 	if !abort {
-		asAutoscalingControllerLogger.Infof("Scaling operation: scaling down now (-1)")
+		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s now (%d)", scalingOp, sizeChange)
 		autoscaling := ecs.AutoScaling{}
 		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 		if err != nil {
 			return err
 		}
-		err = autoscaling.ScaleClusterNodes(autoScalingGroupName, -1)
+		err = autoscaling.ScaleClusterNodes(autoScalingGroupName, sizeChange)
 		if err != nil {
 			return err
 		}
-		_, err = s.PutClusterInfo(*dcNew, clusterName, "down", "")
+		_, err = s.PutClusterInfo(*dcNew, clusterName, scalingOp, "")
 		if err != nil {
 			return err
 		}
 	} else {
-		asAutoscalingControllerLogger.Infof("Scaling operation: scaling down aborted. deploy running: %v, free resources: %v", deployRunning, hasFreeResourcesGlobal)
+		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s aborted. deploy running: %v, free resources (scaling down): %v, resources fit (scaling up): %v", scalingOp, deployRunning, hasFreeResourcesGlobal, resourcesFit)
 	}
 	return nil
 }

@@ -834,15 +834,17 @@ func (c *Controller) Resume() error {
 			asc := AutoscalingController{}
 			registeredInstanceCpu := f.RegisteredCpu
 			registeredInstanceMemory := f.RegisteredMemory
-			period, interval := asc.getAutoscalingPeriodInterval()
-			startTime := time.Now().Add(-1 * time.Duration(period) * time.Duration(interval) * time.Second)
-			_, pendingAction, err := s.GetScalingActivity(clusterName, startTime)
-			if err != nil {
-				return err
-			}
-			if pendingAction != "" && pendingAction != "no" {
-				controllerLogger.Infof("Launching ")
-				go asc.launchProcessPendingScalingOp(clusterName, registeredInstanceCpu, registeredInstanceMemory)
+			for _, scalingOp := range []string{"up", "down"} {
+				period, interval := asc.getAutoscalingPeriodInterval(scalingOp)
+				startTime := time.Now().Add(-1 * time.Duration(period) * time.Duration(interval) * time.Second)
+				_, pendingAction, err := s.GetScalingActivity(clusterName, startTime)
+				if err != nil {
+					return err
+				}
+				if pendingAction == scalingOp {
+					controllerLogger.Infof("Launching process for pending scaling operation: %s ", pendingAction)
+					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory)
+				}
 			}
 		}
 	}
