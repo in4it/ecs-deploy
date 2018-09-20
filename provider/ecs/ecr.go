@@ -26,7 +26,32 @@ func (e *ECR) CreateRepository() error {
 	res, err := svc.CreateRepository(input)
 	if err == nil && res.Repository.RepositoryUri != nil {
 		e.RepositoryURI = *res.Repository.RepositoryUri
-		return nil
+
+		lifecyclePolicyText := `{
+			"rules": [
+				{
+					"rulePriority": 10,
+					"description": "cleanup",
+					"selection": {
+						"tagStatus": "any",
+						"countType": "imageCountMoreThan",
+						"countNumber": 100
+					},
+					"action": {
+						"type": "expire"
+					}
+				}
+			]
+		}`
+
+		lifecycleInput := &ecr.PutLifecyclePolicyInput{
+			RepositoryName:      aws.String(e.RepositoryName),
+			LifecyclePolicyText: aws.String(lifecyclePolicyText),
+			RegistryId:          aws.String(*res.Repository.RegistryId),
+		}
+
+		_, err := svc.PutLifecyclePolicy(lifecycleInput)
+		return err
 	} else {
 		return err
 	}
