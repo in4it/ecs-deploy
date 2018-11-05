@@ -128,8 +128,7 @@
   revision = "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae"
 
 [[projects]]
-  branch = "master"
-  digest = "1:29cf8c86cb44ee8871467f9470e110814aeadcc71c828256f9b0bdfc0e6279ea"
+  digest = "1:748df8eda48a48d6d05ebb848a6cf966f846fa4e6179f8731385d04d7a287fc1"
   name = "github.com/gin-gonic/gin"
   packages = [
     ".",
@@ -138,7 +137,8 @@
     "render",
   ]
   pruneopts = ""
-  revision = "a712f77d7aaec7eb4766a663924aaa4e54d3fe70"
+  revision = "b869fe1415e4b9eb52f247441830d502aece2d4d"
+  version = "v1.3.0"
 
 [[projects]]
   digest = "1:a00483fe4106b86fb1187a92b5cf6915c85f294ed4c129ccbe7cb1f1a06abd46"
