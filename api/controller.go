@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -475,6 +476,14 @@ func (c *Controller) describeServices() ([]service.RunningService, error) {
 		}
 		rss = append(rss, newRss...)
 	}
+
+	sort.Slice(rss, func(i, j int) bool {
+		if strings.Compare(rss[i].ServiceName, rss[j].ServiceName) == 1 {
+			return false
+		}
+		return true
+	})
+
 	return rss, nil
 }
 func (c *Controller) describeService(serviceName string) (service.RunningService, error) {
