@@ -60,23 +60,25 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 	iam := ecs.IAM{}
 	iamRoleArn, err := iam.RoleExists("ecs-" + serviceName)
 	if err == nil && iamRoleArn == nil {
-		// role does not exist, create it
-		controllerLogger.Debugf("Role does not exist, creating: ecs-%v", serviceName)
-		iamRoleArn, err = iam.CreateRole("ecs-"+serviceName, iam.GetEcsTaskIAMTrust())
-		if err != nil {
-			return nil, err
-		}
-		// optionally add a policy
-		ps := ecs.Paramstore{}
-		if ps.IsEnabled() {
-			namespace := d.EnvNamespace
-			if namespace == "" {
-				namespace = serviceName
-			}
-			controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", namespace)
-			err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+namespace, ps.GetParamstoreIAMPolicy(namespace))
+		if util.GetEnv("AWS_RESOURCE_CREATION_ENABLED", "yes") == "yes" {
+			// role does not exist, create it
+			controllerLogger.Debugf("Role does not exist, creating: ecs-%v", serviceName)
+			iamRoleArn, err = iam.CreateRole("ecs-"+serviceName, iam.GetEcsTaskIAMTrust())
 			if err != nil {
 				return nil, err
+			}
+			// optionally add a policy
+			ps := ecs.Paramstore{}
+			if ps.IsEnabled() {
+				namespace := d.EnvNamespace
+				if namespace == "" {
+					namespace = serviceName
+				}
+				controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", namespace)
+				err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+namespace, ps.GetParamstoreIAMPolicy(namespace))
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	} else if err != nil {
@@ -97,9 +99,16 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 	serviceExists, err := e.ServiceExists(serviceName)
 	if err == nil && !serviceExists {
 		controllerLogger.Debugf("service (%v) not found, creating...", serviceName)
-		err = c.createService(serviceName, d, taskDefArn)
+		if util.GetEnv("AWS_RESOURCE_CREATION_ENABLED", "yes") == "yes" {
+			s.Listeners, err = c.createService(serviceName, d, taskDefArn)
+			if err != nil {
+				controllerLogger.Errorf("Could not create service %v", serviceName)
+				return nil, err
+			}
+		}
+		err = c.createServiceInDynamo(s, d)
 		if err != nil {
-			controllerLogger.Errorf("Could not create service %v", serviceName)
+			controllerLogger.Errorf("Could not create service %v in dynamodb", serviceName)
 			return nil, err
 		}
 	} else if err != nil {
@@ -292,7 +301,7 @@ func (c *Controller) redeploy(serviceName, time string) (*service.DeployResult, 
 }
 
 // service not found, create ALB target group + rule
-func (c *Controller) createService(serviceName string, d service.Deploy, taskDefArn *string) error {
+func (c *Controller) createService(serviceName string, d service.Deploy, taskDefArn *string) ([]string, error) {
 	iam := ecs.IAM{}
 	var targetGroupArn *string
 	var listeners []string
@@ -304,7 +313,7 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 		alb, err = ecs.NewALB(d.Cluster)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// create target group
@@ -313,20 +322,20 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 		controllerLogger.Debugf("Creating target group for service: %v", serviceName)
 		targetGroupArn, err = alb.CreateTargetGroup(serviceName, d)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// modify target group attributes
 		if d.DeregistrationDelay != -1 || d.Stickiness.Enabled {
 			err = alb.ModifyTargetGroupAttributes(*targetGroupArn, d)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 		// deploy rules for target group
 		listeners, err = c.createRulesForTarget(serviceName, d, targetGroupArn, alb)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -337,15 +346,15 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 		controllerLogger.Debugf("Creating ecs service role")
 		_, err = iam.CreateRole(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.GetEcsServiceIAMTrust())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		controllerLogger.Debugf("Attaching ecs service role")
 		err = iam.AttachRolePolicy(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"), iam.GetEcsServicePolicy())
 		if err != nil {
-			return err
+			return nil, err
 		}
 	} else if err != nil {
-		return errors.New("Error during checking whether ecs service role exists")
+		return nil, errors.New("Error during checking whether ecs service role exists")
 	}
 
 	// create ecs service
@@ -353,21 +362,21 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 	e := ecs.ECS{ServiceName: serviceName, TaskDefArn: taskDefArn, TargetGroupArn: targetGroupArn}
 	err = e.CreateService(d)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	return listeners, nil
+}
 
-	// create service in dynamodb
-	s := service.NewService()
-	s.ServiceName = serviceName
-	s.ClusterName = d.Cluster
-	s.Listeners = listeners
+func (c *Controller) createServiceInDynamo(s *service.Service, d service.Deploy) error {
+	var err error
+	e := ecs.ECS{ServiceName: s.ServiceName}
 
 	dsEl := &service.DynamoServicesElement{S: s.ServiceName, C: s.ClusterName, Listeners: s.Listeners}
 	dsEl.CpuReservation, dsEl.CpuLimit, dsEl.MemoryReservation, dsEl.MemoryLimit = e.GetContainerLimits(d)
 
 	err = s.CreateService(dsEl)
 	if err != nil {
-		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", serviceName, err)
+		controllerLogger.Errorf("Could not create/update service (%v) in db: %v", s.ServiceName, err)
 		return err
 	}
 	return nil
