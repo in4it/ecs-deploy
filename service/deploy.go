@@ -42,6 +42,7 @@ type DeployContainer struct {
 	CPU               int64                         `json:"cpu"`
 	CPUReservation    int64                         `json:"cpuReservation"`
 	DockerLabels      map[string]string             `json:"dockerLabels"`
+	HealthCheck       DeployContainerHealthCheck    `json:"healthCheck"`
 	Environment       []*DeployContainerEnvironment `json:"environment"`
 	MountPoints       []*DeployContainerMountPoint  `json:"mountPoints"`
 	Ulimits           []*DeployContainerUlimit      `json:"ulimits"`
@@ -59,6 +60,13 @@ type DeployContainerMountPoint struct {
 	ContainerPath string `json:"containerPath"`
 	SourceVolume  string `json:"sourceVolume"`
 	ReadOnly      bool   `json:"readonly"`
+}
+type DeployContainerHealthCheck struct {
+	Command     []*string `json:"command"`
+	Interval    int64     `json:"interval"`
+	Timeout     int64     `json:"timeout"`
+	Retries     int64     `json:"retries"`
+	StartPeriod int64     `json:"startPeriod"`
 }
 type DeployNetworkConfiguration struct {
 	AssignPublicIp string   `json:"assignPublicIp"`

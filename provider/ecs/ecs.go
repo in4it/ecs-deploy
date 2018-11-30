@@ -293,6 +293,25 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 			Image:        aws.String(imageUri),
 			DockerLabels: aws.StringMap(container.DockerLabels),
 		}
+
+		if len(container.HealthCheck.Command) > 0 {
+			healthCheck := &ecs.HealthCheck{
+				Command: container.HealthCheck.Command,
+			}
+			if container.HealthCheck.Interval > 0 {
+				healthCheck.SetInterval(container.HealthCheck.Interval)
+			}
+			if container.HealthCheck.Retries > 0 {
+				healthCheck.SetRetries(container.HealthCheck.Retries)
+			}
+			if container.HealthCheck.StartPeriod > 0 {
+				healthCheck.SetStartPeriod(container.HealthCheck.StartPeriod)
+			}
+			if container.HealthCheck.Timeout > 0 {
+				healthCheck.SetTimeout(container.HealthCheck.Timeout)
+			}
+			containerDefinition.SetHealthCheck(healthCheck)
+		}
 		// set containerPort if not empty
 		if container.ContainerPort > 0 {
 			containerDefinition.SetPortMappings([]*ecs.PortMapping{
