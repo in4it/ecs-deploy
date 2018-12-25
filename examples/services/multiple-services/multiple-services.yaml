@@ -1,0 +1,38 @@
+---
+services:
+- cluster: mycluster
+  serviceName: nginx
+  servicePort: 80
+  serviceProtocol: HTTP
+  desiredCount: 1
+  containers:
+  - containerName: nginx
+    containerImage: nginx
+    containerURI: index.docker.io/nginx:alpine
+    containerPort: 80
+    memoryReservation: 128
+    essential: true
+  healthCheck:
+    healthyThreshold: 3
+    unhealthyThreshold: 3
+    path: "/"
+    interval: 60
+    matcher: "200,301"
+- cluster: mycluster
+  serviceName: echoserver
+  servicePort: 8080
+  serviceProtocol: HTTP
+  desiredCount: 1
+  containers:
+  - containerName: echoserver
+    containerImage: echoserver
+    containerURI: gcr.io/google_containers/echoserver:1.4
+    containerPort: 8080
+    memoryReservation: 64
+    essential: true
+  healthCheck:
+    healthyThreshold: 3
+    unhealthyThreshold: 3
+    path: "/"
+    interval: 60
+    matcher: "200,301"

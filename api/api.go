@@ -263,7 +263,7 @@ func (a *API) healthHandler(c *gin.Context) {
 func (a *API) deployServiceHandler(c *gin.Context) {
 	var json service.Deploy
 	controller := Controller{}
-	controller.SetDeployDefaults(&json)
+	service.SetDeployDefaults(&json)
 	if err := c.ShouldBindJSON(&json); err == nil {
 		if err = a.deployServiceValidator(c.Param("service"), json); err == nil {
 			res, err := controller.Deploy(c.Param("service"), json)
@@ -299,7 +299,7 @@ func (a *API) deployServicesHandler(c *gin.Context) {
 	controller := Controller{}
 	if err = c.ShouldBindJSON(&json); err == nil {
 		for i, v := range json.Services {
-			controller.SetDeployDefaults(&json.Services[i])
+			service.SetDeployDefaults(&json.Services[i])
 			if err = a.deployServiceValidator(v.ServiceName, json.Services[i]); err == nil {
 				res, err = controller.Deploy(v.ServiceName, json.Services[i])
 				if err == nil {

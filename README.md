@@ -5,7 +5,7 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
 * Creates ECR repository
 * Creates necessary IAM roles
 * Creates ALB target and listener rules
-* Creates and updates ECS Services based on JSON input
+* Creates and updates ECS Services based on json/yaml input
 * SAML supported Web UI to redeploy/rollback versions, add/update/delete parameters, examine event/container logs, scale, and run manual tasks
 * Support to scale out and scale in ECS Container Instances
 
@@ -71,7 +71,7 @@ ECS_DEPLOY_LOGIN=deploy ECS_DEPLOY_PASSWORD=password ./ecs-client login --url ht
 
 Deploy:
 ```
-./ecs-client deploy -f examples/services/multiple-services/multiple-services.json
+./ecs-client deploy -f examples/services/multiple-services/multiple-services.yaml
 ```
 
 
@@ -89,11 +89,10 @@ Deploy:
 ### Service specific variables 
 These will be used when deploying services
 
-* AWS\_ACCOUNT\_ENV=staging 
+* AWS\_ACCOUNT\_ENV=dev|staging|testing|qa|prod
 * PARAMSTORE\_ENABLED=yes
 * PARAMSTORE\_PREFIX=mycompany 
 * PARAMSTORE\_KMS\_ARN=
-* AWS\_ACCOUNT\_ENV=dev|staging|testing|qa|prod
 * CLOUDWATCH\_LOGS\_ENABLED=yes
 * CLOUDWATCH\_LOGS\_PREFIX=mycompany
 * LOADBALANCER\_DOMAIN=mycompany.com

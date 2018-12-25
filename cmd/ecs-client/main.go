@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/in4it/ecs-deploy/api"
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/spf13/pflag"
 	"golang.org/x/crypto/ssh/terminal"
+	"gopkg.in/yaml.v2"
 )
 
 type Token struct {
@@ -154,7 +154,7 @@ func runtask(session Session, deployFlags *DeployFlags) (bool, error) {
 }
 
 // deploy with timeouts
-// if --service-name is set, look for ecs.json and ecs.*.json (if filename is set, use it as directory to look into)
+// if --service-name is set, look for ecs.[json|yaml] and ecs.*.[json|yaml] (if filename is set, use it as directory to look into)
 // if --service-name is set, with filename, give error
 // if filename is set but not service name, expect serviceName in json (normal behavior)
 
@@ -300,7 +300,8 @@ func doAPICall(session Session, url string, deployData string) ([]byte, error) {
 func getDeployData(session Session, deployFlags *DeployFlags) (string, error) {
 	var deployData string
 	var readDir string
-	controller := api.Controller{}
+	var deployServices service.DeployServices
+	var err error
 	if deployFlags.ServiceName != "" {
 		// servicename is set
 		if deployFlags.Filename != "" {
@@ -311,64 +312,133 @@ func getDeployData(session Session, deployFlags *DeployFlags) (string, error) {
 		} else {
 			readDir = "./"
 		}
-		files, err := ioutil.ReadDir(readDir)
+		// parse JSON/YAML files
+		deployServices, err = parseFiles(readDir, deployFlags.ServiceName)
 		if err != nil {
 			return deployData, err
 		}
-		fs := []string{}
-		for _, f := range files {
-			if f.Name() == "ecs.json" {
-				fs = append(fs, f.Name())
-			} else if strings.HasPrefix(f.Name(), "ecs.") && strings.HasSuffix(f.Name(), ".json") {
-				fs = append(fs, f.Name())
-			}
+		if len(deployServices.Services) == 0 {
+			return deployData, fmt.Errorf("No json/yaml files found to deploy\n")
 		}
-		var deployServices service.DeployServices
-		for _, f := range fs {
-			var deploy service.Deploy
-			controller.SetDeployDefaults(&deploy)
-
-			content, err := ioutil.ReadFile(filepath.Join(readDir, f))
-			if err != nil {
-				return deployData, fmt.Errorf("Could not read file: %v\n", filepath.Join(readDir, f))
-			}
-			err = json.Unmarshal(content, &deploy)
-			if err != nil {
-				return deployData, fmt.Errorf("file %v in wrong format: %v", f, err.Error())
-			}
-			if f == "ecs.json" {
-				deploy.ServiceName = deployFlags.ServiceName
-			} else {
-				start := 4
-				end := len(f) - 5
-				deploy.ServiceName = deployFlags.ServiceName + "-" + f[start:end]
-			}
-			deployServices.Services = append(deployServices.Services, deploy)
-		}
-		b, err := json.Marshal(deployServices)
-		if err != nil {
-			return deployData, err
-		}
-		deployData = string(b)
 	} else if deployFlags.ServiceName == "" && deployFlags.Filename != "" {
 		// serviceName is not set
-		content, err := ioutil.ReadFile(deployFlags.Filename)
 		if ok, _ := isDir(deployFlags.Filename); ok {
 			return deployData, fmt.Errorf("%v is a directory. Specify a file or use the --service-name argument\n", deployFlags.Filename)
 		}
-		if err != nil {
-			return deployData, fmt.Errorf("Could not read file: %v", deployFlags.Filename)
+		fType := ""
+		if filepath.Ext(deployFlags.Filename) == ".json" {
+			fType = "json"
+		} else if filepath.Ext(deployFlags.Filename) == ".yaml" || filepath.Ext(deployFlags.Filename) == ".yml" {
+			fType = "yaml"
 		}
-		deployData = string(content)
+		deployService, err := parseFile(deployFlags.Filename, fType, "")
+		if err != nil {
+			return deployData, nil
+		}
+		deployServices.Services = append(deployServices.Services, deployService...)
 	} else {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		pflag.PrintDefaults()
 		return deployData, errors.New("InvalidFlags")
 	}
+	// convert to JSON
+	b, err := json.Marshal(deployServices)
+	if err != nil {
+		return deployData, err
+	}
+	deployData = string(b)
 	if deployData == `{"deploy":null}` {
 		return deployData, errors.New("No deployment data found")
 	}
 	return deployData, nil
+}
+func parseFiles(readDir, serviceName string) (service.DeployServices, error) {
+	var deployServices service.DeployServices
+	fs := make(map[string]string)
+	files, err := ioutil.ReadDir(readDir)
+	if err != nil {
+		return deployServices, err
+	}
+	for _, f := range files {
+		if f.Name() == "ecs.json" {
+			fs[f.Name()] = "json"
+		} else if strings.HasPrefix(f.Name(), "ecs.") && strings.HasSuffix(f.Name(), ".json") {
+			fs[f.Name()] = "json"
+		} else if f.Name() == "ecs.yaml" || f.Name() == "ecs.yml" {
+			fs[f.Name()] = "yaml"
+		} else if strings.HasPrefix(f.Name(), "ecs.") && (strings.HasSuffix(f.Name(), ".yaml") || strings.HasSuffix(f.Name(), ".yml")) {
+			fs[f.Name()] = "yaml"
+		}
+	}
+	for f, fType := range fs {
+		deploy, err := parseFile(filepath.Join(readDir, f), fType, serviceName)
+		if err != nil {
+			return deployServices, nil
+		}
+		deployServices.Services = append(deployServices.Services, deploy...)
+	}
+	return deployServices, nil
+}
+func parseFile(filename, fType, serviceName string) ([]service.Deploy, error) {
+	var deploy service.DeployServices
+	var singleDeploy service.Deploy
+	fileBase := filepath.Base(filename)
+
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return deploy.Services, fmt.Errorf("Could not read file: %v\n", filename)
+	}
+	if fType == "json" {
+		err = json.Unmarshal(content, &deploy)
+		if err != nil {
+			return deploy.Services, fmt.Errorf("json file %v in wrong format: %v", filename, err.Error())
+		}
+		if len(deploy.Services) == 0 {
+			err = json.Unmarshal(content, &singleDeploy)
+			if err != nil {
+				return deploy.Services, fmt.Errorf("json file %v in wrong format: %v", filename, err.Error())
+			}
+			deploy.Services = append(deploy.Services, singleDeploy)
+		}
+	} else if fType == "yaml" {
+		err = yaml.Unmarshal(content, &deploy)
+		if err != nil {
+			return deploy.Services, fmt.Errorf("yaml file %v in wrong format: %v", filename, err.Error())
+		}
+		if len(deploy.Services) == 0 {
+			err = yaml.Unmarshal(content, &singleDeploy)
+			if err != nil {
+				return deploy.Services, fmt.Errorf("yaml file %v in wrong format: %v", filename, err.Error())
+			}
+			deploy.Services = append(deploy.Services, singleDeploy)
+		}
+	} else {
+		return deploy.Services, fmt.Errorf("Wrong file extension (needs to be json, yaml, or yml)\n")
+	}
+	// check whether we have services
+	if len(deploy.Services) == 0 {
+		return deploy.Services, fmt.Errorf("Unable to extract any services from the provided file(s)\n")
+	}
+	// set defaults and serviceName
+	for k, _ := range deploy.Services {
+		service.SetDeployDefaults(&deploy.Services[k])
+		if serviceName != "" {
+			if fileBase == "ecs.json" || fileBase == "ecs.yaml" || fileBase == "ecs.yml" {
+				deploy.Services[k].ServiceName = serviceName
+			} else {
+				start := 4
+				filenameWithoutExt := strings.Replace(fileBase, ".yml", "", -1)
+				filenameWithoutExt = strings.Replace(filenameWithoutExt, ".json", "", -1)
+				filenameWithoutExt = strings.Replace(filenameWithoutExt, ".yaml", "", -1)
+				deploy.Services[k].ServiceName = serviceName + "-" + filenameWithoutExt[start:]
+			}
+		}
+		// check whether we not have an empty service
+		if deploy.Services[k].Cluster == "" {
+			return deploy.Services, fmt.Errorf("Service %v has no ClusterName defined\n", deploy.Services[k].ServiceName)
+		}
+	}
+	return deploy.Services, nil
 }
 
 func createRepository(session Session, repository string) (string, error) {
