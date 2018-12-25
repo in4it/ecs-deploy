@@ -665,11 +665,6 @@ func (c *Controller) scaleService(serviceName string, desiredCount int64) error 
 	return nil
 }
 
-func (c *Controller) SetDeployDefaults(d *service.Deploy) {
-	d.DeregistrationDelay = -1
-	d.Stickiness.Duration = -1
-}
-
 func (c *Controller) runTask(serviceName string, runTask service.RunTask) (string, error) {
 	s := service.NewService()
 	s.ServiceName = serviceName
