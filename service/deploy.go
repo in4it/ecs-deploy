@@ -6,11 +6,11 @@ import (
 
 // deploy binding from JSON
 type DeployServices struct {
-	Services []Deploy `json:"services" binding:"required"`
+	Services []Deploy `json:"services" yaml:"services" binding:"required"`
 }
 type Deploy struct {
 	Cluster               string                      `json:"cluster" yaml:"cluster" binding:"required"`
-	LoadBalancer          string                      `json:"loadBalancer" yaml:"loadBalancer`
+	LoadBalancer          string                      `json:"loadBalancer" yaml:"loadBalancer"`
 	ServiceName           string                      `json:"serviceName" yaml:"serviceName"`
 	ServicePort           int64                       `json:"servicePort" yaml:"servicePort"`
 	ServiceProtocol       string                      `json:"serviceProtocol" yaml:"serviceProtocol" binding:"required"`
@@ -19,7 +19,7 @@ type Deploy struct {
 	MaximumPercent        int64                       `json:"maximumPercent" yaml:"maximumPercent"`
 	Containers            []*DeployContainer          `json:"containers" yaml:"containers" binding:"required,dive"`
 	HealthCheck           DeployHealthCheck           `json:"healthCheck" yaml:"healthCheck"`
-	RuleConditions        []*DeployRuleConditions     `json:"ruleConditions yaml:"ruleConditions`
+	RuleConditions        []*DeployRuleConditions     `json:"ruleConditions" yaml:"ruleConditions"`
 	NetworkMode           string                      `json:"networkMode" yaml:"networkMode"`
 	NetworkConfiguration  DeployNetworkConfiguration  `json:"networkConfiguration" yaml:"networkConfiguration"`
 	PlacementConstraints  []DeployPlacementConstraint `json:"placementConstraints" yaml:"placementConstraints"`
@@ -34,7 +34,7 @@ type DeployContainer struct {
 	ContainerTag      string                        `json:"containerTag" yaml:"containerTag" binding:"required"`
 	ContainerPort     int64                         `json:"containerPort" yaml:"containerPort"`
 	ContainerCommand  []*string                     `json:"containerCommand" yaml:"containerCommand"`
-	ContainerImage    string                        `json:"containerImage yaml:"containerImage`
+	ContainerImage    string                        `json:"containerImage" yaml:"containerImage"`
 	ContainerURI      string                        `json:"containerURI" yaml:"containerURI"`
 	Essential         bool                          `json:"essential" yaml:"essential"`
 	Memory            int64                         `json:"memory" yaml:"memory"`
