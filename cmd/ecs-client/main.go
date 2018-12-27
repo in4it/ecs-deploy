@@ -15,10 +15,13 @@ import (
 	"time"
 
 	"github.com/in4it/ecs-deploy/service"
+	"github.com/juju/loggo"
 	"github.com/spf13/pflag"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/yaml.v2"
 )
+
+var clientLogger = loggo.GetLogger("client")
 
 type Token struct {
 	Token  string `json:"token" binding:"required"`
@@ -57,6 +60,14 @@ func addDeployFlags(f *DeployFlags, fs *pflag.FlagSet) {
 
 func main() {
 	var err error
+
+	// set logging
+	if os.Getenv("DEBUG") == "true" {
+		loggo.ConfigureLoggers(`<root>=DEBUG`)
+	} else {
+		loggo.ConfigureLoggers(`<root>=INFO`)
+	}
+
 	session, err := readSession()
 	if err != nil {
 		fmt.Printf("%v", err.Error())
@@ -270,6 +281,7 @@ func doDeployAPICall(session Session, deployData string) ([]byte, error) {
 }
 func doAPICall(session Session, url string, deployData string) ([]byte, error) {
 	var body []byte
+	clientLogger.Debugf("API Call data: %v", deployData)
 	req, err := http.NewRequest("POST", session.Url+"/api/v1/"+url, bytes.NewBuffer([]byte(deployData)))
 	if err != nil {
 		return body, err
