@@ -1,0 +1,26 @@
+---
+services:
+- cluster: mycluster
+  serviceName: testservice
+  servicePort: 80
+  serviceProtocol: HTTP
+  desiredCount: 1
+  deregistrationDelay: 30
+  containers:
+  - containerName: testservice
+    containerImage: nginx
+    containerURI: index.docker.io/nginx:alpine
+    containerPort: 80
+    memoryReservation: 128
+    essential: true
+  healthCheck:
+    healthyThreshold: 3
+    unhealthyThreshold: 3
+    path: "/"
+    interval: 60
+    matcher: "200,301"
+  ruleConditions:
+  - hostname: testservice
+    listeners:
+    - http
+    - https

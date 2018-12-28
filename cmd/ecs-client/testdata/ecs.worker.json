@@ -1,0 +1,18 @@
+{
+  "services": [
+    {
+      "cluster": "mycluster",
+      "serviceProtocol": "none",
+      "desiredCount": 1,
+      "containers": [
+        {
+          "containerName": "testservice-worker",
+          "containerImage": "echoserver",
+          "containerURI": "gcr.io/google_containers/echoserver:1.4",
+          "memoryReservation": 64,
+          "essential": true
+        }
+      ]
+    }
+  ]
+}

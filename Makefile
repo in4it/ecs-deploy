@@ -8,6 +8,8 @@ build: build-server build-client
 
 build-static: build-server-static build-client-static
 
+test: test-main test-client
+
 deps:
 	dep ensure
 
@@ -23,8 +25,11 @@ build-server-static:
 build-client-static:
 	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -a -installsuffix cgo ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
 
-test:
+test-main:
 	cd test && go test
+
+test-client:
+	cd cmd/ecs-client && go test
 
 integrationTest:
 	cd test && export $$(cat ../.env | grep -v '^\#' | xargs) && go test -timeout 1h -run Integration
