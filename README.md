@@ -53,7 +53,8 @@ You'll need to setup the security groups and VPC/subnets first. The ALB security
 
 If you no longer need the cluster, you can remove it by specifying --delete-cluster instead of --bootstrap
 
-Alternatively you can use terraform to deploy the ecs cluster. See examples/ecs-deploy.tf for a terraform example that spins up an ecs cluster. You will need to use the IAM policy from examples/iam-policy.json to give ecs-deploy the necessary permissions.
+### Bootstrap with terraform
+Alternatively you can use terraform to deploy the ecs cluster. See [terraform/README.md](https://github.com/in4it/ecs-deploy/blob/master/terraform/README.md) for a terraform module that spins up an ecs cluster.
 
 ### Deploy to ECS Cluster
 

@@ -1,0 +1,41 @@
+[
+  {
+    "name": "ecs-deploy",
+    "image": "in4it/ecs-deploy:${ECS_DEPLOY_VERSION}",
+    "cpu": 128,
+    "memoryReservation": 64,
+    "essential": true,
+    "mountPoints": [],
+    "portMappings": [
+      {
+        "containerPort": 8080
+      }
+    ],
+    "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+              "awslogs-group": "ecs-deploy",
+              "awslogs-region": "${AWS_REGION}",
+              "awslogs-stream-prefix": "ecs-deploy"
+          }
+    },
+    "environment": [
+      {
+        "name": "DEBUG",
+        "value": "${DEBUG}"
+      },
+      {
+        "name": "AWS_REGION",
+        "value": "${AWS_REGION}"
+      },
+      {
+        "name": "AWS_ENV_PATH",
+        "value": "/${CLUSTER_NAME}-${ENVIRONMENT}/ecs-deploy/"
+      },
+      { 
+        "name": "PARAMSTORE_ENABLED",
+        "value": "${PARAMSTORE_ENABLED}"
+      }
+    ]
+  }
+]
