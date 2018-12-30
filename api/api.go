@@ -299,7 +299,6 @@ func (a *API) deployServicesHandler(c *gin.Context) {
 	controller := Controller{}
 	if err = c.ShouldBindJSON(&json); err == nil {
 		for i, v := range json.Services {
-			service.SetDeployDefaults(&json.Services[i])
 			if err = a.deployServiceValidator(v.ServiceName, json.Services[i]); err == nil {
 				res, err = controller.Deploy(v.ServiceName, json.Services[i])
 				if err == nil {
