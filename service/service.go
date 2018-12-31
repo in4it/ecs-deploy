@@ -11,6 +11,7 @@ import (
 
 	"errors"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -387,9 +388,22 @@ func (s *Service) GetServiceVersionsByTags(serviceName, imageName string, tags m
 	err := s.table.Get("ServiceName", serviceName).Range("Time", dynamo.LessOrEqual, time.Now()).Order(dynamo.Descending).Limit(int64(math.Max(float64(100), float64(len(tags))))).All(&dds)
 	for _, dd := range dds {
 		for _, container := range dd.DeployData.Containers {
+			// determine containerTag
+			containerTag := ""
+			if container.ContainerURI != "" {
+				split := strings.Split(container.ContainerURI, ":")
+				if len(split) == 2 {
+					containerTag = split[1]
+				} else {
+					containerTag = "latest"
+				}
+			} else {
+				containerTag = container.ContainerTag
+			}
+			// Populate lastdeploy with matching images
 			if container.ContainerImage == imageName || (container.ContainerImage == "" && dd.ServiceName == imageName) {
 				for tag, imageId := range tags {
-					if tag == container.ContainerTag {
+					if tag == containerTag {
 						if _, ok := matched[tag]; !ok {
 							svs = append(svs, ServiceVersion{ImageName: imageName, Tag: tag, ImageId: imageId, LastDeploy: dd.Time})
 							matched[tag] = true
