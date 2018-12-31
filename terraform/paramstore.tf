@@ -25,6 +25,13 @@ resource "aws_ssm_parameter" "ecs-deploy-kms-id" {
   value = "${aws_kms_key.ssm.arn}"
 }
 
+resource "aws_ssm_parameter" "ecs-paramstore-assume-role" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/PARAMSTORE_ASSUME_ROLE"
+  type  = "String"
+  value = "${var.paramstore_assume_role}"
+  count = "${var.paramstore_assume_role == "" ? 0 : 1}"
+}
+
 # dynamodb config
 resource "aws_ssm_parameter" "ecs-deploy-dynamodb" {
   name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/DYNAMODB_TABLE"

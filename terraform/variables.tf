@@ -115,3 +115,8 @@ variable "fixed_response_body" {
   description = "fixed response body"
   default = "No service configured at this address"
 }
+
+variable "paramstore_assume_role" {
+  description = "assume role when using paramstore"
+  default = ""
+}
