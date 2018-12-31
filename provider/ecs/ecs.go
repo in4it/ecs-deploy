@@ -17,6 +17,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -90,6 +91,24 @@ type EcsVersionInfo struct {
 	AgentHash     string `json:"agentHash"`
 	AgentVersion  string `json:"agentVersion"`
 	DockerVersion string `json:"dockerVersion"`
+}
+
+// task metadata
+type EcsTaskMetadata struct {
+	Tasks []EcsTaskMetadataItem `json:"Tasks"`
+}
+type EcsTaskMetadataItem struct {
+	Arn           string                         `json:"Arn"`
+	DesiredStatus string                         `json:"DesiredStatus"`
+	KnownStatus   string                         `json:"KnownStatus"`
+	Family        string                         `json:"Family"`
+	Version       string                         `json:"Version"`
+	Containers    []EcsTaskMetadataItemContainer `json:"Containers"`
+}
+type EcsTaskMetadataItemContainer struct {
+	DockerId   string `json:"DockerId"`
+	DockerName string `json:"DockerName"`
+	Name       string `json:"Name"`
 }
 
 // create cluster
@@ -808,6 +827,9 @@ func (e *ECS) DescribeService(clusterName string, serviceName string, showEvents
 	}
 }
 func (e *ECS) DescribeServices(clusterName string, serviceNames []*string, showEvents bool, showTasks bool, showStoppedTasks bool) ([]service.RunningService, error) {
+	return e.DescribeServicesWithOptions(clusterName, serviceNames, showEvents, showTasks, showStoppedTasks, map[string]string{})
+}
+func (e *ECS) DescribeServicesWithOptions(clusterName string, serviceNames []*string, showEvents bool, showTasks bool, showStoppedTasks bool, options map[string]string) ([]service.RunningService, error) {
 	var rss []service.RunningService
 	svc := ecs.New(session.New())
 
@@ -878,6 +900,16 @@ func (e *ECS) DescribeServices(clusterName string, serviceNames []*string, showE
 				rs.Tasks = runningTasks
 			}
 			rss = append(rss, rs)
+		}
+		// check whether to sleep between calls
+		for k, v := range options {
+			if k == "sleep" {
+				seconds, err := strconv.Atoi(v)
+				if err != nil {
+					return rss, fmt.Errorf("Couldn't convert sleep value to int (in options)")
+				}
+				time.Sleep(time.Duration(seconds) * time.Second)
+			}
 		}
 	}
 	return rss, nil

@@ -92,6 +92,14 @@ type DynamoClusterContainerInstance struct {
 	Status              string
 }
 
+// dynamo pull struct
+type DynamoAutoscalingPull struct {
+	Identifier    string    `dynamo:"ServiceName,hash"`
+	Time          string    `dynamo:"Time,range"`
+	Lock          string    `dynamo:"L"`
+	LockTimestamp time.Time `dynamo:"LT"`
+}
+
 func NewService() *Service {
 	s := Service{}
 	s.db = dynamo.New(session.New(), &aws.Config{})
@@ -641,4 +649,43 @@ func (s *Service) IsDeployRunning() (bool, error) {
 		}
 	}
 	return deployRunning, nil
+}
+
+func (s *Service) AutoscalingPullInit() error {
+	p := &DynamoAutoscalingPull{Identifier: "__AUTOSCALINGPULL", Time: "0", Lock: "initial"}
+	err := s.table.Put(p).If("attribute_not_exists(L)").Run()
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeConditionalCheckFailedException:
+				return nil
+			default:
+				serviceLogger.Errorf("Error during put of first record: %v", aerr.Error())
+				return err
+			}
+		} else {
+			serviceLogger.Errorf("Error during put of first record: %v", err.Error())
+			return err
+		}
+	}
+	serviceLogger.Infof("initialized autoscalingPull in backend")
+	return nil
+}
+func (s *Service) AutoscalingPullAcquireLock(localId string) (bool, error) {
+	p := &DynamoAutoscalingPull{Identifier: "__AUTOSCALINGPULL", Time: "0", Lock: localId, LockTimestamp: time.Now()}
+	err := s.table.Put(p).If("$ < ?", "LT", time.Now().Add(-1*time.Minute)).Run()
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeConditionalCheckFailedException:
+				return false, nil
+			default:
+				return false, err
+			}
+		} else {
+			return false, err
+		}
+	}
+	return true, nil
 }

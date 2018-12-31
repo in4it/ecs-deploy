@@ -65,3 +65,11 @@ resource "aws_ssm_parameter" "ecs-deploy-loadbalancer-domain" {
   type  = "String"
   value = "${var.cluster_domain}"
 }
+
+# Autoscaling strategies
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-strategies" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_STRATEGIES"
+  type  = "String"
+  value = "${var.autoscaling_strategies}"
+  count = "${var.autoscaling_strategies == "" ? 0 : 1}"
+}

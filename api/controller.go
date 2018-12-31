@@ -861,6 +861,15 @@ func (c *Controller) Resume() error {
 			}
 		}
 	}
+	// Start autoscaling polling if enabled
+	autoscalingStrategies := strings.Split(util.GetEnv("AUTOSCALING_STRATEGIES", ""), ",")
+	for _, v := range autoscalingStrategies {
+		if strings.ToLower(v) == "polling" {
+			asc := AutoscalingController{}
+			controllerLogger.Debugf("Starting AutoscalingPollingStrategy in goroutine")
+			go asc.startAutoscalingPollingStrategy()
+		}
+	}
 	controllerLogger.Debugf("Finished controller resume. Checked %d services", len(dds))
 	return err
 }

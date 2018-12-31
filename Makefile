@@ -31,6 +31,9 @@ test-main:
 test-client:
 	cd cmd/ecs-client && go test
 
+test-provider:
+	cd provider/ecs && go test
+
 integrationTest:
 	cd test && export $$(cat ../.env | grep -v '^\#' | xargs) && go test -timeout 1h -run Integration
 	

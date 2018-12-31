@@ -139,6 +139,7 @@ The defaults are set for the most common use cases, but can be changed by settin
 
 | Environment variable       | Default value | Description |
 | ---------------------      | ------------- | ----------- |
+| AUTOSCALING\_STRATEGIES  | LargestContainerUp,LargestContainerDown | List of autoscaling strategies to apply. See below for different types |
 | AUTOSCALING\_DOWN\_STRATEGY  | gracefully | Only gracefully supported now (uses interval and period before executing the scaling down operation) |
 | AUTOSCALING\_UP\_STRATEGY  | immediately | Scale up strategy  (immediatey, gracefully) |
 | AUTOSCALING\_DOWN\_COOLDOWN | 5 | Cooldown period after scaling down |
@@ -148,3 +149,11 @@ The defaults are set for the most common use cases, but can be changed by settin
 | AUTOSCALING\_UP\_INTERVAL | 60 | Seconds between intervals to check resource usage before scaling, after a scaling up operation is detected |
 | AUTOSCALING\_UP\_PERIOD | 5 | Periods to check before scaling |
 | AWS\_RESOURCE\_CREATION\_ENABLED | yes | Let ecs-deploy create AWS IAM resources for you |
+
+### Autoscaling Strategies
+
+| Strategy       | Description |
+| ---------------| ----------- |
+| LargestContainerUp | Scale when the largest container (+buffer) in the cluster cannot be scheduled anymore on a node |
+| LargestContainerDown | Scale down when there is enough capacity to schedule the largest container (buffer) after a node is removed |
+| Polling | Poll all services every minute to check if a task can't be scheduled due to resource constraints (10 services per api call, only 1 call per second) |

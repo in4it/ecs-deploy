@@ -6,8 +6,11 @@ import (
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 
+	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"math"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -166,11 +169,24 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	if err != nil {
 		return err
 	}
+	// Check whether Strategy is enabled
+	asStrategies := strings.Split(util.GetEnv("AUTOSCALING_STRATEGIES", "LargestContainerUp,LargestContainerDown"), ",")
+	asStrategyLargestContainerUp := false
+	asStrategyLargestContainerDown := false
+	for _, v := range asStrategies {
+		if strings.ToLower(v) == "largestcontainerup" {
+			asStrategyLargestContainerUp = true
+		}
+		if strings.ToLower(v) == "largestcontainerdown" {
+			asStrategyLargestContainerDown = true
+		}
+	}
+
 	// make scaling (up) decision
 	var resourcesFitGlobal bool
 	var scalingOp = "no"
 	var pendingScalingOp string
-	if desiredCapacity < maxSize {
+	if asStrategyLargestContainerUp && desiredCapacity < maxSize {
 		resourcesFitGlobal = c.scaleUpDecision(clusterName, dc.ContainerInstances, cpuNeeded, memoryNeeded)
 		if !resourcesFitGlobal {
 			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
@@ -197,7 +213,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 		}
 	}
 	// make scaling (down) decision
-	if desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
+	if asStrategyLargestContainerDown && desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
 		hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, dc.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 		if hasFreeResourcesGlobal {
 			// check cooldown period
@@ -437,4 +453,121 @@ func (c *AutoscalingController) processLifecycleMessage(message ecs.SNSPayloadLi
 	// monitor drained node
 	go e.LaunchWaitForDrainedNode(clusterName, containerInstanceArn, message.Detail.EC2InstanceId, message.Detail.AutoScalingGroupName, message.Detail.LifecycleHookName, message.Detail.LifecycleActionToken)
 	return nil
+}
+
+// start autoscaling polling
+func (c *AutoscalingController) startAutoscalingPollingStrategy() {
+	e := ecs.ECS{}
+	s := service.NewService()
+	showEvents := true
+	showTasks := false
+	showStoppedTasks := false
+	lastChecked := time.Now().Add(-1 * time.Minute)
+	servicesFound := make(map[string]int)
+	// init
+	err := s.AutoscalingPullInit()
+	if err != nil {
+		asAutoscalingControllerLogger.Errorf("couldn't initialize autoscalingpull in backend: %v", err)
+	}
+	localId, err := c.getLocalId()
+	if err != nil {
+		asAutoscalingControllerLogger.Errorf("Error while setting getting localId: %v", err)
+	}
+	asAutoscalingControllerLogger.Infof("ecs-deploy local ID: %v", localId)
+	for {
+		// only 1 process should do the checking, lock row in dynamodb
+		lock, err := s.AutoscalingPullAcquireLock(localId)
+		if err != nil {
+			asAutoscalingControllerLogger.Errorf("Error while setting lock for pullautoscaling: %v", err)
+		}
+		if lock {
+			services := make(map[string][]*string)
+			// get services
+			var dss service.DynamoServices
+			err := s.GetServices(&dss)
+			if err != nil {
+				asAutoscalingControllerLogger.Errorf("couldn't get services from backend: %v", err)
+			}
+			// describe services
+			for _, ds := range dss.Services {
+				services[ds.C] = append(services[ds.C], &ds.S)
+			}
+			for clusterName, serviceList := range services {
+				rss, err := e.DescribeServicesWithOptions(clusterName, serviceList, showEvents, showTasks, showStoppedTasks, map[string]string{"sleep": "1"})
+				if err != nil {
+					asAutoscalingControllerLogger.Errorf("Error occured during describe services: %v", err)
+				}
+				for _, rs := range rss {
+					if rs.DesiredCount > rs.RunningCount {
+						scaled := false
+						if servicesFound[clusterName+":"+rs.ServiceName] < 6 {
+							servicesFound[clusterName+":"+rs.ServiceName] += 1
+						}
+						asAutoscalingControllerLogger.Debugf("Checking service %v for unschedulable tasks where desired count > running count (count: %d)", rs.ServiceName, servicesFound[clusterName+":"+rs.ServiceName])
+						for _, event := range rs.Events {
+							if event.CreatedAt.After(lastChecked) {
+								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message)
+							}
+						}
+						if len(rs.Events) > 0 && servicesFound[clusterName+":"+rs.ServiceName] == 5 {
+							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message)
+						}
+						if scaled {
+							servicesFound[clusterName+":"+rs.ServiceName] = 0
+						}
+					}
+				}
+			}
+			lastChecked = time.Now()
+		}
+		time.Sleep(60 * time.Second)
+	}
+}
+func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, message string) bool {
+	if strings.Contains(message, "was unable to place a task because no container instance met all of its requirements") && strings.Contains(message, "has insufficient") {
+		autoscaling := ecs.AutoScaling{}
+		asAutoscalingControllerLogger.Infof("Scaling operation: scaling up now")
+		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
+		if err != nil {
+			asAutoscalingControllerLogger.Errorf("Error: %v", err)
+		} else {
+			err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
+			if err != nil {
+				asAutoscalingControllerLogger.Errorf("Error: %v", err)
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func (c *AutoscalingController) getLocalId() (string, error) {
+	ret := "ecs-deploy-" + util.RandStringBytesMaskImprSrc(8)
+	var tasks ecs.EcsTaskMetadata
+	url := "http://localhost:51678/v1/tasks"
+	timeout := time.Duration(10 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	resp, err := client.Get(url)
+	if err != nil {
+		return ret, err
+	}
+	defer resp.Body.Close()
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return ret, err
+	}
+	err = json.Unmarshal(contents, &tasks)
+	if err != nil {
+		return ret, err
+	}
+	if len(tasks.Tasks) == 0 {
+		return ret, errors.New("tasks struct retrieved from metaserver is empty")
+	}
+	split := strings.Split(tasks.Tasks[0].Arn, "task/")
+	if len(split) != 2 {
+		return ret, err
+	}
+	return split[1], nil
 }

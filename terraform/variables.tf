@@ -120,3 +120,8 @@ variable "paramstore_assume_role" {
   description = "assume role when using paramstore"
   default = ""
 }
+
+variable "autoscaling_strategies" {
+  description = "enable/disable autoscaling strategies"
+  default = ""
+}
