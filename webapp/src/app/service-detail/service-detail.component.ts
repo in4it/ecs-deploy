@@ -432,10 +432,15 @@ export class ServiceDetailComponent implements OnInit {
     this.sds.getServiceLog(params).subscribe(data => {
       this.loadingLogs = false
       if("error" in data) {
-        if(data["error"].startsWith("ResourceNotFoundException")) {
-          this.service["logs"] = { "count": 0 }
+        let errorMsg: string = data["error"]
+        if(errorMsg == "") {
+          this.alertService.error("Error, but error message was empty");
         } else {
-          this.alertService.error(data["error"]);
+          if(errorMsg.startsWith("ResourceNotFoundException")) {
+            this.service["logs"] = { "count": 0 }
+          } else {
+            this.alertService.error(errorMsg);
+          }
         }
         return
       }
