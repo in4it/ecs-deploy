@@ -543,8 +543,8 @@ func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, messa
 
 func (c *AutoscalingController) getLocalId() (string, error) {
 	ret := "ecs-deploy-" + util.RandStringBytesMaskImprSrc(8)
-	var tasks ecs.EcsTaskMetadata
-	url := "http://localhost:51678/v1/tasks"
+	var task ecs.EcsTaskMetadata
+	url := util.GetEnv("ECS_CONTAINER_METADATA_URI", "") + "/task"
 	timeout := time.Duration(10 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
@@ -558,14 +558,11 @@ func (c *AutoscalingController) getLocalId() (string, error) {
 	if err != nil {
 		return ret, err
 	}
-	err = json.Unmarshal(contents, &tasks)
+	err = json.Unmarshal(contents, &task)
 	if err != nil {
 		return ret, err
 	}
-	if len(tasks.Tasks) == 0 {
-		return ret, errors.New("tasks struct retrieved from metaserver is empty")
-	}
-	split := strings.Split(tasks.Tasks[0].Arn, "task/")
+	split := strings.Split(task.TaskARN, "task/")
 	if len(split) != 2 {
 		return ret, err
 	}

@@ -95,20 +95,36 @@ type EcsVersionInfo struct {
 
 // task metadata
 type EcsTaskMetadata struct {
-	Tasks []EcsTaskMetadataItem `json:"Tasks"`
-}
-type EcsTaskMetadataItem struct {
-	Arn           string                         `json:"Arn"`
+	Cluster       string                         `json:"Cluster"`
+	TaskARN       string                         `json:"TaskARN"`
+	Family        string                         `json:"Family"`
+	Revision      string                         `json:"Revision"`
 	DesiredStatus string                         `json:"DesiredStatus"`
 	KnownStatus   string                         `json:"KnownStatus"`
-	Family        string                         `json:"Family"`
-	Version       string                         `json:"Version"`
 	Containers    []EcsTaskMetadataItemContainer `json:"Containers"`
 }
 type EcsTaskMetadataItemContainer struct {
-	DockerId   string `json:"DockerId"`
-	DockerName string `json:"DockerName"`
-	Name       string `json:"Name"`
+	DockerId      string                                 `json:"DockerId"`
+	DockerName    string                                 `json:"DockerName"`
+	Name          string                                 `json:"Name"`
+	Image         string                                 `json:"Image"`
+	ImageID       string                                 `json:"ImageID"`
+	Labels        map[string]string                      `json:"Labels"`
+	DesiredStatus string                                 `json:"DesiredStatus"`
+	KnownStatus   string                                 `json:"KnownStatus"`
+	CreatedAt     time.Time                              `json:"CreatedAt"`
+	StartedAt     time.Time                              `json:"CreatedAt"`
+	Limits        EcsTaskMetadataItemContainerLimits     `json:"Limits"`
+	Type          string                                 `json:"Type"`
+	Networks      []EcsTaskMetadataItemContainerNetworks `json:"Networks"`
+}
+type EcsTaskMetadataItemContainerLimits struct {
+	CPU    int64 `json:"CPU"`
+	Memory int64 `json:"Memory"`
+}
+type EcsTaskMetadataItemContainerNetworks struct {
+	NetworkMode   string   `json:"NetworkMode"`
+	Ipv4Addresses []string `json:"Ipv4Addresses"`
 }
 
 // create cluster
