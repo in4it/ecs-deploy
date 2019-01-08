@@ -90,6 +90,21 @@ func (c *AutoscalingController) getResourcesNeeded(clusterName string) (int64, i
 	}
 	return memoryNeeded[clusterName], cpuNeeded[clusterName], nil
 }
+func (c *AutoscalingController) getAutoscalingStrategy() (bool, bool) {
+	// Check whether Strategy is enabled
+	asStrategies := strings.Split(util.GetEnv("AUTOSCALING_STRATEGIES", "LargestContainerUp,LargestContainerDown"), ",")
+	asStrategyLargestContainerUp := false
+	asStrategyLargestContainerDown := false
+	for _, v := range asStrategies {
+		if strings.ToLower(v) == "largestcontainerup" {
+			asStrategyLargestContainerUp = true
+		}
+		if strings.ToLower(v) == "largestcontainerdown" {
+			asStrategyLargestContainerDown = true
+		}
+	}
+	return asStrategyLargestContainerUp, asStrategyLargestContainerDown
+}
 
 // Process ECS event message and determine to scale or not
 func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) error {
@@ -170,18 +185,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 		return err
 	}
 	// Check whether Strategy is enabled
-	asStrategies := strings.Split(util.GetEnv("AUTOSCALING_STRATEGIES", "LargestContainerUp,LargestContainerDown"), ",")
-	asStrategyLargestContainerUp := false
-	asStrategyLargestContainerDown := false
-	for _, v := range asStrategies {
-		if strings.ToLower(v) == "largestcontainerup" {
-			asStrategyLargestContainerUp = true
-		}
-		if strings.ToLower(v) == "largestcontainerdown" {
-			asStrategyLargestContainerDown = true
-		}
-	}
-
+	asStrategyLargestContainerUp, asStrategyLargestContainerDown := c.getAutoscalingStrategy()
 	// make scaling (up) decision
 	var resourcesFitGlobal bool
 	var scalingOp = "no"
@@ -391,6 +395,7 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 	totalFreeMemory := make(map[string]int64)
 	hasFreeResources := make(map[string]bool)
 	hasFreeResourcesGlobal := true
+	clusterType := "normal"
 	for _, dcci := range containerInstances {
 		if clusterName == dcci.ClusterName {
 			if dcci.Status != "DRAINING" {
@@ -400,6 +405,9 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 		}
 	}
 	if len(containerInstances) <= (2 * len(totalFreeCpu)) { // small clusters, reduce memory/cpu needed with full container node
+		clusterType = "small"
+	}
+	if clusterType == "small" {
 		clusterMemoryNeeded -= instanceMemory
 		clusterCpuNeeded -= instanceCpu
 	}
@@ -415,8 +423,25 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 			}
 		}
 	}
-	for _, v := range hasFreeResources {
-		if !v {
+	asStrategyLargestContainerUp, _ := c.getAutoscalingStrategy()
+	if asStrategyLargestContainerUp {
+		// when using LargestContainerUp, only downscale when all AZs have too much capacity, otherwise a scaleUp will immediately be triggered
+		for k, v := range hasFreeResources {
+			asAutoscalingControllerLogger.Debugf("%v has free resources: %v", k, v)
+			if !v {
+				hasFreeResourcesGlobal = false
+			}
+		}
+	} else {
+		// when not using the strategy LargestContainerUp, set hasFreeResourcesGlobal to true if any of the nodes has too many resources
+		foundTrue := false
+		for k, v := range hasFreeResources {
+			asAutoscalingControllerLogger.Debugf("%v has free resources: %v", k, v)
+			if v {
+				foundTrue = true
+			}
+		}
+		if !foundTrue {
 			hasFreeResourcesGlobal = false
 		}
 	}
