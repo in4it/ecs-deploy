@@ -186,31 +186,36 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	var resourcesFitGlobal bool
 	var scalingOp = "no"
 	var pendingScalingOp string
-	if asStrategyLargestContainerUp && desiredCapacity < maxSize {
-		resourcesFitGlobal = c.scaleUpDecision(clusterName, dc.ContainerInstances, cpuNeeded, memoryNeeded)
-		if !resourcesFitGlobal {
-			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
-			if err != nil {
-				cooldownMin = 5
-			}
-			startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
-			lastScalingOp, _, err := s.GetScalingActivity(clusterName, startTime)
-			if err != nil {
-				return err
-			}
-			if lastScalingOp == "no" {
-				if util.GetEnv("AUTOSCALING_UP_STRATEGY", "immediately") == "gracefully" {
-					pendingScalingOp = "up"
-				} else {
-					asAutoscalingControllerLogger.Infof("Initiating scaling activity")
-					scalingOp = "up"
-					err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
-					if err != nil {
-						return err
+	if asStrategyLargestContainerUp {
+		if desiredCapacity < maxSize {
+			resourcesFitGlobal = c.scaleUpDecision(clusterName, dc.ContainerInstances, cpuNeeded, memoryNeeded)
+			if !resourcesFitGlobal {
+				cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
+				if err != nil {
+					cooldownMin = 5
+				}
+				startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
+				lastScalingOp, _, err := s.GetScalingActivity(clusterName, startTime)
+				if err != nil {
+					return err
+				}
+				if lastScalingOp == "no" {
+					if util.GetEnv("AUTOSCALING_UP_STRATEGY", "immediately") == "gracefully" {
+						pendingScalingOp = "up"
+					} else {
+						asAutoscalingControllerLogger.Infof("Initiating scaling activity")
+						scalingOp = "up"
+						err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
+						if err != nil {
+							return err
+						}
 					}
 				}
 			}
 		}
+	} else {
+		// if strategy is "latgestContainerUp" is disabled, resources always fit, and scaling down always needs to be checked
+		resourcesFitGlobal = true
 	}
 	// make scaling (down) decision
 	if asStrategyLargestContainerDown && desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
