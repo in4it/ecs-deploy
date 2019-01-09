@@ -160,9 +160,9 @@ func (c *Controller) updateDeployment(d service.Deploy, ddLast *service.DynamoDe
 	updateECSService := true
 	// compare with previous deployment if there is one
 	if ddLast != nil {
+		var err error
 		if strings.ToLower(d.ServiceProtocol) != "none" {
 			var alb *ecs.ALB
-			var err error
 			if d.LoadBalancer == "" {
 				alb, err = ecs.NewALB(d.Cluster)
 			} else {
@@ -248,26 +248,26 @@ func (c *Controller) updateDeployment(d service.Deploy, ddLast *service.DynamoDe
 				// don't update ecs service later
 				updateECSService = false
 			}
-			ps := ecs.Paramstore{}
-			if ps.IsEnabled() {
-				iam := ecs.IAM{}
-				thisNamespace, lastNamespace := d.EnvNamespace, ddLast.DeployData.EnvNamespace
-				if thisNamespace == "" {
-					thisNamespace = serviceName
+		}
+		ps := ecs.Paramstore{}
+		if ps.IsEnabled() {
+			iam := ecs.IAM{}
+			thisNamespace, lastNamespace := d.EnvNamespace, ddLast.DeployData.EnvNamespace
+			if thisNamespace == "" {
+				thisNamespace = serviceName
+			}
+			if lastNamespace == "" {
+				lastNamespace = serviceName
+			}
+			if thisNamespace != lastNamespace {
+				controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", serviceName)
+				err = iam.DeleteRolePolicy("ecs-"+serviceName, "paramstore-"+lastNamespace)
+				if err != nil {
+					return err
 				}
-				if lastNamespace == "" {
-					lastNamespace = serviceName
-				}
-				if thisNamespace != lastNamespace {
-					controllerLogger.Debugf("Paramstore enabled, putting role: paramstore-%v", serviceName)
-					err = iam.DeleteRolePolicy("ecs-"+serviceName, "paramstore-"+lastNamespace)
-					if err != nil {
-						return err
-					}
-					err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+thisNamespace, ps.GetParamstoreIAMPolicy(thisNamespace))
-					if err != nil {
-						return err
-					}
+				err = iam.PutRolePolicy("ecs-"+serviceName, "paramstore-"+thisNamespace, ps.GetParamstoreIAMPolicy(thisNamespace))
+				if err != nil {
+					return err
 				}
 			}
 		}
