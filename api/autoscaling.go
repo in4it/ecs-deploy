@@ -395,7 +395,6 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 	totalFreeMemory := make(map[string]int64)
 	hasFreeResources := make(map[string]bool)
 	hasFreeResourcesGlobal := true
-	clusterType := "normal"
 	for _, dcci := range containerInstances {
 		if clusterName == dcci.ClusterName {
 			if dcci.Status != "DRAINING" {
@@ -404,12 +403,10 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 			}
 		}
 	}
-	if len(containerInstances) <= (2 * len(totalFreeCpu)) { // small clusters, reduce memory/cpu needed with full container node
-		clusterType = "small"
-	}
-	if clusterType == "small" {
-		clusterMemoryNeeded -= instanceMemory
-		clusterCpuNeeded -= instanceCpu
+	asStrategyLargestContainerUp, _ := c.getAutoscalingStrategy()
+	if !asStrategyLargestContainerUp { // if we're not using the LargestContainerUp strategy, scale down only when there's a full instance size of extra resources
+		clusterMemoryNeeded = instanceMemory
+		clusterCpuNeeded = instanceCpu
 	}
 	for k, _ := range totalFreeCpu {
 		asAutoscalingControllerLogger.Debugf("%v: Have %d cpu available, need %d", k, totalFreeCpu[k], clusterCpuNeeded)
@@ -423,7 +420,6 @@ func (c *AutoscalingController) scaleDownDecision(clusterName string, containerI
 			}
 		}
 	}
-	asStrategyLargestContainerUp, _ := c.getAutoscalingStrategy()
 	if asStrategyLargestContainerUp {
 		// when using LargestContainerUp, only downscale when all AZs have too much capacity, otherwise a scaleUp will immediately be triggered
 		for k, v := range hasFreeResources {
