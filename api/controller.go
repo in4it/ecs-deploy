@@ -80,6 +80,8 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 					return nil, err
 				}
 			}
+		} else {
+			return nil, errors.New("IAM Task Role not found and resource creation is disabled")
 		}
 	} else if err != nil {
 		return nil, err
