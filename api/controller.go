@@ -120,9 +120,8 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 				controllerLogger.Errorf("Could not create service %v in dynamodb", serviceName)
 				return nil, err
 			}
-		} else {
-			c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
 		}
+		c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
 	}
 
 	// Mark previous deployment as aborted if still running
