@@ -105,16 +105,22 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 				controllerLogger.Errorf("Could not create service %v", serviceName)
 				return nil, err
 			}
-		}
-		err = c.createServiceInDynamo(s, d)
-		if err != nil {
-			controllerLogger.Errorf("Could not create service %v in dynamodb", serviceName)
-			return nil, err
+		} else {
+			return nil, errors.New("ECS Service not found and resource creation is disabled")
 		}
 	} else if err != nil {
 		return nil, errors.New("Error during checking whether service exists")
 	} else {
-		c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
+		serviceExistsInDynamo, err := s.ServiceExistsInDynamo()
+		if err == nil && !serviceExistsInDynamo {
+			err = c.createServiceInDynamo(s, d)
+			if err != nil {
+				controllerLogger.Errorf("Could not create service %v in dynamodb", serviceName)
+				return nil, err
+			}
+		} else {
+			c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
+		}
 	}
 
 	// Mark previous deployment as aborted if still running
