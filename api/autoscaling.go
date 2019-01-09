@@ -544,6 +544,15 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 						}
 						if scaled {
 							servicesFound[clusterName+":"+rs.ServiceName] = 0
+							// write record in dynamodb
+							dc, err := s.GetClusterInfo()
+							if err != nil {
+								asAutoscalingControllerLogger.Debugf("Error while doing GetClusterInfo: %v", err)
+							}
+							_, err = s.PutClusterInfo(*dc, clusterName, "up", "")
+							if err != nil {
+								asAutoscalingControllerLogger.Debugf("Error while doing PutClusterInfo: %v", err)
+							}
 						}
 					}
 				}
