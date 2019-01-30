@@ -107,6 +107,19 @@ func NewService() *Service {
 	return &s
 }
 
+func (s *Service) InitDB(apiVersion string) error {
+	ds := &DynamoServices{ApiVersion: apiVersion, ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{}}
+
+	// __SERVICE not found, write first record
+	err := s.table.Put(ds).Run()
+
+	if err != nil {
+		serviceLogger.Errorf("Error during put of first record: %v", err.Error())
+		return err
+	}
+	return nil
+}
+
 func (s *Service) initService(dsElement *DynamoServicesElement) error {
 	ds := &DynamoServices{ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{dsElement}}
 
