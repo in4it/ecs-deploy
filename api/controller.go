@@ -757,7 +757,7 @@ func (c *Controller) Resume() error {
 	if err != nil {
 		if err.Error() == "dynamo: no item found" {
 			controllerLogger.Infof("Database is empty - starting app for the first time")
-			err = service.InitDB(apiVersion)
+			err = s.InitDB(apiVersion)
 			if err != nil {
 				return err
 			}
