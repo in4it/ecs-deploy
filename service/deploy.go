@@ -98,11 +98,19 @@ type DeployStickiness struct {
 	Duration int64 `json:"duration" yaml:"duration"`
 }
 type DeployVolume struct {
-	Host DeployVolumeHost `json:"host" yaml:"host"`
-	Name string           `json:"name" yaml:"name"`
+	Host                      DeployVolumeHost                      `json:"host" yaml:"host"`
+	DockerVolumeConfiguration DeployVolumeDockerVolumeConfiguration `json:"dockerVolumeConfiguration" yaml:"dockerVolumeConfiguration"`
+	Name                      string                                `json:"name" yaml:"name"`
 }
 type DeployVolumeHost struct {
 	SourcePath string `json:"sourcePath" yaml:"sourcePath"`
+}
+type DeployVolumeDockerVolumeConfiguration struct {
+	Scope         string            `json:"scope" yaml:"scope"`
+	Autoprovision bool              `json:"autoprovision" yaml:"autoprovision"`
+	Driver        string            `json:"driver" yaml:"driver"`
+	DriverOpts    map[string]string `json:"driverOpts" yaml:"driverOpts"`
+	Labels        map[string]string `json:"labels" yaml:"labels"`
 }
 
 type DeployResult struct {

@@ -287,12 +287,22 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 	if len(d.Volumes) > 0 {
 		var volumes []*ecs.Volume
 		for _, vol := range d.Volumes {
-			volumes = append(volumes, &ecs.Volume{
+			volume := &ecs.Volume{
 				Name: aws.String(vol.Name),
 				Host: &ecs.HostVolumeProperties{
 					SourcePath: aws.String(vol.Host.SourcePath),
 				},
-			})
+			}
+			if len(vol.DockerVolumeConfiguration.Scope) > 0 {
+				volume.SetDockerVolumeConfiguration(&ecs.DockerVolumeConfiguration{
+					Autoprovision: aws.Bool(vol.DockerVolumeConfiguration.Autoprovision),
+					Driver:        aws.String(vol.DockerVolumeConfiguration.Driver),
+					DriverOpts:    aws.StringMap(vol.DockerVolumeConfiguration.DriverOpts),
+					Labels:        aws.StringMap(vol.DockerVolumeConfiguration.Labels),
+					Scope:         aws.String(vol.DockerVolumeConfiguration.Scope),
+				})
+			}
+			volumes = append(volumes, volume)
 		}
 		e.TaskDefinition.SetVolumes(volumes)
 	}
