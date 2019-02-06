@@ -46,6 +46,7 @@ type DeployContainer struct {
 	Environment       []*DeployContainerEnvironment `json:"environment" yaml:"environment"`
 	MountPoints       []*DeployContainerMountPoint  `json:"mountPoints" yaml:"mountPoints"`
 	Ulimits           []*DeployContainerUlimit      `json:"ulimits" yaml:"ulimits"`
+	Links             []*string                     `json:"links" yaml:"links"`
 }
 type DeployContainerUlimit struct {
 	Name      string `json:"name" yaml:"name"`
