@@ -452,6 +452,11 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 			containerDefinition.SetMountPoints(mps)
 		}
 
+		// Links
+		if len(container.Links) > 0 {
+			containerDefinition.SetLinks(container.Links)
+		}
+
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, containerDefinition)
 	}
 
