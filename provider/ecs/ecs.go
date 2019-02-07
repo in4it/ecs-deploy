@@ -296,13 +296,18 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 				})
 			}
 			if len(vol.DockerVolumeConfiguration.Scope) > 0 {
-				volume.SetDockerVolumeConfiguration(&ecs.DockerVolumeConfiguration{
+				volumeConfig := &ecs.DockerVolumeConfiguration{
 					Autoprovision: aws.Bool(vol.DockerVolumeConfiguration.Autoprovision),
 					Driver:        aws.String(vol.DockerVolumeConfiguration.Driver),
-					DriverOpts:    aws.StringMap(vol.DockerVolumeConfiguration.DriverOpts),
-					Labels:        aws.StringMap(vol.DockerVolumeConfiguration.Labels),
 					Scope:         aws.String(vol.DockerVolumeConfiguration.Scope),
-				})
+				}
+				if len(vol.DockerVolumeConfiguration.DriverOpts) > 0 {
+					volumeConfig.SetDriverOpts(aws.StringMap(vol.DockerVolumeConfiguration.DriverOpts))
+				}
+				if len(vol.DockerVolumeConfiguration.Labels) > 0 {
+					volumeConfig.SetLabels(aws.StringMap(vol.DockerVolumeConfiguration.Labels))
+				}
+				volume.SetDockerVolumeConfiguration(volumeConfig)
 			}
 			volumes = append(volumes, volume)
 		}
