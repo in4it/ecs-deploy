@@ -289,9 +289,11 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 		for _, vol := range d.Volumes {
 			volume := &ecs.Volume{
 				Name: aws.String(vol.Name),
-				Host: &ecs.HostVolumeProperties{
+			}
+			if len(vol.Host.SourcePath) > 0 {
+				volume.SetHost(&ecs.HostVolumeProperties{
 					SourcePath: aws.String(vol.Host.SourcePath),
-				},
+				})
 			}
 			if len(vol.DockerVolumeConfiguration.Scope) > 0 {
 				volume.SetDockerVolumeConfiguration(&ecs.DockerVolumeConfiguration{
