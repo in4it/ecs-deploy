@@ -376,6 +376,10 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 		if len(container.ContainerCommand) > 0 {
 			containerDefinition.SetCommand(container.ContainerCommand)
 		}
+		// set containerEntryPoint if not empty
+		if len(container.ContainerEntryPoint) > 0 {
+			containerDefinition.SetEntryPoint(container.ContainerEntryPoint)
+		}
 		// set cloudwacht logs if enabled
 		if util.GetEnv("CLOUDWATCH_LOGS_ENABLED", "no") == "yes" {
 			var logPrefix string
