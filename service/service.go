@@ -108,7 +108,7 @@ func NewService() *Service {
 }
 
 func (s *Service) InitDB(apiVersion string) error {
-	ds := &DynamoServices{ApiVersion: apiVersion, ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{}}
+	ds := DynamoServices{ApiVersion: apiVersion, ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{}}
 
 	// __SERVICE not found, write first record
 	err := s.table.Put(ds).Run()
@@ -121,7 +121,7 @@ func (s *Service) InitDB(apiVersion string) error {
 }
 
 func (s *Service) initService(dsElement *DynamoServicesElement) error {
-	ds := &DynamoServices{ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{dsElement}}
+	ds := DynamoServices{ServiceName: "__SERVICES", Time: "0", Version: 1, Services: []*DynamoServicesElement{dsElement}}
 
 	// __SERVICE not found, write first record
 	err := s.table.Put(ds).Run()
