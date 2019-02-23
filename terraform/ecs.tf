@@ -27,7 +27,7 @@ resource "aws_ecs_cluster" "cluster" {
 }
 
 data "template_file" "ecs_init" {
-  template = "${file("${path.module}/templates/ecs-init.sh")}"
+  template = "${file(var.ecs_init_script == "" ? "${path.module}/templates/ecs-init.sh" : "${var.ecs_init_script}")}"
 
   vars {
     CLUSTER_NAME = "${var.cluster_name}"
@@ -48,7 +48,7 @@ resource "aws_launch_template" "cluster" {
     name = "${aws_iam_instance_profile.cluster-ec2-role.id}"
   }
 
-  vpc_security_group_ids = ["${aws_security_group.cluster.id}"]
+  vpc_security_group_ids = ["${compact(split(",", format("%s,%s", aws_security_group.cluster.id, var.ecs_ec2_extra_sg)))}"]
   user_data              = "${base64encode(data.template_file.ecs_init.rendered)}"
 
   credit_specification {

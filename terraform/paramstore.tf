@@ -22,7 +22,7 @@ resource "aws_ssm_parameter" "ecs-deploy-paramstore-prefix" {
 resource "aws_ssm_parameter" "ecs-deploy-kms-id" {
   name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/PARAMSTORE_KMS_ARN"
   type  = "String"
-  value = "${aws_kms_key.ssm.arn}"
+  value = "${data.aws_kms_key.ssm.arn}"
 }
 
 resource "aws_ssm_parameter" "ecs-paramstore-assume-role" {

@@ -292,7 +292,7 @@ EOF
 resource "aws_sns_topic_subscription" "ecs-deploy" {
   topic_arn              = "${aws_sns_topic.ecs-deploy.arn}"
   protocol               = "https"
-  endpoint               = "https://${var.cluster_domain}/ecs-deploy/webhook"
+  endpoint               = "https://${var.sns_endpoint == "" ? var.cluster_domain : var.sns_endpoint}/ecs-deploy/webhook"
   endpoint_auto_confirms = true
 }
 

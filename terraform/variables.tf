@@ -125,3 +125,15 @@ variable "autoscaling_strategies" {
   description = "enable/disable autoscaling strategies"
   default = ""
 }
+
+variable "ecs_init_script" {
+  default = ""
+}
+
+variable "ecs_ec2_extra_sg" {
+  default = ""
+}
+
+variable "sns_endpoint" {
+  default = ""
+}

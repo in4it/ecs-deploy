@@ -43,3 +43,10 @@ resource "aws_key_pair" "mykey" {
 aws ssm put-parameter --name '/mycluster-prod/ecs-deploy/JWT_SECRET' --type SecureString --value 'secret' --key-id 'arn:aws:kms:region:0123456789:key/key-id' --region region
 aws ssm put-parameter --name '/mycluster-prod/ecs-deploy/DEPLOY_PASSWORD' --type SecureString --value 'secret' --key-id 'arn:aws:kms:region:0123456789:key/key-id' --region region
 ```
+
+# More Configuration Options
+| Variable | Description |
+| -------- | ----------- |
+| ecs\_init\_script | Provide new (local) path to the ecs init script |
+| ecs\_ecs2\_extra\_sg | Provide extra security group for EC2 instance |
+| sns\_endpoint | Override sns endpoint domain |

@@ -9,3 +9,7 @@ output "alb-zone-id" {
 output "paramstore-kms-arn" {
   value = "${data.aws_kms_key.ssm.arn}"
 }
+
+output "sg-cluster" {
+  value = "${aws_security_group.cluster.id}"
+}
