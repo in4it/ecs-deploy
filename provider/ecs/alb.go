@@ -238,7 +238,7 @@ func (a *ALB) GetDomainUsingCertificate() error {
 func (a *ALB) CreateTargetGroup(serviceName string, d service.Deploy) (*string, error) {
 	svc := elbv2.New(session.New())
 	input := &elbv2.CreateTargetGroupInput{
-		Name:     aws.String(serviceName),
+		Name:     aws.String(util.TruncateString(serviceName, 32)),
 		VpcId:    aws.String(a.VpcId),
 		Port:     aws.Int64(d.ServicePort),
 		Protocol: aws.String(d.ServiceProtocol),
@@ -527,7 +527,7 @@ func (a *ALB) GetRulesByTargetGroupArn(targetGroupArn string) []string {
 func (a *ALB) GetTargetGroupArn(serviceName string) (*string, error) {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DescribeTargetGroupsInput{
-		Names: []*string{aws.String(serviceName)},
+		Names: []*string{aws.String(util.TruncateString(serviceName, 32))},
 	}
 
 	result, err := svc.DescribeTargetGroups(input)

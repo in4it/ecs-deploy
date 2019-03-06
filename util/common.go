@@ -69,3 +69,11 @@ func YesNoToBool(s string) bool {
 		return false
 	}
 }
+
+func TruncateString(str string, n int) string {
+	if n > 0 && len(str) > n {
+		return str[0:n]
+	} else {
+		return str
+	}
+}
