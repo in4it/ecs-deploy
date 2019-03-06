@@ -28,7 +28,7 @@
     "@ng-bootstrap/ng-bootstrap": "^4.0.1",
     "@schematics/angular": "^7.1.4",
     "awesome-bootstrap-checkbox": "^1.0.1",
-    "bootstrap": "^4.2.1",
+    "bootstrap": "^4.3.1",
     "core-js": "^2.6.1",
     "font-awesome": "^4.7.0",
     "jquery": "^3.3.1",

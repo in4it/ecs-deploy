@@ -107,19 +107,21 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 				controllerLogger.Errorf("Could not create service %v", serviceName)
 				return nil, err
 			}
+			// create service in dynamodb
+			err = c.checkAndCreateServiceInDynamo(s, d)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			return nil, errors.New("ECS Service not found and resource creation is disabled")
 		}
 	} else if err != nil {
 		return nil, errors.New("Error during checking whether service exists")
 	} else {
-		serviceExistsInDynamo, err := s.ServiceExistsInDynamo()
-		if err == nil && !serviceExistsInDynamo {
-			err = c.createServiceInDynamo(s, d)
-			if err != nil {
-				controllerLogger.Errorf("Could not create service %v in dynamodb", serviceName)
-				return nil, err
-			}
+		// create service in dynamodb
+		err = c.checkAndCreateServiceInDynamo(s, d)
+		if err != nil {
+			return nil, err
 		}
 		c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
 	}
@@ -372,6 +374,17 @@ func (c *Controller) createService(serviceName string, d service.Deploy, taskDef
 		return nil, err
 	}
 	return listeners, nil
+}
+func (c *Controller) checkAndCreateServiceInDynamo(s *service.Service, d service.Deploy) error {
+	serviceExistsInDynamo, err := s.ServiceExistsInDynamo()
+	if err == nil && !serviceExistsInDynamo {
+		err = c.createServiceInDynamo(s, d)
+		if err != nil {
+			controllerLogger.Errorf("Could not create service %v in dynamodb", s.ServiceName)
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Controller) createServiceInDynamo(s *service.Service, d service.Deploy) error {
