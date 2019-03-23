@@ -129,7 +129,9 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "application-autoscaling:DescribeScalableTargets",
         "application-autoscaling:DescribeScalingPolicies",
         "application-autoscaling:DeleteScalingPolicy",
-        "servicediscovery:ListNamespaces"
+        "servicediscovery:ListNamespaces",
+        "servicediscovery:ListServices",
+        "servicediscovery:CreateService"
       ],
       "Resource": "*"
     },
