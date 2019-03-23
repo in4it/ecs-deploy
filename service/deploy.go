@@ -28,6 +28,7 @@ type Deploy struct {
 	Stickiness            DeployStickiness            `json:"stickiness" yaml:"stickiness"`
 	Volumes               []DeployVolume              `json:"volumes" yaml:"volumes"`
 	EnvNamespace          string                      `json:"envNamespace" yaml:"envNamespace"`
+	ServiceRegistry       string                      `json:"serviceRegistry" yaml:"serviceRegistry"`
 }
 type DeployContainer struct {
 	ContainerName       string                        `json:"containerName" yaml:"containerName" binding:"required"`

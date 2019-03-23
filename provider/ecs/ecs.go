@@ -691,6 +691,24 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		input.SetHealthCheckGracePeriodSeconds(d.HealthCheck.GracePeriodSeconds)
 	}
 
+	// set ServiceRegistry
+	if d.ServiceRegistry != "" && strings.ToLower(d.ServiceProtocol) != "none" {
+		sd := ServiceDiscovery{}
+		serviceDiscoveryRegistryArn, err := sd.GetNamespaceArn(d.ServiceRegistry)
+		if err != nil {
+			ecsLogger.Warningf("Could not apply ServiceRegistry Config: %s", err.Error())
+		} else {
+			ecsLogger.Debugf("Applying ServiceRegistry for %s with Arn %s", e.ServiceName, serviceDiscoveryRegistryArn)
+			input.SetServiceRegistries([]*ecs.ServiceRegistry{
+				{
+					ContainerName: aws.String(e.ServiceName),
+					ContainerPort: aws.Int64(d.ServicePort),
+					RegistryArn:   aws.String(serviceDiscoveryRegistryArn),
+				},
+			})
+		}
+	}
+
 	// create service
 	_, err := svc.CreateService(input)
 	if err != nil {
