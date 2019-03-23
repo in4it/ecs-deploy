@@ -148,6 +148,8 @@ The defaults are set for the most common use cases, but can be changed by settin
 | AUTOSCALING\_UP\_COOLDOWN | 5 | Cooldown period after scaling up |
 | AUTOSCALING\_UP\_INTERVAL | 60 | Seconds between intervals to check resource usage before scaling, after a scaling up operation is detected |
 | AUTOSCALING\_UP\_PERIOD | 5 | Periods to check before scaling |
+| SERVICE\_DISCOVERY\_TTL | 60 | TTL for service discovery records |
+| SERVICE_DISCOVERY_FAILURETHRESHOLD | 3 | Failure threshold for service discovery records |
 | AWS\_RESOURCE\_CREATION\_ENABLED | yes | Let ecs-deploy create AWS IAM resources for you |
 
 ### Autoscaling Strategies

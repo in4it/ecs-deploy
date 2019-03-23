@@ -696,18 +696,28 @@ func (e *ECS) CreateService(d service.Deploy) error {
 	// set ServiceRegistry
 	if d.ServiceRegistry != "" && strings.ToLower(d.ServiceProtocol) != "none" {
 		sd := ServiceDiscovery{}
-		serviceDiscoveryRegistryArn, err := sd.GetNamespaceArn(d.ServiceRegistry)
+		_, serviceDiscoveryNamespaceID, err := sd.getNamespaceArnAndId(d.ServiceRegistry)
 		if err != nil {
 			ecsLogger.Warningf("Could not apply ServiceRegistry Config: %s", err.Error())
 		} else {
-			ecsLogger.Debugf("Applying ServiceRegistry for %s with Arn %s", e.ServiceName, serviceDiscoveryRegistryArn)
-			input.SetServiceRegistries([]*ecs.ServiceRegistry{
-				{
-					ContainerName: aws.String(e.ServiceName),
-					ContainerPort: aws.Int64(d.ServicePort),
-					RegistryArn:   aws.String(serviceDiscoveryRegistryArn),
-				},
-			})
+			serviceDiscoveryServiceArn, err := sd.getServiceArn(d.ServiceName, serviceDiscoveryNamespaceID)
+			if err != nil && strings.HasPrefix(err.Error(), "Service not found") {
+				// Service not found, create service in service registry
+				serviceDiscoveryServiceArn, err = sd.createService(d.ServiceName, serviceDiscoveryNamespaceID)
+			}
+			// check for error, else set service registry
+			if err != nil && !strings.HasPrefix(err.Error(), "Service not found") {
+				ecsLogger.Warningf("Could not get service from ServiceRegistry: %s", err.Error())
+			} else {
+				ecsLogger.Debugf("Applying ServiceRegistry for %s with Arn %s", e.ServiceName, serviceDiscoveryServiceArn)
+				input.SetServiceRegistries([]*ecs.ServiceRegistry{
+					{
+						ContainerName: aws.String(e.ServiceName),
+						ContainerPort: aws.Int64(d.ServicePort),
+						RegistryArn:   aws.String(serviceDiscoveryServiceArn),
+					},
+				})
+			}
 		}
 	}
 
