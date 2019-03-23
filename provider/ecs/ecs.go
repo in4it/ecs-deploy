@@ -669,7 +669,9 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		input.SetNetworkConfiguration(e.getNetworkConfiguration(d))
 	} else {
 		// only set role if network mode is not awsvpc (it will be set automatically)
-		if strings.ToLower(d.ServiceProtocol) != "none" { // only set the role if there's a loadbalancer necessary
+		// only set role if serviceregistry is not defined
+		// only set the role if there's a loadbalancer necessary
+		if d.ServiceRegistry == "" && strings.ToLower(d.ServiceProtocol) != "none" {
 			input.SetRole(util.GetEnv("AWS_ECS_SERVICE_ROLE", "ecs-service-role"))
 		}
 	}
