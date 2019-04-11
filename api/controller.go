@@ -144,7 +144,13 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 	}
 
 	// run goroutine to update status of service
-	go e.LaunchWaitUntilServicesStable(dd, ddLast, integrations.NewSlack())
+	var notification integrations.Notification
+	if util.GetEnv("SLACK_WEBHOOKS", "") != "" {
+		notification = integrations.NewSlack()
+	} else {
+		notification = integrations.NewDummy()
+	}
+	go e.LaunchWaitUntilServicesStable(dd, ddLast, notification)
 
 	ret := &service.DeployResult{
 		ServiceName:       serviceName,
@@ -802,7 +808,13 @@ func (c *Controller) Resume() error {
 			} else {
 				ddLast = dds[i-1]
 			}
-			go e.LaunchWaitUntilServicesStable(&dds[i], &ddLast, integrations.NewSlack())
+			var notification integrations.Notification
+			if util.GetEnv("SLACK_WEBHOOKS", "") != "" {
+				notification = integrations.NewSlack()
+			} else {
+				notification = integrations.NewDummy()
+			}
+			go e.LaunchWaitUntilServicesStable(&dds[i], &ddLast, notification)
 
 		}
 	}
