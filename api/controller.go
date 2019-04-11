@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/google/go-cmp/cmp"
+	"github.com/in4it/ecs-deploy/integrations"
 	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
@@ -143,7 +144,7 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 	}
 
 	// run goroutine to update status of service
-	go e.LaunchWaitUntilServicesStable(dd)
+	go e.LaunchWaitUntilServicesStable(dd, ddLast, integrations.NewSlack())
 
 	ret := &service.DeployResult{
 		ServiceName:       serviceName,
@@ -795,7 +796,14 @@ func (c *Controller) Resume() error {
 		if dd.Status == "running" {
 			// run goroutine to update status of service
 			controllerLogger.Infof("Starting waitUntilServiceStable for %v", dd.ServiceName)
-			go e.LaunchWaitUntilServicesStable(&dds[i])
+			var ddLast service.DynamoDeployment
+			if i == 0 {
+				ddLast = dds[i]
+			} else {
+				ddLast = dds[i-1]
+			}
+			go e.LaunchWaitUntilServicesStable(&dds[i], &ddLast, integrations.NewSlack())
+
 		}
 	}
 	// check for nodes draining

@@ -151,6 +151,9 @@ The defaults are set for the most common use cases, but can be changed by settin
 | SERVICE\_DISCOVERY\_TTL | 60 | TTL for service discovery records |
 | SERVICE_DISCOVERY_FAILURETHRESHOLD | 3 | Failure threshold for service discovery records |
 | AWS\_RESOURCE\_CREATION\_ENABLED | yes | Let ecs-deploy create AWS IAM resources for you |
+| SLACK\_WEBHOOKS | "" | Comma seperated Slack webhooks, optionally with a channel (format: url1:#channel,url2:#channel) |
+| SLACK\_USERNAME | ecs-deploy | Slack username |
+
 
 ### Autoscaling Strategies
 

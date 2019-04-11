@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/in4it/ecs-deploy/integrations"
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
@@ -789,7 +790,7 @@ func (e *ECS) WaitUntilServicesStable(clusterName, serviceName string, maxWaitMi
 	}
 	return nil
 }
-func (e *ECS) LaunchWaitUntilServicesStable(dd *service.DynamoDeployment) error {
+func (e *ECS) LaunchWaitUntilServicesStable(dd, ddLast *service.DynamoDeployment, notification integrations.Notification) error {
 	var failed bool
 	var maxWaitMinutes int
 	s := service.NewService()
@@ -816,6 +817,10 @@ func (e *ECS) LaunchWaitUntilServicesStable(dd *service.DynamoDeployment) error 
 		if err != nil {
 			return err
 		}
+		err = notification.LogFailure(dd.ServiceName + ": " + reason)
+		if err != nil {
+			ecsLogger.Errorf("Could not send notification: %s", err)
+		}
 		err = e.Rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
@@ -828,6 +833,10 @@ func (e *ECS) LaunchWaitUntilServicesStable(dd *service.DynamoDeployment) error 
 		err := s.SetDeploymentStatusWithReason(dd, "failed", reason)
 		if err != nil {
 			return err
+		}
+		err = notification.LogFailure(dd.ServiceName + ": " + reason)
+		if err != nil {
+			ecsLogger.Errorf("Could not send notification: %s", err)
 		}
 		err = e.Rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
@@ -842,6 +851,10 @@ func (e *ECS) LaunchWaitUntilServicesStable(dd *service.DynamoDeployment) error 
 		if err != nil {
 			return err
 		}
+		err = notification.LogFailure(dd.ServiceName + ": " + reason)
+		if err != nil {
+			ecsLogger.Errorf("Could not send notification: %s", err)
+		}
 		err = e.Rollback(dd.DeployData.Cluster, dd.ServiceName)
 		if err != nil {
 			return err
@@ -849,11 +862,22 @@ func (e *ECS) LaunchWaitUntilServicesStable(dd *service.DynamoDeployment) error 
 		return nil
 	}
 	if failed {
-		s.SetDeploymentStatusWithReason(dd, "failed", "Deployment timed out")
+		reason := "Deployment timed out"
+		s.SetDeploymentStatusWithReason(dd, "failed", reason)
+		err = notification.LogFailure(dd.ServiceName + ": " + reason)
+		if err != nil {
+			ecsLogger.Errorf("Could not send notification: %s", err)
+		}
 		return nil
 	}
 	// set success
 	s.SetDeploymentStatus(dd, "success")
+	if ddLast.Status != "success" {
+		err = notification.LogRecovery(dd.ServiceName + ": Deployed successfully")
+		if err != nil {
+			ecsLogger.Errorf("Could not send notification: %s", err)
+		}
+	}
 	return nil
 }
 func (e *ECS) Rollback(clusterName, serviceName string) error {
