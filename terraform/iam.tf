@@ -50,7 +50,7 @@ resource "aws_iam_role_policy" "cluster-service-role" {
             "${data.aws_kms_key.ssm.arn}"
           ],
           "Effect": "Allow"
-        },
+        }
     ]
 }
 EOF
