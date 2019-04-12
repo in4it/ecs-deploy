@@ -256,7 +256,7 @@ func (e *ECS) DeleteCluster(clusterName string) error {
 }
 
 // Creates ECS repository
-func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
+func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) (*string, error) {
 	svc := ecs.New(session.New())
 	e.TaskDefinition = &ecs.RegisterTaskDefinitionInput{
 		Family:      aws.String(e.ServiceName),
@@ -467,6 +467,18 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 		// Links
 		if len(container.Links) > 0 {
 			containerDefinition.SetLinks(container.Links)
+		}
+
+		// inject parameter store entries as secrets
+		if util.GetEnv("PARAMSTORE_INJECT", "no") == "yes" {
+			ecsSecrets := []*ecs.Secret{}
+			for k, v := range secrets {
+				ecsSecrets = append(ecsSecrets, &ecs.Secret{
+					Name:      aws.String(k),
+					ValueFrom: aws.String(v),
+				})
+			}
+			containerDefinition.SetSecrets(ecsSecrets)
 		}
 
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, containerDefinition)

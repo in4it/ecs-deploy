@@ -19,6 +19,7 @@ var paramstoreLogger = loggo.GetLogger("paramstore")
 
 // parameter type
 type Parameter struct {
+	Arn     string `json:"arn"`
 	Name    string `json:"name"`
 	Type    string `json:"type"`
 	Value   string `json:"value"`
@@ -104,10 +105,11 @@ func (p *Paramstore) GetParameters(prefix string, withDecryption bool) error {
 					value = "***"
 				}
 				p.Parameters[paramName] = Parameter{
-					Name:    *param.Name,
-					Type:    *param.Type,
+					Arn:     aws.StringValue(param.ARN),
+					Name:    aws.StringValue(param.Name),
+					Type:    aws.StringValue(param.Type),
 					Value:   value,
-					Version: *param.Version,
+					Version: aws.Int64Value(param.Version),
 				}
 			}
 			return pageNum <= 50 // 50 iterations max
