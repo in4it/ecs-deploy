@@ -139,6 +139,10 @@ The defaults are set for the most common use cases, but can be changed by settin
 
 | Environment variable       | Default value | Description |
 | ---------------------      | ------------- | ----------- |
+| PARAMSTORE\_ENABLED | no | Use "yes" to enable the parameter store. |
+| PARAMSTORE\_PREFIX | "" | Prefix to use for the parameter store. mycompany will result in /mycompany/servicename/variable | 
+| PARAMSTORE\_KMS\_ARN | "" | Specify a KMS ARN to encrypt/decrypt variables |
+| PARAMSTORE\_INJECT | no | Use "Yes" to enable injection of secrets into the task definition |
 | AUTOSCALING\_STRATEGIES  | LargestContainerUp,LargestContainerDown | List of autoscaling strategies to apply. See below for different types |
 | AUTOSCALING\_DOWN\_STRATEGY  | gracefully | Only gracefully supported now (uses interval and period before executing the scaling down operation) |
 | AUTOSCALING\_UP\_STRATEGY  | immediately | Scale up strategy  (immediatey, gracefully) |

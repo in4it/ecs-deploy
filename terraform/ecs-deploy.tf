@@ -131,7 +131,8 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "application-autoscaling:DeleteScalingPolicy",
         "servicediscovery:ListNamespaces",
         "servicediscovery:ListServices",
-        "servicediscovery:CreateService"
+        "servicediscovery:CreateService",
+        "ssm:GetParametersByPath"
       ],
       "Resource": "*"
     },

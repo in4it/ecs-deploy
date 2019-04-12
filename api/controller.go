@@ -88,9 +88,25 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 		return nil, err
 	}
 
+	// retrieving secrets
+	secrets := make(map[string]string)
+	if util.GetEnv("PARAMSTORE_INJECT", "no") == "yes" {
+		ps := ecs.Paramstore{}
+		if ps.IsEnabled() {
+			err := ps.GetParameters("/"+util.GetEnv("PARAMSTORE_PREFIX", "")+"-"+util.GetEnv("AWS_ACCOUNT_ENV", "")+"/"+serviceName+"/", false)
+			if err != nil {
+				return nil, err
+			}
+			for _, v := range ps.Parameters {
+				keyName := strings.Split(v.Name, "/")
+				secrets[keyName[len(keyName)-1]] = v.Arn
+			}
+		}
+	}
+
 	// create task definition
 	e := ecs.ECS{ServiceName: serviceName, IamRoleArn: *iamRoleArn, ClusterName: d.Cluster}
-	taskDefArn, err := e.CreateTaskDefinition(d)
+	taskDefArn, err := e.CreateTaskDefinition(d, secrets)
 	if err != nil {
 		controllerLogger.Errorf("Could not create task def %v", serviceName)
 		return nil, err

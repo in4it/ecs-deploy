@@ -256,7 +256,7 @@ func (e *ECS) DeleteCluster(clusterName string) error {
 }
 
 // Creates ECS repository
-func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
+func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) (*string, error) {
 	svc := ecs.New(session.New())
 	e.TaskDefinition = &ecs.RegisterTaskDefinitionInput{
 		Family:      aws.String(e.ServiceName),
@@ -469,7 +469,33 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy) (*string, error) {
 			containerDefinition.SetLinks(container.Links)
 		}
 
+		// inject parameter store entries as secrets
+		if util.GetEnv("PARAMSTORE_INJECT", "no") == "yes" {
+			ecsSecrets := []*ecs.Secret{}
+			for k, v := range secrets {
+				ecsSecrets = append(ecsSecrets, &ecs.Secret{
+					Name:      aws.String(k),
+					ValueFrom: aws.String(v),
+				})
+			}
+			containerDefinition.SetSecrets(ecsSecrets)
+		}
+
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, containerDefinition)
+	}
+
+	// add execution role
+	if util.GetEnv("PARAMSTORE_INJECT", "no") == "yes" {
+		iam := IAM{}
+		iamExecutionRoleName := util.GetEnv("AWS_ECS_EXECUTION_ROLE", "ecs-"+d.Cluster+"-task-execution-role")
+		iamExecutionRoleArn, err := iam.RoleExists(iamExecutionRoleName)
+		if err != nil {
+			return nil, err
+		}
+		if iamExecutionRoleArn == nil {
+			return nil, fmt.Errorf("Execution role %s not found and PARAMSTORE_INJECT enabled", iamExecutionRoleName)
+		}
+		e.TaskDefinition.SetExecutionRoleArn(aws.StringValue(iamExecutionRoleArn))
 	}
 
 	// going to register
