@@ -484,6 +484,20 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) 
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, containerDefinition)
 	}
 
+	// add execution role
+	if util.GetEnv("PARAMSTORE_INJECT", "no") == "yes" {
+		iam := IAM{}
+		iamExecutionRoleName := util.GetEnv("AWS_ECS_EXECUTION_ROLE", "ecs-"+d.Cluster+"-task-execution-role")
+		iamExecutionRoleArn, err := iam.RoleExists(iamExecutionRoleName)
+		if err != nil {
+			return nil, err
+		}
+		if iamExecutionRoleArn == nil {
+			return nil, fmt.Errorf("Execution role %s not found and PARAMSTORE_INJECT enabled", iamExecutionRoleName)
+		}
+		e.TaskDefinition.SetExecutionRoleArn(aws.StringValue(iamExecutionRoleArn))
+	}
+
 	// going to register
 	ecsLogger.Debugf("Going to register: %+v", e.TaskDefinition)
 
