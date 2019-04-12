@@ -98,7 +98,8 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 				return nil, err
 			}
 			for _, v := range ps.Parameters {
-				secrets[v.Name] = v.Arn
+				keyName := strings.Split(v.Name, "/")
+				secrets[keyName[len(keyName)-1]] = v.Arn
 			}
 		}
 	}
