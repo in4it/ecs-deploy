@@ -41,15 +41,6 @@ resource "aws_iam_role_policy" "cluster-service-role" {
                 "elasticloadbalancing:RegisterTargets"
             ],
             "Resource": "*"
-        },
-        {
-          "Action": [
-            "kms:Decrypt"
-          ],
-          "Resource": [
-            "${data.aws_kms_key.ssm.arn}"
-          ],
-          "Effect": "Allow"
         }
     ]
 }
@@ -170,6 +161,15 @@ resource "aws_iam_role_policy" "ecs-task-execution-role" {
         "ssm:GetParameter"
       ],
       "Resource": "*"
+    },
+    {
+      "Action": [
+        "kms:Decrypt"
+      ],
+      "Resource": [
+        "${data.aws_kms_key.ssm.arn}"
+      ],
+      "Effect": "Allow"
     }
   ]
 }
