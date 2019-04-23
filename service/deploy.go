@@ -92,9 +92,14 @@ type DeployHealthCheck struct {
 	GracePeriodSeconds int64  `json:"gracePeriodSeconds" yaml:"gracePeriodSeconds"`
 }
 type DeployRuleConditions struct {
-	Listeners   []string `json:"listeners" yaml:"listeners"`
-	PathPattern string   `json:"pathPattern" yaml:"pathPattern"`
-	Hostname    string   `json:"hostname" yaml:"hostname"`
+	Listeners   []string                        `json:"listeners" yaml:"listeners"`
+	PathPattern string                          `json:"pathPattern" yaml:"pathPattern"`
+	Hostname    string                          `json:"hostname" yaml:"hostname"`
+	CognitoAuth DeployRuleConditionsCognitoAuth `json:"cognitoAuth" yaml:"cognitoAuth"`
+}
+type DeployRuleConditionsCognitoAuth struct {
+	UserPoolName string `json:"userPoolName" yaml:"userPoolName"`
+	ClientName   string `json:"clientName" yaml:"clientName"`
 }
 type DeployStickiness struct {
 	Enabled  bool  `json:"enabled" yaml:"enabled"`

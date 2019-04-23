@@ -8,3 +8,5 @@ ecs-deploy-linux-amd64
 webapp/node_modules/
 webapp/dist/
 vendor/
+bin/
+.vscode/

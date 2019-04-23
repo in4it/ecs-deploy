@@ -340,7 +340,7 @@ func (a *ALB) GetHighestRule() (int64, error) {
 				return 0, errors.New("Could not describe alb listener rules")
 			}
 
-			albLogger.Debugf("Looping rules: %+v", result.Rules)
+			albLogger.Tracef("Looping rules: %+v", result.Rules)
 			for _, rule := range result.Rules {
 				if i, _ := strconv.ParseInt(*rule.Priority, 10, 64); i > highest {
 					albLogger.Debugf("Found rule with priority: %d", i)
@@ -364,7 +364,7 @@ func (a *ALB) GetHighestRule() (int64, error) {
 func (a *ALB) CreateRuleForAllListeners(ruleType string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
 	var listeners []string
 	for _, l := range a.Listeners {
-		err := a.CreateRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
+		err := a.CreateRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority, service.DeployRuleConditionsCognitoAuth{})
 		if err != nil {
 			return nil, err
 		}
@@ -373,23 +373,195 @@ func (a *ALB) CreateRuleForAllListeners(ruleType string, targetGroupArn string, 
 	return listeners, nil
 }
 
-func (a *ALB) CreateRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64) ([]string, error) {
-	var retListeners []string
-	for _, l := range a.Listeners {
-		for _, l2 := range listeners {
-			if l.Protocol != nil && strings.ToLower(*l.Protocol) == strings.ToLower(l2) {
-				err := a.CreateRule(ruleType, *l.ListenerArn, targetGroupArn, rules, priority)
-				if err != nil {
-					return nil, err
-				}
-				retListeners = append(retListeners, *l.ListenerArn)
-			}
+func (a *ALB) CreateRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64, cognitoAuth service.DeployRuleConditionsCognitoAuth) ([]string, error) {
+	retListeners := a.getListenersArnForProtocol(listeners)
+	for k, listener := range retListeners {
+		var err error
+		// if cognito is set, a redirect is needed instead (cognito doesn't work with http)
+		if strings.ToLower(listeners[k]) == "http" && cognitoAuth.ClientName != "" {
+			err = a.CreateHTTPSRedirectRule(ruleType, listener, targetGroupArn, rules, priority)
+		} else {
+			err = a.CreateRule(ruleType, listener, targetGroupArn, rules, priority, cognitoAuth)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	return retListeners, nil
 }
 
-func (a *ALB) CreateRule(ruleType string, listenerArn string, targetGroupArn string, rules []string, priority int64) error {
+func (a *ALB) getListenersArnForProtocol(listeners []string) []string {
+	var listenersArn []string
+	for _, l := range a.Listeners {
+		for _, l2 := range listeners {
+			if l.Protocol != nil && strings.ToLower(aws.StringValue(l.Protocol)) == strings.ToLower(l2) {
+				listenersArn = append(listenersArn, aws.StringValue(l.ListenerArn))
+			}
+		}
+	}
+	albLogger.Debugf("getListenersArnForProtocol: resolved %s to %s", strings.Join(listeners, ","), strings.Join(listenersArn, ","))
+
+	return listenersArn
+}
+
+/*
+ * Gets listeners ARN based on http / https string
+ */
+func (a *ALB) GetListenerArnForProtocol(listener string) string {
+	listeners := a.getListenersArnForProtocol([]string{listener})
+	if len(listeners) == 1 {
+		return listeners[0]
+	}
+	return ""
+}
+
+/*
+ * modify an existing rule to a https redirect
+ */
+func (a *ALB) UpdateRuleToHTTPSRedirect(targetGroupArn, ruleArn string, ruleType string, rules []string) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.ModifyRuleInput{
+		Actions: []*elbv2.Action{
+			{
+				RedirectConfig: &elbv2.RedirectActionConfig{
+					Protocol:   aws.String("HTTPS"),
+					StatusCode: aws.String("HTTP_301"),
+					Port:       aws.String("443"),
+				},
+				Type: aws.String("redirect"),
+			},
+		},
+		RuleArn: aws.String(ruleArn),
+	}
+	conditions, err := a.getRuleConditions(ruleType, rules)
+	if err != nil {
+		return err
+	}
+	input.SetConditions(conditions)
+
+	_, err = svc.ModifyRule(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+		} else {
+			albLogger.Errorf(err.Error())
+		}
+		return errors.New("Could not modify alb rule")
+	}
+	return nil
+}
+
+func (a *ALB) UpdateRule(targetGroupArn, ruleArn string, ruleType string, rules []string, cognitoAuth service.DeployRuleConditionsCognitoAuth) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.ModifyRuleInput{
+		Actions: []*elbv2.Action{
+			{
+				TargetGroupArn: aws.String(targetGroupArn),
+				Type:           aws.String("forward"),
+			},
+		},
+		RuleArn: aws.String(ruleArn),
+	}
+	conditions, err := a.getRuleConditions(ruleType, rules)
+	if err != nil {
+		return err
+	}
+	input.SetConditions(conditions)
+
+	// cognito
+	if cognitoAuth.UserPoolName != "" && cognitoAuth.ClientName != "" {
+		cognitoAction, err := a.getCognitoAction(targetGroupArn, cognitoAuth)
+		if err != nil {
+			return err
+		}
+		input.SetActions(cognitoAction)
+	}
+	_, err = svc.ModifyRule(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			albLogger.Errorf(aerr.Error())
+		} else {
+			albLogger.Errorf(err.Error())
+		}
+		return errors.New("Could not modify alb rule")
+	}
+	return nil
+}
+
+func (a *ALB) getRuleConditions(ruleType string, rules []string) ([]*elbv2.RuleCondition, error) {
+	if ruleType == "pathPattern" {
+		if len(rules) != 1 {
+			return nil, errors.New("Wrong number of rules (expected 1, got " + strconv.Itoa(len(rules)) + ")")
+		}
+		return []*elbv2.RuleCondition{
+			{
+				Field:  aws.String("path-pattern"),
+				Values: []*string{aws.String(rules[0])},
+			},
+		}, nil
+	} else if ruleType == "hostname" {
+		if len(rules) != 1 {
+			return nil, errors.New("Wrong number of rules (expected 1, got " + strconv.Itoa(len(rules)) + ")")
+		}
+		hostname := rules[0]
+		return []*elbv2.RuleCondition{
+			{
+				Field:  aws.String("host-header"),
+				Values: []*string{aws.String(hostname)},
+			},
+		}, nil
+	} else if ruleType == "combined" {
+		if len(rules) != 2 {
+			return nil, errors.New("Wrong number of rules (expected 2, got " + strconv.Itoa(len(rules)) + ")")
+		}
+		hostname := rules[1]
+		return []*elbv2.RuleCondition{
+			{
+				Field:  aws.String("path-pattern"),
+				Values: []*string{aws.String(rules[0])},
+			},
+			{
+				Field:  aws.String("host-header"),
+				Values: []*string{aws.String(hostname)},
+			},
+		}, nil
+
+	} else {
+		return nil, errors.New("ruleType not recognized: " + ruleType)
+	}
+}
+
+func (a *ALB) CreateHTTPSRedirectRule(ruleType string, listenerArn string, targetGroupArn string, rules []string, priority int64) error {
+	svc := elbv2.New(session.New())
+	input := &elbv2.CreateRuleInput{
+		Actions: []*elbv2.Action{
+			{
+				RedirectConfig: &elbv2.RedirectActionConfig{
+					Protocol:   aws.String("HTTPS"),
+					StatusCode: aws.String("HTTP_301"),
+					Port:       aws.String("443"),
+				},
+				Type: aws.String("redirect"),
+			},
+		},
+		ListenerArn: aws.String(listenerArn),
+		Priority:    aws.Int64(priority),
+	}
+	conditions, err := a.getRuleConditions(ruleType, rules)
+	if err != nil {
+		return err
+	}
+	input.SetConditions(conditions)
+
+	_, err = svc.CreateRule(input)
+	if err != nil {
+		albLogger.Errorf(err.Error())
+		return errors.New("Could not create alb rule")
+	}
+	return nil
+}
+
+func (a *ALB) CreateRule(ruleType string, listenerArn string, targetGroupArn string, rules []string, priority int64, cognitoAuth service.DeployRuleConditionsCognitoAuth) error {
 	svc := elbv2.New(session.New())
 	input := &elbv2.CreateRuleInput{
 		Actions: []*elbv2.Action{
@@ -401,78 +573,24 @@ func (a *ALB) CreateRule(ruleType string, listenerArn string, targetGroupArn str
 		ListenerArn: aws.String(listenerArn),
 		Priority:    aws.Int64(priority),
 	}
-	if ruleType == "pathPattern" {
-		if len(rules) != 1 {
-			return errors.New("Wrong number of rules (expected 1, got " + strconv.Itoa(len(rules)) + ")")
+	conditions, err := a.getRuleConditions(ruleType, rules)
+	if err != nil {
+		return err
+	}
+	input.SetConditions(conditions)
+
+	// cognito
+	if cognitoAuth.UserPoolName != "" && cognitoAuth.ClientName != "" {
+		cognitoAction, err := a.getCognitoAction(targetGroupArn, cognitoAuth)
+		if err != nil {
+			return err
 		}
-		input.SetConditions([]*elbv2.RuleCondition{
-			{
-				Field:  aws.String("path-pattern"),
-				Values: []*string{aws.String(rules[0])},
-			},
-		})
-	} else if ruleType == "hostname" {
-		if len(rules) != 1 {
-			return errors.New("Wrong number of rules (expected 1, got " + strconv.Itoa(len(rules)) + ")")
-		}
-		hostname := rules[0] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.Domain)
-		input.SetConditions([]*elbv2.RuleCondition{
-			{
-				Field:  aws.String("host-header"),
-				Values: []*string{aws.String(hostname)},
-			},
-		})
-	} else if ruleType == "combined" {
-		if len(rules) != 2 {
-			return errors.New("Wrong number of rules (expected 2, got " + strconv.Itoa(len(rules)) + ")")
-		}
-		hostname := rules[1] + "." + util.GetEnv("LOADBALANCER_DOMAIN", a.Domain)
-		input.SetConditions([]*elbv2.RuleCondition{
-			{
-				Field:  aws.String("path-pattern"),
-				Values: []*string{aws.String(rules[0])},
-			},
-			{
-				Field:  aws.String("host-header"),
-				Values: []*string{aws.String(hostname)},
-			},
-		})
-	} else {
-		return errors.New("ruleType not recognized: " + ruleType)
+		input.SetActions(cognitoAction)
 	}
 
-	_, err := svc.CreateRule(input)
+	_, err = svc.CreateRule(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case elbv2.ErrCodePriorityInUseException:
-				albLogger.Errorf(elbv2.ErrCodePriorityInUseException+": %v", aerr.Error())
-			case elbv2.ErrCodeTooManyTargetGroupsException:
-				albLogger.Errorf(elbv2.ErrCodeTooManyTargetGroupsException+": %v", aerr.Error())
-			case elbv2.ErrCodeTooManyRulesException:
-				albLogger.Errorf(elbv2.ErrCodeTooManyRulesException+": %v", aerr.Error())
-			case elbv2.ErrCodeTargetGroupAssociationLimitException:
-				albLogger.Errorf(elbv2.ErrCodeTargetGroupAssociationLimitException+": %v", aerr.Error())
-			case elbv2.ErrCodeIncompatibleProtocolsException:
-				albLogger.Errorf(elbv2.ErrCodeIncompatibleProtocolsException+": %v", aerr.Error())
-			case elbv2.ErrCodeListenerNotFoundException:
-				albLogger.Errorf(elbv2.ErrCodeListenerNotFoundException+": %v", aerr.Error())
-			case elbv2.ErrCodeTargetGroupNotFoundException:
-				albLogger.Errorf(elbv2.ErrCodeTargetGroupNotFoundException+": %v", aerr.Error())
-			case elbv2.ErrCodeInvalidConfigurationRequestException:
-				albLogger.Errorf(elbv2.ErrCodeInvalidConfigurationRequestException+": %v", aerr.Error())
-			case elbv2.ErrCodeTooManyRegistrationsForTargetIdException:
-				albLogger.Errorf(elbv2.ErrCodeTooManyRegistrationsForTargetIdException+": %v", aerr.Error())
-			case elbv2.ErrCodeTooManyTargetsException:
-				albLogger.Errorf(elbv2.ErrCodeTooManyTargetsException+": %v", aerr.Error())
-			default:
-				albLogger.Errorf(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			albLogger.Errorf(err.Error())
-		}
+		albLogger.Errorf(err.Error())
 		return errors.New("Could not create alb rule")
 	}
 	return nil
@@ -524,6 +642,47 @@ func (a *ALB) GetRulesByTargetGroupArn(targetGroupArn string) []string {
 	}
 	return result
 }
+func (a *ALB) GetRuleByTargetGroupArnWithAuth(targetGroupArn string) []string {
+	var result []string
+	for _, rules := range a.Rules {
+		for _, rule := range rules {
+			foundAuthType := false
+			for _, ruleAction := range rule.Actions {
+				if aws.StringValue(ruleAction.Type) == "authenticate-cognito" {
+					foundAuthType = true
+				}
+			}
+			if foundAuthType {
+				for _, ruleAction := range rule.Actions {
+					if aws.StringValue(ruleAction.TargetGroupArn) == targetGroupArn {
+						result = append(result, aws.StringValue(rule.RuleArn))
+					}
+				}
+			}
+		}
+	}
+	return result
+}
+func (a *ALB) GetConditionsForRule(ruleArn string) ([]string, []string) {
+	conditionFields := []string{}
+	conditionValues := []string{}
+	for _, rules := range a.Rules {
+		for _, rule := range rules {
+			if aws.StringValue(rule.RuleArn) == ruleArn {
+				for _, condition := range rule.Conditions {
+					if aws.StringValue(condition.Field) == "path-pattern" || aws.StringValue(condition.Field) == "host-header" {
+						conditionFields = append(conditionFields, aws.StringValue(condition.Field))
+						if len(condition.Values) >= 1 {
+							conditionValues = append(conditionValues, aws.StringValue(condition.Values[0]))
+						}
+					}
+				}
+			}
+		}
+	}
+	return conditionFields, conditionValues
+}
+
 func (a *ALB) GetTargetGroupArn(serviceName string) (*string, error) {
 	svc := elbv2.New(session.New())
 	input := &elbv2.DescribeTargetGroupsInput{
@@ -559,7 +718,13 @@ func (a *ALB) GetTargetGroupArn(serviceName string) (*string, error) {
 func (a *ALB) GetDomain() string {
 	return util.GetEnv("LOADBALANCER_DOMAIN", a.Domain)
 }
+
+/*
+ * FindRule tries to find a matching rule in the Rules map
+ */
 func (a *ALB) FindRule(listener string, targetGroupArn string, conditionField []string, conditionValue []string) (*string, *string, error) {
+	albLogger.Debugf("Find Rule: listener %s, targetGroupArn %s, conditionField %s, conditionValue %s", listener, targetGroupArn, strings.Join(conditionField, ","), strings.Join(conditionValue, ","))
+
 	if len(conditionField) != len(conditionValue) {
 		return nil, nil, errors.New("conditionField length not equal to conditionValue length")
 	}
@@ -567,25 +732,19 @@ func (a *ALB) FindRule(listener string, targetGroupArn string, conditionField []
 	if rules, ok := a.Rules[listener]; ok {
 		for _, r := range rules {
 			for _, a := range r.Actions {
-				if *a.Type == "forward" && *a.TargetGroupArn == targetGroupArn {
-					// target group found, loop over conditions
-					priorityFound := false
-					skip := false
+				if (aws.StringValue(a.Type) == "forward" && aws.StringValue(a.TargetGroupArn) == targetGroupArn) || aws.StringValue(a.Type) == "redirect" {
+					// possible action match found, checking conditions
+					matchingConditions := []bool{}
 					for _, c := range r.Conditions {
 						match := false
-						for i, _ := range conditionField {
-							if *c.Field == conditionField[i] && len(c.Values) > 0 && *c.Values[0] == conditionValue[i] {
+						for i := range conditionField {
+							if aws.StringValue(c.Field) == conditionField[i] && len(c.Values) > 0 && aws.StringValue(c.Values[0]) == conditionValue[i] {
 								match = true
 							}
 						}
-						if !skip && match { // if any condition was false, skip this rule
-							priorityFound = true
-						} else {
-							priorityFound = false
-							skip = true
-						}
+						matchingConditions = append(matchingConditions, match)
 					}
-					if priorityFound {
+					if len(matchingConditions) == len(conditionField) && util.IsBoolArrayTrue(matchingConditions) {
 						return r.RuleArn, r.Priority, nil
 					}
 				}
@@ -692,4 +851,29 @@ func (a *ALB) DeleteRule(ruleArn string) error {
 		return err
 	}
 	return nil
+}
+func (a *ALB) getCognitoAction(targetGroupArn string, cognitoAuth service.DeployRuleConditionsCognitoAuth) ([]*elbv2.Action, error) {
+	// get cognito user pool info
+	cognito := CognitoIdp{}
+	userPoolArn, userPoolClientID, userPoolDomain, err := cognito.getUserPoolInfo(cognitoAuth.UserPoolName, cognitoAuth.ClientName)
+	if err != nil {
+		return nil, err
+	}
+	return []*elbv2.Action{
+		{
+			AuthenticateCognitoConfig: &elbv2.AuthenticateCognitoActionConfig{
+				OnUnauthenticatedRequest: aws.String("deny"),
+				UserPoolArn:              aws.String(userPoolArn),
+				UserPoolClientId:         aws.String(userPoolClientID),
+				UserPoolDomain:           aws.String(userPoolDomain),
+			},
+			Type:  aws.String("authenticate-cognito"),
+			Order: aws.Int64(1),
+		},
+		{
+			TargetGroupArn: aws.String(targetGroupArn),
+			Type:           aws.String("forward"),
+			Order:          aws.Int64(2),
+		},
+	}, nil
 }
