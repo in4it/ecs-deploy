@@ -132,7 +132,10 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "servicediscovery:ListNamespaces",
         "servicediscovery:ListServices",
         "servicediscovery:CreateService",
-        "ssm:GetParametersByPath"
+        "ssm:GetParametersByPath",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:ListUserPoolClients",
+        "cognito-idp:ListUserPools"
       ],
       "Resource": "*"
     },
