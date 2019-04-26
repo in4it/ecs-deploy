@@ -140,7 +140,10 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 		if err != nil {
 			return nil, err
 		}
-		c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
+		err = c.updateDeployment(d, ddLast, serviceName, taskDefArn, iamRoleArn)
+		if err != nil {
+			controllerLogger.Errorf("updateDeployment failed: %s", err)
+		}
 	}
 
 	// Mark previous deployment as aborted if still running
@@ -272,6 +275,21 @@ func (c *Controller) updateDeployment(d service.Deploy, ddLast *service.DynamoDe
 				s.UpdateServiceListeners(s.ClusterName, s.ServiceName, listeners)
 				// don't update ecs service later
 				updateECSService = false
+			} else {
+				// check for rules changes
+				if c.rulesChanged(d, ddLast) {
+					controllerLogger.Infof("Recreating alb rules for: " + serviceName)
+					// recreate rules
+					err = c.deleteRulesForTarget(serviceName, d, targetGroupArn, alb)
+					if err != nil {
+						controllerLogger.Infof("Couldn't delete existing rules for target: " + serviceName)
+					}
+					// create new rules
+					_, err := c.createRulesForTarget(serviceName, d, targetGroupArn, alb)
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 		ps := ecs.Paramstore{}
@@ -314,6 +332,29 @@ func (c *Controller) updateDeployment(d service.Deploy, ddLast *service.DynamoDe
 	}
 	return nil
 }
+
+func (c *Controller) rulesChanged(d service.Deploy, ddLast *service.DynamoDeployment) bool {
+	if len(d.RuleConditions) != len(ddLast.DeployData.RuleConditions) {
+		return true
+	}
+
+	// sort rule conditions
+	sortedRuleCondition := d.RuleConditions
+	ddLastSortedRuleCondition := ddLast.DeployData.RuleConditions
+	sort.Sort(ruleConditionSort(sortedRuleCondition))
+	sort.Sort(ruleConditionSort(ddLastSortedRuleCondition))
+	// loop over rule conditions to compare them
+	for k, v := range sortedRuleCondition {
+		v2 := ddLastSortedRuleCondition[k]
+		if !cmp.Equal(v, v2) {
+			return true
+		}
+	}
+
+	return false
+
+}
+
 func (c *Controller) redeploy(serviceName, time string) (*service.DeployResult, error) {
 	s := service.NewService()
 	dd, err := s.GetDeployment(serviceName, time)
@@ -431,11 +472,76 @@ func (c *Controller) deleteRulesForTarget(serviceName string, d service.Deploy, 
 	if err != nil {
 		return err
 	}
-	ruleArns := alb.GetRulesByTargetGroupArn(*targetGroupArn)
-	for _, ruleArn := range ruleArns {
+	ruleArnsToDelete := alb.GetRulesByTargetGroupArn(*targetGroupArn)
+	authRuleArns := alb.GetRuleByTargetGroupArnWithAuth(*targetGroupArn)
+	for _, authRuleArn := range authRuleArns {
+		conditionField, conditionValue := alb.GetConditionsForRule(authRuleArn)
+		controllerLogger.Debugf("deleteRulesForTarget: found authRule with conditionField %s and conditionValue %s", strings.Join(conditionField, ","), strings.Join(conditionValue, ","))
+		httpListener := alb.GetListenerArnForProtocol("http")
+		if httpListener != "" {
+			ruleArn, _, err := alb.FindRule(httpListener, "", conditionField, conditionValue)
+			if err != nil {
+				controllerLogger.Debugf("deleteRulesForTarget: rule not found: %s", err)
+			}
+			if ruleArn != nil {
+				ruleArnsToDelete = append(ruleArnsToDelete, *ruleArn)
+			}
+
+		}
+	}
+	for _, ruleArn := range ruleArnsToDelete {
 		alb.DeleteRule(ruleArn)
 	}
 	return nil
+}
+
+// delete rule for a targetgroup with specific listener
+func (c *Controller) deleteRuleForTargetWithListener(serviceName string, r *service.DeployRuleConditions, targetGroupArn *string, alb *ecs.ALB, listener string) error {
+	_, conditionField, conditionValue := c.getALBConditionFieldAndValue(*r, alb.GetDomain())
+	err := alb.GetRulesForAllListeners()
+	if err != nil {
+		return err
+	}
+	ruleArn, _, err := alb.FindRule(listener, *targetGroupArn, conditionField, conditionValue)
+	if err != nil {
+		return err
+	}
+	return alb.DeleteRule(*ruleArn)
+}
+
+// Update rule for a specific targetGroups
+func (c *Controller) UpdateRuleForTarget(serviceName string, r *service.DeployRuleConditions, rLast *service.DeployRuleConditions, targetGroupArn *string, alb *ecs.ALB, listener string) error {
+	_, conditionField, conditionValue := c.getALBConditionFieldAndValue(*rLast, alb.GetDomain())
+	err := alb.GetRulesForAllListeners()
+	if err != nil {
+		return err
+	}
+	ruleArn, _, err := alb.FindRule(alb.GetListenerArnForProtocol(listener), *targetGroupArn, conditionField, conditionValue)
+	if err != nil {
+		return err
+	}
+	ruleType, _, conditionValue := c.getALBConditionFieldAndValue(*rLast, alb.GetDomain())
+
+	// if cognito is set, a redirect is needed instead (cognito doesn't work with http)
+	if strings.ToLower(listener) == "http" && r.CognitoAuth.ClientName != "" {
+		return alb.UpdateRuleToHTTPSRedirect(*targetGroupArn, *ruleArn, ruleType, conditionValue)
+	}
+
+	return alb.UpdateRule(*targetGroupArn, *ruleArn, ruleType, conditionValue, r.CognitoAuth)
+
+}
+
+func (c *Controller) getALBConditionFieldAndValue(r service.DeployRuleConditions, domain string) (string, []string, []string) {
+	if r.PathPattern != "" && r.Hostname != "" {
+		return "combined", []string{"path-pattern", "host-header"}, []string{r.PathPattern, r.Hostname + "." + domain}
+	}
+	if r.PathPattern != "" {
+		return "pathPattern", []string{"path-pattern"}, []string{r.PathPattern}
+	}
+	if r.Hostname != "" {
+		return "hostname", []string{"host-header"}, []string{r.Hostname + "." + domain}
+	}
+	return "", []string{}, []string{}
 }
 
 // Deploy rules for a specific targetGroup
@@ -450,32 +556,16 @@ func (c *Controller) createRulesForTarget(serviceName string, d service.Deploy, 
 	if len(d.RuleConditions) > 0 {
 		// create rules based on conditions
 		var newRules int
-		for _, r := range d.RuleConditions {
-			if r.PathPattern != "" && r.Hostname != "" {
-				rules := []string{r.PathPattern, r.Hostname}
-				l, err := alb.CreateRuleForListeners("combined", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
-				if err != nil {
-					return nil, err
-				}
-				newRules += len(r.Listeners)
-				listeners = append(listeners, l...)
-			} else if r.PathPattern != "" {
-				rules := []string{r.PathPattern}
-				l, err := alb.CreateRuleForListeners("pathPattern", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
-				if err != nil {
-					return nil, err
-				}
-				newRules += len(r.Listeners)
-				listeners = append(listeners, l...)
-			} else if r.Hostname != "" {
-				rules := []string{r.Hostname}
-				l, err := alb.CreateRuleForListeners("hostname", r.Listeners, *targetGroupArn, rules, (priority + 10 + int64(newRules)))
-				if err != nil {
-					return nil, err
-				}
-				newRules += len(r.Listeners)
-				listeners = append(listeners, l...)
+		ruleConditionsSorted := d.RuleConditions
+		sort.Sort(ruleConditionSort(ruleConditionsSorted))
+		for _, r := range ruleConditionsSorted {
+			ruleType, _, conditionValue := c.getALBConditionFieldAndValue(*r, alb.GetDomain())
+			l, err := alb.CreateRuleForListeners(ruleType, r.Listeners, *targetGroupArn, conditionValue, (priority + 10 + int64(newRules)), r.CognitoAuth)
+			if err != nil {
+				return nil, err
 			}
+			newRules += len(r.Listeners)
+			listeners = append(listeners, l...)
 		}
 	} else {
 		// create default rules ( /servicename path on all listeners )

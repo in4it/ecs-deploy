@@ -27,7 +27,7 @@
 
 [[constraint]]
   name = "github.com/aws/aws-sdk-go"
-  version = "1.15.88"
+  version = "1.19.15"
 
 [[constraint]]
   name = "github.com/crewjam/saml"

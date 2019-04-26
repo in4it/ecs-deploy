@@ -2,6 +2,8 @@ package api
 
 import (
 	"testing"
+
+	"github.com/in4it/ecs-deploy/service"
 )
 
 func TestDeployServiceValidator(t *testing.T) {
@@ -9,8 +11,8 @@ func TestDeployServiceValidator(t *testing.T) {
 	a := API{}
 
 	// test with 2 characters
-	d := Deploy{
-		Containers: []*DeployContainer{
+	d := service.Deploy{
+		Containers: []*service.DeployContainer{
 			{
 				ContainerName: "abc",
 			},
@@ -23,8 +25,8 @@ func TestDeployServiceValidator(t *testing.T) {
 	}
 
 	// test with 3 characters
-	d = Deploy{
-		Containers: []*DeployContainer{
+	d = service.Deploy{
+		Containers: []*service.DeployContainer{
 			{
 				ContainerName: "abc",
 			},
@@ -38,8 +40,8 @@ func TestDeployServiceValidator(t *testing.T) {
 
 	// test with wrong container name
 	serviceName = "myservice"
-	d = Deploy{
-		Containers: []*DeployContainer{
+	d = service.Deploy{
+		Containers: []*service.DeployContainer{
 			{
 				ContainerName: "ab",
 			},

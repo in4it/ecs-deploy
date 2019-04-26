@@ -26,7 +26,7 @@
   version = "v2.3.1"
 
 [[projects]]
-  digest = "1:48934db4e5e41f30e83c5650b4e8d3fcc58a431987cdd36d9d019eecc45f2645"
+  digest = "1:1713df27130c2745660c1773b3101e63b0888d930089687be5b2f61b3f2fe8e9"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -38,6 +38,7 @@
     "aws/credentials",
     "aws/credentials/ec2rolecreds",
     "aws/credentials/endpointcreds",
+    "aws/credentials/processcreds",
     "aws/credentials/stscreds",
     "aws/crr",
     "aws/csm",
@@ -65,6 +66,7 @@
     "service/autoscaling",
     "service/cloudwatch",
     "service/cloudwatchlogs",
+    "service/cognitoidentityprovider",
     "service/dynamodb",
     "service/dynamodb/dynamodbattribute",
     "service/dynamodb/dynamodbiface",
@@ -78,8 +80,8 @@
     "service/sts",
   ]
   pruneopts = ""
-  revision = "ceab7b7ac6f535d1397f124620720b5145f1ad59"
-  version = "v1.15.88"
+  revision = "ca6d5f771b63df153f02fe5b117434d5ebafeeda"
+  version = "v1.19.15"
 
 [[projects]]
   digest = "1:a2470e727142c0fb8dbf6f230fb63cf8dc39da614b55c157ad31d27fbc40e033"
@@ -244,11 +246,11 @@
   revision = "78f36f7876767b1899b4bac7381d109fe5a58539"
 
 [[projects]]
-  digest = "1:6f49eae0c1e5dab1dafafee34b207aeb7a42303105960944828c2079b92fc88e"
+  digest = "1:13fe471d0ed891e8544eddfeeb0471fd3c9f2015609a1c000aefdedf52a19d40"
   name = "github.com/jmespath/go-jmespath"
   packages = ["."]
   pruneopts = ""
-  revision = "0b12d6b5"
+  revision = "c2b33e84"
 
 [[projects]]
   digest = "1:302ad9379eb146668760df4d779a95379acab43ce5f9a28f27f3273f98232020"
@@ -448,6 +450,7 @@
     "github.com/aws/aws-sdk-go/service/autoscaling",
     "github.com/aws/aws-sdk-go/service/cloudwatch",
     "github.com/aws/aws-sdk-go/service/cloudwatchlogs",
+    "github.com/aws/aws-sdk-go/service/cognitoidentityprovider",
     "github.com/aws/aws-sdk-go/service/dynamodb",
     "github.com/aws/aws-sdk-go/service/ec2",
     "github.com/aws/aws-sdk-go/service/ecr",

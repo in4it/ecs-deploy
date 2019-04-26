@@ -77,3 +77,59 @@ func TruncateString(str string, n int) string {
 		return str
 	}
 }
+
+/*
+ * RemoveCommonElements removes the common elements and returns the first array
+ */
+func RemoveCommonElements(a, b []string) []string {
+	var c = []string{}
+	var d = []string{}
+
+	for _, item1 := range a {
+		for _, item2 := range b {
+			if item1 == item2 {
+				c = append(c, item2)
+			}
+		}
+	}
+
+	for _, item1 := range a {
+		found := false
+		for _, item2 := range c {
+			if item1 == item2 {
+				found = true
+			}
+		}
+		if !found {
+			d = append(d, item1)
+		}
+	}
+	return d
+}
+
+/*
+ * IsBoolArrayTrue checks whether the array contains only true elements
+ */
+func IsBoolArrayTrue(array []bool) bool {
+	if len(array) == 0 {
+		return false
+	}
+	for _, v := range array {
+		if !v {
+			return false
+		}
+	}
+	return true
+}
+
+/*
+ * InArray returns true if the value exists in the array
+ */
+func InArray(a []string, v string) (ret bool, i int) {
+	for i = range a {
+		if ret = a[i] == v; ret {
+			return ret, i
+		}
+	}
+	return false, -1
+}

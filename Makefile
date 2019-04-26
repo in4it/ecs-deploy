@@ -16,8 +16,13 @@ deps:
 build-server:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 
 
+build-server-darwin:
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 
+
 build-client:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
+build-client-darwin:
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
 
 build-server-static:
 	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -a -installsuffix cgo ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 
