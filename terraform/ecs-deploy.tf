@@ -106,6 +106,7 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "ecr:CompleteLayerUpload",
         "ecr:PutImage",
         "ecr:CreateRepository",
+        "ecr:PutLifecyclePolicy",
         "elasticloadbalancing:Describe*",
         "elasticloadbalancing:CreateRule",
         "elasticloadbalancing:DeleteRule",
