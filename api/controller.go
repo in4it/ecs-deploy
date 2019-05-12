@@ -121,7 +121,7 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 		if util.GetEnv("AWS_RESOURCE_CREATION_ENABLED", "yes") == "yes" {
 			s.Listeners, err = c.createService(serviceName, d, taskDefArn)
 			if err != nil {
-				controllerLogger.Errorf("Could not create service %v", serviceName)
+				controllerLogger.Errorf("Could not create service %v: %s", serviceName, err)
 				return nil, err
 			}
 			// create service in dynamodb
