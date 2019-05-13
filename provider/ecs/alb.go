@@ -401,7 +401,7 @@ func (a *ALB) getListenersArnForProtocol(listeners []string) map[string]string {
 	for _, l := range a.Listeners {
 		for _, l2 := range listeners {
 			if l.Protocol != nil && strings.ToLower(aws.StringValue(l.Protocol)) == strings.ToLower(l2) {
-				listenersArn[aws.StringValue(l.Protocol)] = aws.StringValue(l.ListenerArn)
+				listenersArn[strings.ToLower(aws.StringValue(l.Protocol))] = aws.StringValue(l.ListenerArn)
 			}
 		}
 	}

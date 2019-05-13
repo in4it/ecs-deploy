@@ -130,11 +130,11 @@ func TestGetListenersArnForProtocol(t *testing.T) {
 	a := ALB{}
 	a.Listeners = []*elbv2.Listener{
 		{
-			Protocol:    aws.String("http"),
+			Protocol:    aws.String("HTTP"),
 			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/abc123"),
 		},
 		{
-			Protocol:    aws.String("https"),
+			Protocol:    aws.String("HTTPS"),
 			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/def456"),
 		},
 	}
@@ -156,11 +156,11 @@ func TestGetListenerArnForProtocol(t *testing.T) {
 	a := ALB{}
 	a.Listeners = []*elbv2.Listener{
 		{
-			Protocol:    aws.String("http"),
+			Protocol:    aws.String("HTTP"),
 			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/abc123"),
 		},
 		{
-			Protocol:    aws.String("https"),
+			Protocol:    aws.String("HTTPS"),
 			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/def456"),
 		},
 	}
