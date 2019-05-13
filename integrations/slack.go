@@ -42,6 +42,12 @@ func (s *Slack) sendMsg(message, status string) error {
 	}
 
 	username := util.GetEnv("SLACK_USERNAME", "ecs-deploy")
+
+	// add environment
+	if util.GetEnv("AWS_ACCOUNT_ENV", "") != "" {
+		message = "[" + util.GetEnv("AWS_ACCOUNT_ENV", "") + "] " + message
+	}
+
 	icon := ":vertical_traffic_light:"
 	webhooks := strings.Split(util.GetEnv("SLACK_WEBHOOKS", ""), ",")
 
