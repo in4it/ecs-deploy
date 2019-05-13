@@ -1,6 +1,8 @@
 package ecs
 
 import (
+	"fmt"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -375,10 +377,10 @@ func (a *ALB) CreateRuleForAllListeners(ruleType string, targetGroupArn string, 
 
 func (a *ALB) CreateRuleForListeners(ruleType string, listeners []string, targetGroupArn string, rules []string, priority int64, cognitoAuth service.DeployRuleConditionsCognitoAuth) ([]string, error) {
 	retListeners := a.getListenersArnForProtocol(listeners)
-	for k, listener := range retListeners {
+	for proto, listener := range retListeners {
 		var err error
 		// if cognito is set, a redirect is needed instead (cognito doesn't work with http)
-		if strings.ToLower(listeners[k]) == "http" && cognitoAuth.ClientName != "" {
+		if proto == "http" && cognitoAuth.ClientName != "" {
 			err = a.CreateHTTPSRedirectRule(ruleType, listener, targetGroupArn, rules, priority)
 		} else {
 			err = a.CreateRule(ruleType, listener, targetGroupArn, rules, priority, cognitoAuth)
@@ -387,19 +389,25 @@ func (a *ALB) CreateRuleForListeners(ruleType string, listeners []string, target
 			return nil, err
 		}
 	}
-	return retListeners, nil
+	listenerArns := []string{}
+	for _, v := range retListeners {
+		listenerArns = append(listenerArns, v)
+	}
+	return listenerArns, nil
 }
 
-func (a *ALB) getListenersArnForProtocol(listeners []string) []string {
-	var listenersArn []string
+func (a *ALB) getListenersArnForProtocol(listeners []string) map[string]string {
+	listenersArn := make(map[string]string)
 	for _, l := range a.Listeners {
 		for _, l2 := range listeners {
 			if l.Protocol != nil && strings.ToLower(aws.StringValue(l.Protocol)) == strings.ToLower(l2) {
-				listenersArn = append(listenersArn, aws.StringValue(l.ListenerArn))
+				listenersArn[aws.StringValue(l.Protocol)] = aws.StringValue(l.ListenerArn)
 			}
 		}
 	}
-	albLogger.Debugf("getListenersArnForProtocol: resolved %s to %s", strings.Join(listeners, ","), strings.Join(listenersArn, ","))
+	for k, v := range listenersArn {
+		albLogger.Debugf("getListenersArnForProtocol: resolved %s to %s", k, v)
+	}
 
 	return listenersArn
 }
@@ -409,8 +417,8 @@ func (a *ALB) getListenersArnForProtocol(listeners []string) []string {
  */
 func (a *ALB) GetListenerArnForProtocol(listener string) string {
 	listeners := a.getListenersArnForProtocol([]string{listener})
-	if len(listeners) == 1 {
-		return listeners[0]
+	if val, ok := listeners[listener]; ok {
+		return val
 	}
 	return ""
 }
@@ -556,7 +564,7 @@ func (a *ALB) CreateHTTPSRedirectRule(ruleType string, listenerArn string, targe
 	_, err = svc.CreateRule(input)
 	if err != nil {
 		albLogger.Errorf(err.Error())
-		return errors.New("Could not create alb rule")
+		return fmt.Errorf("Could not create alb rule: %+v", input)
 	}
 	return nil
 }

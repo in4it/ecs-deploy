@@ -125,3 +125,48 @@ func TestFindRule(t *testing.T) {
 		t.Errorf("Error: found wrong rule")
 	}
 }
+
+func TestGetListenersArnForProtocol(t *testing.T) {
+	a := ALB{}
+	a.Listeners = []*elbv2.Listener{
+		{
+			Protocol:    aws.String("http"),
+			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/abc123"),
+		},
+		{
+			Protocol:    aws.String("https"),
+			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/def456"),
+		},
+	}
+	listeners := []string{"http", "https"}
+	retListeners := a.getListenersArnForProtocol(listeners)
+	expectedResult := map[string]string{
+		"http":  "arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/abc123",
+		"https": "arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/def456",
+	}
+	if retListeners["http"] != expectedResult["http"] {
+		t.Errorf("didn't get expected result: got %s, expected %s", retListeners, expectedResult)
+	}
+	if retListeners["https"] != expectedResult["https"] {
+		t.Errorf("didn't get expected result: got %s, expected %s", retListeners, expectedResult)
+	}
+}
+
+func TestGetListenerArnForProtocol(t *testing.T) {
+	a := ALB{}
+	a.Listeners = []*elbv2.Listener{
+		{
+			Protocol:    aws.String("http"),
+			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/abc123"),
+		},
+		{
+			Protocol:    aws.String("https"),
+			ListenerArn: aws.String("arn:aws:elasticloadbalancing:region:1234567890:listener/app/myapp/def456"),
+		},
+	}
+	retListener := a.GetListenerArnForProtocol("http")
+	expectedResult := aws.StringValue(a.Listeners[0].ListenerArn)
+	if retListener != expectedResult {
+		t.Errorf("didn't get expected result: got %s, expected %s", retListener, expectedResult)
+	}
+}
