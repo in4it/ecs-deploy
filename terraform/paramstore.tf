@@ -73,3 +73,10 @@ resource "aws_ssm_parameter" "ecs-deploy-autoscaling-strategies" {
   value = "${var.autoscaling_strategies}"
   count = "${var.autoscaling_strategies == "" ? 0 : 1}"
 }
+
+# Paramstore auto-inject env vars
+resource "aws_ssm_parameter" "ecs-deploy-paramstore-auto-inject" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/PARAMSTORE_INJECT"
+  type  = "String"
+  value = "${var.paramstore_inject}"
+}
