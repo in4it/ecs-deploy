@@ -32,12 +32,12 @@ variable "vpc_id" {
 
 variable "vpc_private_subnets" {
   description = "VPC private subnets"
-  type        = "list"
+  type        = list(string)
 }
 
 variable "vpc_public_subnets" {
   description = "VPC public subnets"
-  type        = "list"
+  type        = list(string)
 }
 
 variable "aws_region" {
@@ -103,30 +103,31 @@ variable "url_prefix" {
 
 variable "fixed_response_content_type" {
   description = "fixed response content type"
-  default = "text/plain"
+  default     = "text/plain"
 }
 
 variable "fixed_response_code" {
   description = "fixed response http code"
-  default = "404"
+  default     = "404"
 }
 
 variable "fixed_response_body" {
   description = "fixed response body"
-  default = "No service configured at this address"
+  default     = "No service configured at this address"
 }
 
 variable "paramstore_assume_role" {
   description = "assume role when using paramstore"
-  default = ""
+  default     = ""
 }
+
 variable "paramstore_inject" {
   default = "no"
 }
 
 variable "autoscaling_strategies" {
   description = "enable/disable autoscaling strategies"
-  default = ""
+  default     = ""
 }
 
 variable "ecs_init_script" {
@@ -140,3 +141,4 @@ variable "ecs_ec2_extra_sg" {
 variable "sns_endpoint" {
   default = ""
 }
+

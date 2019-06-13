@@ -1,6 +1,6 @@
 resource "aws_security_group" "alb" {
   name        = "${var.cluster_name} ALB"
-  vpc_id      = "${var.vpc_id}"
+  vpc_id      = var.vpc_id
   description = "${var.cluster_name} ALB"
 
   ingress {
@@ -27,14 +27,14 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "cluster" {
   name        = "${var.cluster_name} ECS"
-  vpc_id      = "${var.vpc_id}"
+  vpc_id      = var.vpc_id
   description = "${var.cluster_name} ECS"
 
   ingress {
     from_port       = 32768
     to_port         = 61000
     protocol        = "tcp"
-    security_groups = ["${aws_security_group.alb.id}"]
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
@@ -44,3 +44,4 @@ resource "aws_security_group" "cluster" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+

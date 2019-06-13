@@ -19,11 +19,12 @@ resource "aws_iam_role" "cluster-service-role" {
   ]
 }
 EOF
+
 }
 
 resource "aws_iam_role_policy" "cluster-service-role" {
   name = "${var.cluster_name}-policy"
-  role = "${aws_iam_role.cluster-service-role.name}"
+  role = aws_iam_role.cluster-service-role.name
 
   policy = <<EOF
 {
@@ -45,15 +46,16 @@ resource "aws_iam_role_policy" "cluster-service-role" {
     ]
 }
 EOF
+
 }
 
 #
 # IAM EC2 role
 #
 resource "aws_iam_role" "cluster-ec2-role" {
-  name = "ecs-${var.cluster_name}-ec2-role"
+name = "ecs-${var.cluster_name}-ec2-role"
 
-  assume_role_policy = <<EOF
+assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -68,18 +70,19 @@ resource "aws_iam_role" "cluster-ec2-role" {
   ]
 }
 EOF
+
 }
 
 resource "aws_iam_instance_profile" "cluster-ec2-role" {
-  name = "ecs-${var.cluster_name}-ec2-role"
-  role = "${aws_iam_role.cluster-ec2-role.name}"
+name = "ecs-${var.cluster_name}-ec2-role"
+role = aws_iam_role.cluster-ec2-role.name
 }
 
 resource "aws_iam_role_policy" "cluster-ec2-role" {
-  name = "cluster-ec2-role-policy"
-  role = "${aws_iam_role.cluster-ec2-role.id}"
+name = "cluster-ec2-role-policy"
+role = aws_iam_role.cluster-ec2-role.id
 
-  policy = <<EOF
+policy = <<EOF
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -115,6 +118,7 @@ resource "aws_iam_role_policy" "cluster-ec2-role" {
     ]
 }
 EOF
+
 }
 
 #
@@ -138,11 +142,12 @@ resource "aws_iam_role" "ecs-task-execution-role" {
   ]
 }
 EOF
+
 }
 
 resource "aws_iam_role_policy" "ecs-task-execution-role" {
   name = "ecs-task-execution-role"
-  role = "${aws_iam_role.ecs-task-execution-role.id}"
+  role = aws_iam_role.ecs-task-execution-role.id
 
   policy = <<EOF
 {
@@ -174,4 +179,6 @@ resource "aws_iam_role_policy" "ecs-task-execution-role" {
   ]
 }
 EOF
+
 }
+

@@ -5,7 +5,8 @@
 #
 # accountid
 #
-data "aws_caller_identity" "current" {}
+data "aws_caller_identity" "current" {
+}
 
 #
 # ECS service
@@ -13,37 +14,37 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_ecs_service" "ecs-deploy" {
   name                               = "ecs-deploy"
-  cluster                            = "${aws_ecs_cluster.cluster.id}"
-  task_definition                    = "${aws_ecs_task_definition.ecs-deploy.arn}"
-  iam_role                           = "${aws_iam_role.cluster-service-role.arn}"
+  cluster                            = aws_ecs_cluster.cluster.id
+  task_definition                    = aws_ecs_task_definition.ecs-deploy.arn
+  iam_role                           = aws_iam_role.cluster-service-role.arn
   desired_count                      = 1
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
   load_balancer {
-    target_group_arn = "${aws_alb_target_group.ecs-deploy.id}"
+    target_group_arn = aws_alb_target_group.ecs-deploy.id
     container_name   = "ecs-deploy"
     container_port   = 8080
   }
 }
 
 data "template_file" "ecs-deploy" {
-  template = "${file("${path.module}/templates/ecs-deploy.json")}"
+  template = file("${path.module}/templates/ecs-deploy.json")
 
-  vars {
-    AWS_REGION         = "${var.aws_region}"
-    ENVIRONMENT        = "${var.aws_env}"
-    PARAMSTORE_ENABLED = "${var.paramstore_enabled}"
-    CLUSTER_NAME       = "${var.cluster_name}"
-    ECS_DEPLOY_VERSION = "${var.ecs_deploy_version}"
-    DEBUG              = "${var.ecs_deploy_debug}"
+  vars = {
+    AWS_REGION         = var.aws_region
+    ENVIRONMENT        = var.aws_env
+    PARAMSTORE_ENABLED = var.paramstore_enabled
+    CLUSTER_NAME       = var.cluster_name
+    ECS_DEPLOY_VERSION = var.ecs_deploy_version
+    DEBUG              = var.ecs_deploy_debug
   }
 }
 
 resource "aws_ecs_task_definition" "ecs-deploy" {
   family                = "ecs-deploy"
-  container_definitions = "${data.template_file.ecs-deploy.rendered}"
-  task_role_arn         = "${aws_iam_role.ecs-deploy.arn}"
+  container_definitions = data.template_file.ecs-deploy.rendered
+  task_role_arn         = aws_iam_role.ecs-deploy.arn
 }
 
 #
@@ -67,11 +68,12 @@ resource "aws_iam_role" "ecs-deploy" {
   ]
 }
 EOF
+
 }
 
 resource "aws_iam_role_policy" "ecs-deploy-policy" {
   name = "ecs-deploy-policy"
-  role = "${aws_iam_role.ecs-deploy.id}"
+  role = aws_iam_role.ecs-deploy.id
 
   policy = <<EOF
 {
@@ -186,65 +188,66 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
   ]
 }
 EOF
+
 }
 
 #
 # dynamodb
 #
 resource "aws_dynamodb_table" "ecs-deploy" {
-  name           = "ecs-deploy"
-  read_capacity  = 2
-  write_capacity = 2
-  hash_key       = "ServiceName"
-  range_key      = "Time"
+name           = "ecs-deploy"
+read_capacity  = 2
+write_capacity = 2
+hash_key       = "ServiceName"
+range_key      = "Time"
 
-  attribute {
-    name = "ServiceName"
-    type = "S"
-  }
+attribute {
+name = "ServiceName"
+type = "S"
+}
 
-  attribute {
-    name = "Time"
-    type = "S"
-  }
+attribute {
+name = "Time"
+type = "S"
+}
 
-  attribute {
-    name = "Day"
-    type = "S"
-  }
+attribute {
+name = "Day"
+type = "S"
+}
 
-  attribute {
-    name = "Month"
-    type = "S"
-  }
+attribute {
+name = "Month"
+type = "S"
+}
 
-  ttl {
-    attribute_name = "ExpirationTimeTTL"
-    enabled        = true
-  }
+ttl {
+attribute_name = "ExpirationTimeTTL"
+enabled        = true
+}
 
-  global_secondary_index {
-    name            = "DayIndex"
-    hash_key        = "Day"
-    range_key       = "Time"
-    write_capacity  = 2
-    read_capacity   = 2
-    projection_type = "ALL"
-  }
+global_secondary_index {
+name            = "DayIndex"
+hash_key        = "Day"
+range_key       = "Time"
+write_capacity  = 2
+read_capacity   = 2
+projection_type = "ALL"
+}
 
-  global_secondary_index {
-    name            = "MonthIndex"
-    hash_key        = "Month"
-    range_key       = "Time"
-    write_capacity  = 2
-    read_capacity   = 2
-    projection_type = "ALL"
-  }
+global_secondary_index {
+name            = "MonthIndex"
+hash_key        = "Month"
+range_key       = "Time"
+write_capacity  = 2
+read_capacity   = 2
+projection_type = "ALL"
+}
 }
 
 # cloudwatch log group
 resource "aws_cloudwatch_log_group" "ecs-deploy" {
-  name = "ecs-deploy"
+name = "ecs-deploy"
 }
 
 #
@@ -252,9 +255,9 @@ resource "aws_cloudwatch_log_group" "ecs-deploy" {
 #
 # sns topic for ecs events
 resource "aws_sns_topic" "ecs-deploy" {
-  name = "ecs-deploy-events"
+name = "ecs-deploy-events"
 
-  policy = <<EOF
+policy = <<EOF
 {
   "Version": "2008-10-17",
   "Id": "__default_policy_ID",
@@ -295,22 +298,23 @@ resource "aws_sns_topic" "ecs-deploy" {
   ]
 }
 EOF
+
 }
 
 # post sns to ecs-deploy(https)
 resource "aws_sns_topic_subscription" "ecs-deploy" {
-  topic_arn              = "${aws_sns_topic.ecs-deploy.arn}"
-  protocol               = "https"
-  endpoint               = "https://${var.sns_endpoint == "" ? var.cluster_domain : var.sns_endpoint}/ecs-deploy/webhook"
-  endpoint_auto_confirms = true
+topic_arn = aws_sns_topic.ecs-deploy.arn
+protocol = "https"
+endpoint = "https://${var.sns_endpoint == "" ? var.cluster_domain : var.sns_endpoint}/ecs-deploy/webhook"
+endpoint_auto_confirms = true
 }
 
 # Watch for ecs events in the logs
 resource "aws_cloudwatch_event_rule" "ecs-deploy" {
-  name        = "ecs-event"
-  description = "Capture ecs events"
+name = "ecs-event"
+description = "Capture ecs events"
 
-  event_pattern = <<PATTERN
+event_pattern = <<PATTERN
 {
   "source": [
     "aws.ecs"
@@ -326,13 +330,14 @@ resource "aws_cloudwatch_event_rule" "ecs-deploy" {
   }
 }
 PATTERN
+
 }
 
 # Send ecs-events to sns
 resource "aws_cloudwatch_event_target" "ecs-deploy" {
-  rule      = "${aws_cloudwatch_event_rule.ecs-deploy.name}"
+  rule      = aws_cloudwatch_event_rule.ecs-deploy.name
   target_id = "SendEcsEventToSNS"
-  arn       = "${aws_sns_topic.ecs-deploy.arn}"
+  arn       = aws_sns_topic.ecs-deploy.arn
 }
 
 # cloudwatch event for autoscaling
@@ -355,11 +360,13 @@ resource "aws_cloudwatch_event_rule" "ecs-deploy-autoscaling" {
   }
 }
 PATTERN
+
 }
 
 # Send ecs-events to sns
 resource "aws_cloudwatch_event_target" "ecs-deploy-autoscaling" {
-  rule      = "${aws_cloudwatch_event_rule.ecs-deploy-autoscaling.name}"
+  rule = aws_cloudwatch_event_rule.ecs-deploy-autoscaling.name
   target_id = "SendAutoscalingEventToSNS"
-  arn       = "${aws_sns_topic.ecs-deploy.arn}"
+  arn = aws_sns_topic.ecs-deploy.arn
 }
+
