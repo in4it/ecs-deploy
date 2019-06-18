@@ -2,11 +2,77 @@ package ecs
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"strings"
 	"testing"
 
+	"github.com/ghodss/yaml"
+
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
 )
+
+func TestCreateTaskDefinition(t *testing.T) {
+	var (
+		d       service.DeployServices
+		secrets map[string]string
+		err     error
+	)
+
+	dat, err := ioutil.ReadFile("testdata/ecs.yaml")
+	if err != nil {
+		t.Errorf("Error: %s", err)
+		return
+	}
+
+	err = yaml.Unmarshal(dat, &d)
+	if err != nil {
+		t.Errorf("err: %v\n", err)
+		return
+	}
+
+	if len(d.Services) == 0 {
+		t.Errorf("No services found in yaml")
+		return
+	}
+
+	ecs := ECS{}
+	err = ecs.CreateTaskDefinitionInput(d.Services[0], secrets, "0123456789")
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+
+	// checks
+	if len(ecs.TaskDefinition.ContainerDefinitions) == 0 {
+		t.Errorf("No container definition found")
+	}
+
+	if *ecs.TaskDefinition.ContainerDefinitions[0].Name != "demo" {
+		t.Errorf("Incorrect container definition: name is not demo (got: %s)", *ecs.TaskDefinition.ContainerDefinitions[0].Name)
+		return
+	}
+	if ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration == nil {
+		t.Errorf("Incorrect container definition: no logdriver configured")
+		return
+	}
+	if *ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.LogDriver != "json-file" {
+		t.Errorf("Incorrect container definition: incorrect log driver (got: %s)", *ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.LogDriver)
+		return
+	}
+	if val := ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["max-size"]; val == nil {
+		t.Errorf("Incorrect container definition: missign max-size log option")
+		return
+	}
+	if *ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["max-size"] != "20m" {
+		t.Errorf("Incorrect container definition: incorrect log option (got: %s)", *ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["max-size"])
+		return
+	}
+	if *ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["max-file"] != "1" {
+		t.Errorf("Incorrect container definition: incorrect log option (got: %s)", *ecs.TaskDefinition.ContainerDefinitions[0].LogConfiguration.Options["max-file"])
+		return
+	}
+
+}
 
 func TestWaitUntilServicesStable(t *testing.T) {
 	if accountId == nil {
