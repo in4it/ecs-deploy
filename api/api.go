@@ -2,7 +2,7 @@ package api
 
 import (
 	//"github.com/RobotsAndPencils/go-saml"
-	jwt "github.com/appleboy/gin-jwt"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
@@ -183,12 +183,31 @@ func (a *API) createRoutes() {
 // @produce  json
 // @router /login [post]
 func (a *API) createAuthMiddleware() {
-	a.authMiddleware = &jwt.GinJWTMiddleware{
+	var (
+		identityKey = "id"
+		err         error
+	)
+	a.authMiddleware, err = jwt.New(&jwt.GinJWTMiddleware{
 		Realm:            "ecs-deploy",
 		Key:              []byte(util.GetEnv("JWT_SECRET", "unsecure secret key 8a045eb")),
 		SigningAlgorithm: "HS256",
 		Timeout:          time.Hour,
 		MaxRefresh:       time.Hour,
+		IdentityKey:      identityKey,
+		PayloadFunc: func(data interface{}) jwt.MapClaims {
+			if v, ok := data.(*User); ok {
+				return jwt.MapClaims{
+					identityKey: v.UserID,
+				}
+			}
+			return jwt.MapClaims{}
+		},
+		IdentityHandler: func(c *gin.Context) interface{} {
+			claims := jwt.ExtractClaims(c)
+			return &User{
+				UserID: claims["id"].(string),
+			}
+		},
 		Authenticator: func(c *gin.Context) (interface{}, error) {
 			var loginVals login
 			if err := c.ShouldBind(&loginVals); err != nil {
@@ -232,6 +251,9 @@ func (a *API) createAuthMiddleware() {
 
 		// TimeFunc provides the current time. You can override it to use another time value. This is useful for testing or if your server uses a different time zone than your tokens.
 		TimeFunc: time.Now,
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 
