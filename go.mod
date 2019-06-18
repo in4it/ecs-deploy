@@ -10,6 +10,7 @@ require (
 	github.com/beevik/etree v1.1.0 // indirect
 	github.com/crewjam/saml v0.0.0-20190521120225-344d075952c9
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/ghodss/yaml v1.0.0
 	github.com/gin-contrib/location v0.0.0-20190528141421-4d994432eb13
 	github.com/gin-gonic/gin v1.4.0
 	github.com/google/go-cmp v0.3.0

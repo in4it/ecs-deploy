@@ -49,6 +49,15 @@ type DeployContainer struct {
 	MountPoints         []*DeployContainerMountPoint  `json:"mountPoints" yaml:"mountPoints"`
 	Ulimits             []*DeployContainerUlimit      `json:"ulimits" yaml:"ulimits"`
 	Links               []*string                     `json:"links" yaml:"links"`
+	LogConfiguration    DeployLogConfiguration        `json:"logConfiguration" yaml:"logConfiguration"`
+}
+type DeployLogConfiguration struct {
+	LogDriver string                        `json:"logDriver" yaml:"logDriver"`
+	Options   DeployLogConfigurationOptions `json:"options" yaml:"options"`
+}
+type DeployLogConfigurationOptions struct {
+	MaxSize string `json:"max-size" yaml:"max-size"`
+	MaxFile string `json:"max-file" yaml:"max-file"`
 }
 type DeployContainerUlimit struct {
 	Name      string `json:"name" yaml:"name"`
