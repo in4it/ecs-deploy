@@ -23,17 +23,14 @@ RUN cd /webapp && $(npm bin)/ng build --prod --base-href ${PREFIX}/webapp/
 #
 FROM golang:1.11-alpine as go-builder
 
-WORKDIR /go/src/github.com/in4it/ecs-deploy/
+WORKDIR /ecs-deploy/
 
 COPY . .
 
 RUN apk add -u -t build-tools curl git && \
-    curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && \
-    dep ensure && \
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ecs-deploy cmd/ecs-deploy/main.go && \
     apk del build-tools && \
     rm -rf /var/cache/apk/*
-
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ecs-deploy cmd/ecs-deploy/main.go
 
 #
 # Runtime container
@@ -49,7 +46,7 @@ RUN apk --no-cache add ca-certificates bash curl && mkdir -p /app/webapp
 WORKDIR /app
 
 COPY . .
-COPY --from=go-builder /go/src/github.com/in4it/ecs-deploy/ecs-deploy .
+COPY --from=go-builder /ecs-deploy/ecs-deploy .
 COPY --from=webapp-builder /webapp/dist webapp/dist
 
 RUN echo ${SOURCE_COMMIT} > source_commit
