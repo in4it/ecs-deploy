@@ -1,0 +1,59 @@
+#
+# This file contains the definitions for one or more services on ECS
+# Filename can be ecs.yaml or ecs.*.yaml (the latter one can be used for workers)
+#
+---
+# One or more services
+services:
+  # ECS cluster name
+- cluster: myservices
+  # service port used by the LoadBalancer
+  servicePort: 8080
+  # service protocol used by the LoadBalancer
+  serviceProtocol: HTTP
+  # Desired task count
+  desiredCount: 1
+  # Drain container for x seconds after removing the target from the loadbalancer
+  # (for example during an rolling upgrade)
+  deregistrationDelay: 30
+  # Service registry (enable service discovery)
+  serviceRegistry: domain.local
+  # container definitions
+  containers:
+    # Name of container (at least one container needs to match the serviceName)
+  - containerName: demo
+    # container image (optional if containerURI is defined)
+    containerImage: demo
+    # Full container URI of container to deploy
+    containerURI: $DOCKER_IMAGE_URL:$TAG
+    # Container port
+    containerPort: 8080
+    # memory reservation of container
+    memoryReservation: 512
+    # essential true/false
+    essential: true
+    # log configuration
+    logConfiguration:
+      logDriver: json-file
+      options:
+        max-size: 20m
+        max-file: 1
+  # healthcheck
+  healthCheck:
+    # healthy/unhealthy thresholds
+    healthyThreshold: 3
+    unhealthyThreshold: 3
+    # path to perform healthcheck on
+    path: "/healthcheck"
+    # interval in seconds
+    interval: 60
+    # http code to expect
+    matcher: "200,301"
+  # Loadbalancer rules
+  ruleConditions:
+    # hostname rule. Domain will be automatically appended
+  - hostname: demo
+    # Loadbalancer listeners to bind to (http/https)
+    listeners:
+    - http
+    - https

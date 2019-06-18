@@ -2,16 +2,13 @@ SERVER_BINARY = ecs-deploy
 CLIENT_BINARY = ecs-client
 GOARCH = amd64
 
-all: deps build
+all: build
 
 build: build-server build-client
 
 build-static: build-server-static build-client-static
 
 test: test-main test-client
-
-deps:
-	dep ensure
 
 build-server:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 

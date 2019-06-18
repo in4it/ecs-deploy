@@ -2,7 +2,7 @@ package api
 
 import (
 	//"github.com/RobotsAndPencils/go-saml"
-	"github.com/appleboy/gin-jwt"
+	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
@@ -12,8 +12,8 @@ import (
 	"github.com/in4it/ecs-deploy/session"
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
-	"github.com/robbiet480/go.sns"
-	"github.com/swaggo/gin-swagger"              // gin-swagger middleware
+	sns "github.com/robbiet480/go.sns"
+	ginSwagger "github.com/swaggo/gin-swagger"   // gin-swagger middleware
 	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
 
 	"encoding/json"
@@ -35,6 +35,14 @@ type API struct {
 	authMiddleware *jwt.GinJWTMiddleware
 	//sp             saml.ServiceProviderSettings
 	samlHelper *SAML
+}
+
+type User struct {
+	UserID string
+}
+type login struct {
+	Username string `form:"username" json:"username" binding:"required"`
+	Password string `form:"password" json:"password" binding:"required"`
 }
 
 func (a *API) Launch() error {
@@ -175,21 +183,47 @@ func (a *API) createRoutes() {
 // @produce  json
 // @router /login [post]
 func (a *API) createAuthMiddleware() {
-	a.authMiddleware = &jwt.GinJWTMiddleware{
+	var (
+		identityKey = "id"
+		err         error
+	)
+	a.authMiddleware, err = jwt.New(&jwt.GinJWTMiddleware{
 		Realm:            "ecs-deploy",
 		Key:              []byte(util.GetEnv("JWT_SECRET", "unsecure secret key 8a045eb")),
 		SigningAlgorithm: "HS256",
 		Timeout:          time.Hour,
 		MaxRefresh:       time.Hour,
-		Authenticator: func(userId string, password string, c *gin.Context) (string, bool) {
-			if (userId == "deploy" && password == util.GetEnv("DEPLOY_PASSWORD", "deploy")) || (userId == "developer" && password == util.GetEnv("DEVELOPER_PASSWORD", "developer")) {
-				return userId, true
+		IdentityKey:      identityKey,
+		PayloadFunc: func(data interface{}) jwt.MapClaims {
+			if v, ok := data.(*User); ok {
+				return jwt.MapClaims{
+					identityKey: v.UserID,
+				}
+			}
+			return jwt.MapClaims{}
+		},
+		IdentityHandler: func(c *gin.Context) interface{} {
+			claims := jwt.ExtractClaims(c)
+			return &User{
+				UserID: claims["id"].(string),
+			}
+		},
+		Authenticator: func(c *gin.Context) (interface{}, error) {
+			var loginVals login
+			if err := c.ShouldBind(&loginVals); err != nil {
+				return "", jwt.ErrMissingLoginValues
+			}
+			userID := loginVals.Username
+			password := loginVals.Password
+
+			if (userID == "deploy" && password == util.GetEnv("DEPLOY_PASSWORD", "deploy")) || (userID == "developer" && password == util.GetEnv("DEVELOPER_PASSWORD", "developer")) {
+				return &User{UserID: userID}, nil
 			}
 
-			return userId, false
+			return nil, jwt.ErrFailedAuthentication
 		},
-		Authorizator: func(userId string, c *gin.Context) bool {
-			if userId != "" {
+		Authorizator: func(data interface{}, c *gin.Context) bool {
+			if v, ok := data.(*User); ok && v.UserID != "" {
 				return true
 			}
 
@@ -217,6 +251,9 @@ func (a *API) createAuthMiddleware() {
 
 		// TimeFunc provides the current time. You can override it to use another time value. This is useful for testing or if your server uses a different time zone than your tokens.
 		TimeFunc: time.Now,
+	})
+	if err != nil {
+		panic(err)
 	}
 }
 

@@ -256,8 +256,7 @@ func (e *ECS) DeleteCluster(clusterName string) error {
 }
 
 // Creates ECS repository
-func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) (*string, error) {
-	svc := ecs.New(session.New())
+func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]string, accountId string) error {
 	e.TaskDefinition = &ecs.RegisterTaskDefinitionInput{
 		Family:      aws.String(e.ServiceName),
 		TaskRoleArn: aws.String(e.IamRoleArn),
@@ -318,20 +317,13 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) 
 	// loop over containers
 	for _, container := range d.Containers {
 
-		// get account id
-		iam := IAM{}
-		err := iam.GetAccountId()
-		if err != nil {
-			return nil, errors.New("Could not get accountId during createTaskDefinition")
-		}
-
 		// prepare image Uri
 		var imageUri string
 		if container.ContainerURI == "" {
 			if container.ContainerImage == "" {
-				imageUri = iam.AccountId + ".dkr.ecr." + util.GetEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerName
+				imageUri = accountId + ".dkr.ecr." + util.GetEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerName
 			} else {
-				imageUri = iam.AccountId + ".dkr.ecr." + util.GetEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerImage
+				imageUri = accountId + ".dkr.ecr." + util.GetEnv("AWS_REGION", "") + ".amazonaws.com" + "/" + container.ContainerImage
 			}
 			if container.ContainerTag != "" {
 				imageUri += ":" + container.ContainerTag
@@ -396,6 +388,20 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) 
 				},
 			})
 		}
+		// override logconfiguration if set in deploy config
+		if container.LogConfiguration.LogDriver != "" {
+			containerDefinition.SetLogConfiguration(&ecs.LogConfiguration{
+				LogDriver: aws.String(container.LogConfiguration.LogDriver),
+			})
+			options := map[string]*string{}
+			if container.LogConfiguration.Options.MaxFile != "" {
+				options["max-file"] = aws.String(container.LogConfiguration.Options.MaxFile)
+			}
+			if container.LogConfiguration.Options.MaxSize != "" {
+				options["max-size"] = aws.String(container.LogConfiguration.Options.MaxSize)
+			}
+			containerDefinition.LogConfiguration.SetOptions(options)
+		}
 		if container.Memory > 0 {
 			containerDefinition.Memory = aws.Int64(container.Memory)
 		}
@@ -408,7 +414,7 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) 
 			if container.CPU == 0 && util.GetEnv("DEFAULT_CONTAINER_CPU_LIMIT", "") != "" {
 				defaultCpuLimit, err := strconv.ParseInt(util.GetEnv("DEFAULT_CONTAINER_CPU_LIMIT", ""), 10, 64)
 				if err != nil {
-					return nil, err
+					return err
 				}
 				containerDefinition.Cpu = aws.Int64(defaultCpuLimit)
 			}
@@ -490,12 +496,32 @@ func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) 
 		iamExecutionRoleName := util.GetEnv("AWS_ECS_EXECUTION_ROLE", "ecs-"+d.Cluster+"-task-execution-role")
 		iamExecutionRoleArn, err := iam.RoleExists(iamExecutionRoleName)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if iamExecutionRoleArn == nil {
-			return nil, fmt.Errorf("Execution role %s not found and PARAMSTORE_INJECT enabled", iamExecutionRoleName)
+			return fmt.Errorf("Execution role %s not found and PARAMSTORE_INJECT enabled", iamExecutionRoleName)
 		}
 		e.TaskDefinition.SetExecutionRoleArn(aws.StringValue(iamExecutionRoleArn))
+	}
+
+	return nil
+}
+
+func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) (*string, error) {
+	var err error
+
+	svc := ecs.New(session.New())
+
+	// get account id
+	iam := IAM{}
+	err = iam.GetAccountId()
+	if err != nil {
+		return nil, errors.New("Could not get accountId during createTaskDefinition")
+	}
+
+	err = e.CreateTaskDefinitionInput(d, secrets, iam.AccountId)
+	if err != nil {
+		return nil, err
 	}
 
 	// going to register
