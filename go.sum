@@ -25,6 +25,8 @@ github.com/cloudflare/golz4 v0.0.0-20150217214814-ef862a3cdc58/go.mod h1:EOBUe0h
 github.com/couchbase/go-couchbase v0.0.0-20181122212707-3e9b6e1258bb/go.mod h1:TWI8EKQMs5u5jLKW/tsb9VwauIrMIxQG1r5fMsswK5U=
 github.com/couchbase/gomemcached v0.0.0-20181122193126-5125a94a666c/go.mod h1:srVSlQLB8iXBVXHgnqemxUXqN6FCvClgCMPCsjBDR7c=
 github.com/couchbase/goutils v0.0.0-20180530154633-e865a1461c8a/go.mod h1:BQwMFlJzDjFDG3DJUdU0KORxn88UlsOULuxLExMh3Hs=
+github.com/crewjam/saml v0.0.0-20170522121329-6b5dd2d26974 h1:iUNapnIpE5i4r7wHqsf5GH+KF9L+9hluvnGDm7CI07Q=
+github.com/crewjam/saml v0.0.0-20170522121329-6b5dd2d26974/go.mod h1:w5eu+HNtubx+kRpQL6QFT2F3yIFfYVe6+EzOFVU7Hko=
 github.com/crewjam/saml v0.0.0-20190521120225-344d075952c9 h1:+cz/lCIhz+eg8+jC8cWk5LBLbbpH39IKyHliN6GZyUE=
 github.com/crewjam/saml v0.0.0-20190521120225-344d075952c9/go.mod h1:w5eu+HNtubx+kRpQL6QFT2F3yIFfYVe6+EzOFVU7Hko=
 github.com/cupcake/rdb v0.0.0-20161107195141-43ba34106c76/go.mod h1:vYwsqCOLxGiisLwp9rITslkFNpZD5rz43tf41QFkTWY=

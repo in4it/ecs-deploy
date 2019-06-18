@@ -9,7 +9,7 @@ require (
 	github.com/appleboy/gin-jwt/v2 v2.6.2
 	github.com/aws/aws-sdk-go v1.20.2
 	github.com/beevik/etree v1.1.0 // indirect
-	github.com/crewjam/saml v0.0.0-20190521120225-344d075952c9
+	github.com/crewjam/saml v0.0.0-20170522121329-6b5dd2d26974
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-contrib/location v0.0.0-20190528141421-4d994432eb13
