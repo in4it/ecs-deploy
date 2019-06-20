@@ -18,6 +18,13 @@ services:
   deregistrationDelay: 30
   # Service registry (enable service discovery)
   serviceRegistry: domain.local
+  # network mode and configuration
+  networkMode: awsvpc
+  networkConfiguration:
+    securityGroups:
+      - sg-0123456abc
+    subnets:
+      - subnet-0123456abc
   # container definitions
   containers:
     # Name of container (at least one container needs to match the serviceName)
@@ -37,7 +44,7 @@ services:
       logDriver: json-file
       options:
         max-size: 20m
-        max-file: 1
+        max-file: 1   
   # healthcheck
   healthCheck:
     # healthy/unhealthy thresholds

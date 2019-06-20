@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -12,27 +13,75 @@ import (
 	"github.com/in4it/ecs-deploy/util"
 )
 
-func TestCreateTaskDefinition(t *testing.T) {
+func initDeployment() (service.DeployServices, error) {
 	var (
-		d       service.DeployServices
-		secrets map[string]string
-		err     error
+		d service.DeployServices
 	)
-
 	dat, err := ioutil.ReadFile("testdata/ecs.yaml")
 	if err != nil {
-		t.Errorf("Error: %s", err)
-		return
+		return d, err
 	}
 
 	err = yaml.Unmarshal(dat, &d)
 	if err != nil {
-		t.Errorf("err: %v\n", err)
-		return
+		return d, err
 	}
 
 	if len(d.Services) == 0 {
-		t.Errorf("No services found in yaml")
+		return d, fmt.Errorf("No services found in yaml")
+	}
+
+	return d, nil
+}
+
+func TestGetNetworkConfiguration(t *testing.T) {
+	var (
+		err error
+	)
+
+	d, err := initDeployment()
+	if err != nil {
+		t.Errorf("initDeployment failed: %s", err)
+		return
+	}
+
+	ecs := ECS{}
+	networkConfiguration := ecs.getNetworkConfiguration(d.Services[0])
+
+	if *networkConfiguration.AwsvpcConfiguration.AssignPublicIp != "DISABLED" {
+		t.Errorf("Incorrect value for assign public ip: %s", *networkConfiguration.AwsvpcConfiguration.AssignPublicIp)
+		return
+	}
+
+	if len(networkConfiguration.AwsvpcConfiguration.SecurityGroups) == 0 {
+		t.Errorf("No security groups found")
+		return
+	}
+
+	if *networkConfiguration.AwsvpcConfiguration.SecurityGroups[0] != "sg-0123456abc" {
+		t.Errorf("Wrong security group")
+		return
+	}
+
+	if len(networkConfiguration.AwsvpcConfiguration.Subnets) == 0 {
+		t.Errorf("No subnets found")
+		return
+	}
+
+	if *networkConfiguration.AwsvpcConfiguration.Subnets[0] != "subnet-0123456abc" {
+		t.Errorf("Wrong security group")
+		return
+	}
+}
+func TestCreateTaskDefinition(t *testing.T) {
+	var (
+		secrets map[string]string
+		err     error
+	)
+
+	d, err := initDeployment()
+	if err != nil {
+		t.Errorf("initDeployment failed: %s", err)
 		return
 	}
 

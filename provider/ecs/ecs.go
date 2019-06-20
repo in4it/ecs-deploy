@@ -1311,12 +1311,32 @@ func (e *ECS) getNetworkConfiguration(d service.Deploy) *ecs.NetworkConfiguratio
 	var sgs []*string
 	var aIp string
 	nc := &ecs.NetworkConfiguration{AwsvpcConfiguration: &ecs.AwsVpcConfiguration{}}
-	for i, _ := range d.NetworkConfiguration.Subnets {
-		sns = append(sns, &d.NetworkConfiguration.Subnets[i])
+	ec2 := EC2{}
+	for i := range d.NetworkConfiguration.Subnets {
+		if strings.HasPrefix(d.NetworkConfiguration.Subnets[i], "subnet-") {
+			sns = append(sns, &d.NetworkConfiguration.Subnets[i])
+		} else {
+			subnetID, err := ec2.GetSubnetID(d.NetworkConfiguration.Subnets[i])
+			if err != nil {
+				ecsLogger.Errorf("Couldn't retrieve subnet name %s: %s", d.NetworkConfiguration.Subnets[i], err)
+			} else {
+				sns = append(sns, &subnetID)
+			}
+
+		}
 	}
 	nc.AwsvpcConfiguration.SetSubnets(sns)
-	for i, _ := range d.NetworkConfiguration.SecurityGroups {
-		sgs = append(sgs, &d.NetworkConfiguration.SecurityGroups[i])
+	for i := range d.NetworkConfiguration.SecurityGroups {
+		if strings.HasPrefix(d.NetworkConfiguration.SecurityGroups[i], "sg-") {
+			sgs = append(sgs, &d.NetworkConfiguration.SecurityGroups[i])
+		} else {
+			securityGroupID, err := ec2.GetSecurityGroupID(d.NetworkConfiguration.SecurityGroups[i])
+			if err != nil {
+				ecsLogger.Errorf("Couldn't retrieve subnet name %s: %s", d.NetworkConfiguration.Subnets[i], err)
+			} else {
+				sgs = append(sgs, &securityGroupID)
+			}
+		}
 	}
 	nc.AwsvpcConfiguration.SetSecurityGroups(sgs)
 	if d.NetworkConfiguration.AssignPublicIp == "" {
