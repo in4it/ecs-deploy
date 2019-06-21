@@ -43,9 +43,9 @@ export class ServiceDetailComponent implements OnInit {
 
   tab = "service"
 
-  @ViewChild(InspectChildComponent) inspectChild;
-  @ViewChild(DeployChildComponent) deployChild;
-  @ViewChild(ConfirmChildComponent) confirmChild;
+  @ViewChild(InspectChildComponent, { static: true }) inspectChild;
+  @ViewChild(DeployChildComponent, { static: true }) deployChild;
+  @ViewChild(ConfirmChildComponent, { static: true }) confirmChild;
 
   constructor(
     private route: ActivatedRoute,

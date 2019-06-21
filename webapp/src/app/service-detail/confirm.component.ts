@@ -16,7 +16,7 @@ export class ConfirmChildComponent implements OnInit {
   serviceName: string;
   confirmType: string;
 
-  @ViewChild('confirm') confirmModal : NgbModal;
+  @ViewChild('confirm', { static: true }) confirmModal : NgbModal;
 
   @Output() deletedItem: EventEmitter<any> = new EventEmitter<any>();
   @Output() deletingItem: EventEmitter<any> = new EventEmitter<any>();
