@@ -16,7 +16,7 @@ export class DeployChildComponent implements OnInit {
   serviceName: string;
   versionMap: any;
 
-  @ViewChild('deploy') deployModal : NgbModal;
+  @ViewChild('deploy', { static: true }) deployModal : NgbModal;
 
   @Output() deployed: EventEmitter<any> = new EventEmitter<any>();
   @Output() deploying: EventEmitter<any> = new EventEmitter<any>();

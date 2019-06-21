@@ -16,7 +16,7 @@ export class InspectChildComponent implements OnInit {
   serviceName: string;
   deployment: any
 
-  @ViewChild('inspect') inspectModal : NgbModal;
+  @ViewChild('inspect', { static: true }) inspectModal : NgbModal;
 
   constructor(
     private modalService: NgbModal,
