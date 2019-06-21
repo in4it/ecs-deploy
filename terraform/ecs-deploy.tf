@@ -123,6 +123,8 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "autoscaling:CompleteLifecycleAction",
         "logs:GetLogEvents",
         "ec2:DescribeTags",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
         "cloudwatch:PutMetricAlarm",
         "cloudwatch:DescribeAlarms",
         "cloudwatch:DeleteAlarms",
