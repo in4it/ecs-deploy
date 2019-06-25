@@ -14,7 +14,7 @@ resource "aws_ssm_parameter" "ecs-deploy-saml-enabled" {
 resource "aws_ssm_parameter" "ecs-deploy-saml-acs-url" {
   name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/SAML_ACS_URL"
   type  = "String"
-  value = "https://${var.cluster_domain}${var.url_prefix}"
+  value = var.saml_acs_url == "" ? "https://${var.cluster_domain}${var.url_prefix}" : var.saml_acs_url
   count = var.saml_enabled == "yes" ? 1 : 0
 }
 
