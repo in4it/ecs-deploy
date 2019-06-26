@@ -96,9 +96,9 @@ func (s *ServiceDiscovery) createService(serviceName, namespaceID string) (strin
 	if err != nil {
 		ttl = 60
 	}
-	failureThreshold, err = strconv.ParseInt(util.GetEnv("SERVICE_DISCOVERY_FAILURETHRESHOLD", "3"), 10, 64)
+	failureThreshold, err = strconv.ParseInt(util.GetEnv("SERVICE_DISCOVERY_FAILURETHRESHOLD", "1"), 10, 64)
 	if err != nil {
-		failureThreshold = 3
+		failureThreshold = 1
 	}
 	svc := servicediscovery.New(session.New())
 	input := &servicediscovery.CreateServiceInput{
@@ -111,6 +111,10 @@ func (s *ServiceDiscovery) createService(serviceName, namespaceID string) (strin
 				{
 					TTL:  aws.Int64(ttl),
 					Type: aws.String("SRV"),
+				},
+				{
+					TTL:  aws.Int64(ttl),
+					Type: aws.String("A"),
 				},
 			},
 		},
