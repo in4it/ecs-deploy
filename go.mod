@@ -22,8 +22,9 @@ require (
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8
 	github.com/robbiet480/go.sns v0.0.0-20181124163742-ca087b49e1da
 	github.com/russellhaering/goxmldsig v0.0.0-20180430223755-7acd5e4a6ef7 // indirect
-	github.com/spf13/pflag v1.0.3 // indirect
+	github.com/spf13/pflag v1.0.3
 	github.com/swaggo/gin-swagger v1.1.0
 	github.com/swaggo/swag v1.5.1
+	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 	gopkg.in/dgrijalva/jwt-go.v3 v3.2.0 // indirect
 )
