@@ -1,7 +1,7 @@
 cache: vendor
 language: go
 go:
-  - 1.11
+  - 1.12
 os:
   - linux
 sudo: false
