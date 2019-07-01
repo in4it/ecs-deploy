@@ -31,6 +31,7 @@ func TestDeployServiceValidator(t *testing.T) {
 				ContainerName: "abc",
 			},
 		},
+    ServicePort: 8080,
 	}
 	serviceName = "abc"
 	err = a.deployServiceValidator(serviceName, d)

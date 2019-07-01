@@ -9,22 +9,26 @@ import (
 	"github.com/in4it/ecs-deploy/util"
 )
 
+var accountId *string
+
+const noAWSMsg = "AWS Credentials not found - test skipped"
+
 func TestGetLastDeploy(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := service.NewService()
-	service.serviceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
-	dd, err := service.getLastDeploy()
+	service := NewService()
+	service.ServiceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
+	dd, err := service.GetLastDeploy()
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoItemsFound") {
-			t.Errorf("getLastDeploys: %v", err)
+			t.Errorf("GetLastDeploys: %v", err)
 		}
 	}
 	if dd != nil {
-		fmt.Printf("getLastDeploy: Retrieved last record: %v_%v\n", dd.ServiceName, dd.Time)
+		fmt.Printf("GetLastDeploy: Retrieved last record: %v_%v\n", dd.ServiceName, dd.Time)
 	} else {
-		fmt.Println("getLastDeploy: No items found")
+		fmt.Println("GetLastDeploy: No items found")
 	}
 }
 
@@ -33,45 +37,45 @@ func TestGetDeploymentByMonth(t *testing.T) {
 		t.Skip(noAWSMsg)
 	}
 	limit := 20
-	service := service.NewService()
-	dds, err := service.getDeploys("byMonth", int64(limit))
+	service := NewService()
+	dds, err := service.GetDeploys("byMonth", int64(limit))
 	if err != nil {
-		t.Errorf("getDeploys byMonth: %v", err)
+		t.Errorf("GetDeploys byMonth: %v", err)
 	}
 	if len(dds) > limit {
-		t.Errorf("getDeploys byMonth: result higher than limit")
+		t.Errorf("GetDeploys byMonth: result higher than limit")
 	}
-	fmt.Printf("getDeploys byMonth: retrieved %d records\n", len(dds))
+	fmt.Printf("GetDeploys byMonth: retrieved %d records\n", len(dds))
 }
 func TestGetDeploymentByDay(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
 	limit := 20
-	service := service.NewService()
-	dds, err := service.getDeploys("byDay", int64(limit))
+	service := NewService()
+	dds, err := service.GetDeploys("byDay", int64(limit))
 	if err != nil {
-		t.Errorf("getDeploys byDay: %v", err)
+		t.Errorf("GetDeploys byDay: %v", err)
 	}
 	if len(dds) > limit {
-		t.Errorf("getDeploys byDay: result higher than limit")
+		t.Errorf("GetDeploys byDay: result higher than limit")
 	}
-	fmt.Printf("getDeploys byDay: retrieved %d records\n", len(dds))
+	fmt.Printf("GetDeploys byDay: retrieved %d records\n", len(dds))
 }
 func TestGetDeploymentSecondToLast(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := service.NewService()
-	service.serviceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
-	dds, err := service.getDeploys("secondToLast", 1)
+	service := NewService()
+	service.ServiceName = util.GetEnv("TEST_SERVICENAME", "ecs-deploy")
+	dds, err := service.GetDeploys("secondToLast", 1)
 	if err != nil {
 		if !strings.HasPrefix(err.Error(), "NoSecondToLast") {
-			t.Errorf("getDeploys secondToLast: %v", err)
+			t.Errorf("GetDeploys secondToLast: %v", err)
 		}
 	}
 	if len(dds) > 1 {
-		t.Errorf("getDeploys secondToLast: result higher than 1")
+		t.Errorf("GetDeploys secondToLast: result higher than 1")
 	}
 	if len(dds) == 1 {
 		fmt.Printf("Retrieved second to last record: %v_%v\n", dds[0].ServiceName, dds[0].Time)
@@ -81,9 +85,9 @@ func TestGetServices(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := service.NewService()
+	service := NewService()
 	var ds DynamoServices
-	err := service.getServices(&ds)
+	err := service.GetServices(&ds)
 	if err != nil {
 		t.Errorf("Couldn't retrieve services from dynamodb: %v\n", err.Error())
 	}
@@ -92,8 +96,8 @@ func TestGetClusterInfo(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := service.NewService()
-	dc, err := service.getClusterInfo()
+	service := NewService()
+	dc, err := service.GetClusterInfo()
 	if err != nil {
 		t.Errorf("ClusterInfo: %v", err)
 	}
@@ -107,12 +111,12 @@ func TestGetScalingActivity(t *testing.T) {
 	if accountId == nil {
 		t.Skip(noAWSMsg)
 	}
-	service := service.NewService()
+	service := NewService()
 
 	clusterName := util.GetEnv("TEST_CLUSTERNAME", "testcluster")
 	startTime := time.Now().Add(-5 * time.Minute)
 
-	result, err := service.getScalingActivity(clusterName, startTime)
+	result, _, err := service.GetScalingActivity(clusterName, startTime)
 	if err != nil {
 		t.Errorf("ScalingActivity: %v", err)
 	}

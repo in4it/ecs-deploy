@@ -1,6 +1,12 @@
+cache: vendor
 language: go
-
 go:
   - 1.11
-
-cache: vendor
+os:
+  - linux
+sudo: false
+install: true
+script:
+  - env GO111MODULE=on go build cmd/ecs-deploy/*.go
+  - env GO111MODULE=on go build cmd/ecs-client/*.go
+  - env GO111MODULE=on go test -v ./...
