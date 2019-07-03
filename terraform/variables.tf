@@ -12,6 +12,20 @@ variable "ecs_deploy_debug" {
   default     = "false"
 }
 
+variable "ecs_deploy_awsvpc" {
+  description = "enable awsvpc for the ecs-deploy ecs service"
+  default     = false
+}
+variable "ecs_deploy_awsvpc_allowsg" {
+  description = "allow extra sgs when using awsvpc"
+  default     = ""
+}
+
+variable "ecs_deploy_service_discovery_id"
+  description = "join a service discovery domain"
+  default     = ""
+}
+
 variable "cluster_name" {
   description = "Cluster name"
   default     = "services"

@@ -16,10 +16,21 @@ resource "aws_ecs_service" "ecs-deploy" {
   name                               = "ecs-deploy"
   cluster                            = aws_ecs_cluster.cluster.id
   task_definition                    = aws_ecs_task_definition.ecs-deploy.arn
-  iam_role                           = aws_iam_role.cluster-service-role.arn
+  iam_role                           = var.ecs_deploy_awsvpc == "" ? "" : aws_iam_role.cluster-service-role.arn
   desired_count                      = 1
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
+
+  network_configuration {
+    count = var.ecs_deploy_awsvpc == "" ? 0 : 1 
+    subnets = var.vpc_private_subnets
+    security_groups = aws_security_group.ecs-deploy-awsvpc.id
+    assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = var.ecs_deploy_service_discovery_arn == "" ? "" : aws_service_discovery_service.ecs-deploy.arn
+  }
 
   load_balancer {
     target_group_arn = aws_alb_target_group.ecs-deploy.id
@@ -45,6 +56,8 @@ resource "aws_ecs_task_definition" "ecs-deploy" {
   family                = "ecs-deploy"
   container_definitions = data.template_file.ecs-deploy.rendered
   task_role_arn         = aws_iam_role.ecs-deploy.arn
+  network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : ""
+  execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : "" 
 }
 
 #
