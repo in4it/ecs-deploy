@@ -55,7 +55,7 @@ resource "aws_ecs_task_definition" "ecs-deploy" {
   family                = "ecs-deploy"
   container_definitions = data.template_file.ecs-deploy.rendered
   task_role_arn         = aws_iam_role.ecs-deploy.arn
-  network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : ""
+  network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
   execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : "" 
 }
 
