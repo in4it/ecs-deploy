@@ -23,7 +23,7 @@ resource "aws_ecs_service" "ecs-deploy" {
 
   network_configuration {
     subnets = var.ecs_deploy_awsvpc ? var.vpc_private_subnets : []
-    security_groups = var.ecs_deploy_awsvpc ? aws_security_group.ecs-deploy-awsvpc.id : []
+    security_groups = var.ecs_deploy_awsvpc ? [aws_security_group.ecs-deploy-awsvpc.id] : []
     assign_public_ip = false
   }
 
