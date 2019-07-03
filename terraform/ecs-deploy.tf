@@ -16,15 +16,14 @@ resource "aws_ecs_service" "ecs-deploy" {
   name                               = "ecs-deploy"
   cluster                            = aws_ecs_cluster.cluster.id
   task_definition                    = aws_ecs_task_definition.ecs-deploy.arn
-  iam_role                           = var.ecs_deploy_awsvpc == "" ? "" : aws_iam_role.cluster-service-role.arn
+  iam_role                           = var.ecs_deploy_awsvpc ? "" : aws_iam_role.cluster-service-role.arn
   desired_count                      = 1
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
   network_configuration {
-    count = var.ecs_deploy_awsvpc == "" ? 0 : 1 
-    subnets = var.vpc_private_subnets
-    security_groups = aws_security_group.ecs-deploy-awsvpc.id
+    subnets = var.ecs_deploy_awsvpc ? var.vpc_private_subnets : []
+    security_groups = var.ecs_deploy_awsvpc ? aws_security_group.ecs-deploy-awsvpc.id : []
     assign_public_ip = false
   }
 
