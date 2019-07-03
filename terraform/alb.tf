@@ -24,6 +24,7 @@ resource "aws_alb_target_group" "ecs-deploy" {
   name                 = "ecs-deploy"
   port                 = 8080
   protocol             = "HTTP"
+  target_type          = var.ecs_deploy_awsvpc ? "ip" : "instance"
   vpc_id               = var.vpc_id
   deregistration_delay = 30
 
