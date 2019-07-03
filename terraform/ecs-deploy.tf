@@ -29,7 +29,7 @@ resource "aws_ecs_service" "ecs-deploy" {
   }
 
   service_registries {
-    registry_arn = var.ecs_deploy_service_discovery_id == "" ? "" : aws_service_discovery_service.ecs-deploy.arn
+    registry_arn = var.ecs_deploy_service_discovery_id == "" ? "" : aws_service_discovery_service.ecs-deploy[0].arn
   }
 
   load_balancer {
