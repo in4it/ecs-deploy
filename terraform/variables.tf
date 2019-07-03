@@ -21,7 +21,7 @@ variable "ecs_deploy_awsvpc_allowsg" {
   default     = ""
 }
 
-variable "ecs_deploy_service_discovery_id"
+variable "ecs_deploy_service_discovery_id" {
   description = "join a service discovery domain"
   default     = ""
 }
