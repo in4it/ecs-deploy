@@ -689,7 +689,6 @@ func (e *ECS) CreateService(d service.Deploy) error {
 
 	input := &ecs.CreateServiceInput{
 		Cluster:        aws.String(d.Cluster),
-		DesiredCount:   aws.Int64(d.DesiredCount),
 		ServiceName:    aws.String(e.ServiceName),
 		TaskDefinition: aws.String(*e.TaskDefArn),
 		PlacementStrategy: []*ecs.PlacementStrategy{
@@ -702,6 +701,10 @@ func (e *ECS) CreateService(d service.Deploy) error {
 				Type:  aws.String("binpack"),
 			},
 		},
+	}
+
+	if d.DesiredCount != 0 {
+		input.SetDesiredCount(d.DesiredCount)
 	}
 
 	if d.SchedulingStrategy != "" {
