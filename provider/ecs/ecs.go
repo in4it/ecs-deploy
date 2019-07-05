@@ -704,6 +704,10 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		},
 	}
 
+	if d.SchedulingStrategy != "" {
+		input.SetSchedulingStrategy(d.SchedulingStrategy)
+	}
+
 	if strings.ToLower(d.ServiceProtocol) != "none" {
 		input.SetLoadBalancers([]*ecs.LoadBalancer{
 			{

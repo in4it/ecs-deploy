@@ -29,6 +29,7 @@ type Deploy struct {
 	Volumes               []DeployVolume              `json:"volumes" yaml:"volumes"`
 	EnvNamespace          string                      `json:"envNamespace" yaml:"envNamespace"`
 	ServiceRegistry       string                      `json:"serviceRegistry" yaml:"serviceRegistry"`
+	SchedulingStrategy    string                      `json:"schedulingStrategy" yaml:"schedulingStrategy"`
 }
 type DeployContainer struct {
 	ContainerName       string                        `json:"containerName" yaml:"containerName" binding:"required"`
