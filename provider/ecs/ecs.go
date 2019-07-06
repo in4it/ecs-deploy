@@ -691,7 +691,10 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		Cluster:        aws.String(d.Cluster),
 		ServiceName:    aws.String(e.ServiceName),
 		TaskDefinition: aws.String(*e.TaskDefArn),
-		PlacementStrategy: []*ecs.PlacementStrategy{
+	}
+
+	if d.SchedulingStrategy != "DAEMON" {
+		input.SetPlacementStrategy([]*ecs.PlacementStrategy{
 			{
 				Field: aws.String("attribute:ecs.availability-zone"),
 				Type:  aws.String("spread"),
@@ -701,9 +704,7 @@ func (e *ECS) CreateService(d service.Deploy) error {
 				Type:  aws.String("binpack"),
 			},
 		},
-	}
-
-	if d.SchedulingStrategy != "DAEMON" {
+		)
 		input.SetDesiredCount(d.DesiredCount)
 	}
 
