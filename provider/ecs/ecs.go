@@ -703,7 +703,7 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		},
 	}
 
-	if d.DesiredCount != 0 {
+	if d.SchedulingStrategy != "DAEMON" {
 		input.SetDesiredCount(d.DesiredCount)
 	}
 
