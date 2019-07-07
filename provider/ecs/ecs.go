@@ -359,11 +359,34 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		}
 		// set containerPort if not empty
 		if container.ContainerPort > 0 {
-			containerDefinition.SetPortMappings([]*ecs.PortMapping{
-				{
-					ContainerPort: aws.Int64(container.ContainerPort),
-				},
-			})
+			if len(container.PortMappings) > 0 {
+				var portMapping []*ecs.PortMapping
+				for _, v := range container.PortMappings {
+					protocol := "tcp"
+					if v.Protocol != "" {
+						protocol = v.Protocol
+					}
+					if v.HostPort > 0 {
+						portMapping = append(portMapping, &ecs.PortMapping{
+							ContainerPort: aws.Int64(v.ContainerPort),
+							HostPort:      aws.Int64(v.HostPort),
+							Protocol:      aws.String(protocol),
+						})
+					} else {
+						portMapping = append(portMapping, &ecs.PortMapping{
+							ContainerPort: aws.Int64(v.ContainerPort),
+							Protocol:      aws.String(protocol),
+						})
+					}
+				}
+				containerDefinition.SetPortMappings(portMapping)
+			} else {
+				containerDefinition.SetPortMappings([]*ecs.PortMapping{
+					{
+						ContainerPort: aws.Int64(container.ContainerPort),
+					},
+				})
+			}
 		}
 		// set containerCommand if not empty
 		if len(container.ContainerCommand) > 0 {
