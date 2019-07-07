@@ -359,11 +359,34 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		}
 		// set containerPort if not empty
 		if container.ContainerPort > 0 {
-			containerDefinition.SetPortMappings([]*ecs.PortMapping{
-				{
-					ContainerPort: aws.Int64(container.ContainerPort),
-				},
-			})
+			if len(container.PortMappings) > 0 {
+				var portMapping []*ecs.PortMapping
+				for _, v := range container.PortMappings {
+					protocol := "tcp"
+					if v.Protocol != "" {
+						protocol = v.Protocol
+					}
+					if v.HostPort > 0 {
+						portMapping = append(portMapping, &ecs.PortMapping{
+							ContainerPort: aws.Int64(v.ContainerPort),
+							HostPort:      aws.Int64(v.HostPort),
+							Protocol:      aws.String(protocol),
+						})
+					} else {
+						portMapping = append(portMapping, &ecs.PortMapping{
+							ContainerPort: aws.Int64(v.ContainerPort),
+							Protocol:      aws.String(protocol),
+						})
+					}
+				}
+				containerDefinition.SetPortMappings(portMapping)
+			} else {
+				containerDefinition.SetPortMappings([]*ecs.PortMapping{
+					{
+						ContainerPort: aws.Int64(container.ContainerPort),
+					},
+				})
+			}
 		}
 		// set containerCommand if not empty
 		if len(container.ContainerCommand) > 0 {
@@ -691,7 +714,10 @@ func (e *ECS) CreateService(d service.Deploy) error {
 		Cluster:        aws.String(d.Cluster),
 		ServiceName:    aws.String(e.ServiceName),
 		TaskDefinition: aws.String(*e.TaskDefArn),
-		PlacementStrategy: []*ecs.PlacementStrategy{
+	}
+
+	if d.SchedulingStrategy != "DAEMON" {
+		input.SetPlacementStrategy([]*ecs.PlacementStrategy{
 			{
 				Field: aws.String("attribute:ecs.availability-zone"),
 				Type:  aws.String("spread"),
@@ -701,9 +727,7 @@ func (e *ECS) CreateService(d service.Deploy) error {
 				Type:  aws.String("binpack"),
 			},
 		},
-	}
-
-	if d.SchedulingStrategy != "DAEMON" {
+		)
 		input.SetDesiredCount(d.DesiredCount)
 	}
 

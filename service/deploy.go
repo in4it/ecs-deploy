@@ -51,6 +51,12 @@ type DeployContainer struct {
 	Ulimits             []*DeployContainerUlimit      `json:"ulimits" yaml:"ulimits"`
 	Links               []*string                     `json:"links" yaml:"links"`
 	LogConfiguration    DeployLogConfiguration        `json:"logConfiguration" yaml:"logConfiguration"`
+	PortMappings        []DeployContainerPortMapping  `json:"portMappings" yaml:"portMappings"`
+}
+type DeployContainerPortMapping struct {
+	Protocol      string `json:"protocol" yaml:"protocol"`
+	HostPort      int64  `json:"hostPort" yaml:"hostPort"`
+	ContainerPort int64  `json:"containerPort" yaml:"containerPort"`
 }
 type DeployLogConfiguration struct {
 	LogDriver string                        `json:"logDriver" yaml:"logDriver"`
