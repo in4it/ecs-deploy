@@ -30,6 +30,7 @@ type Deploy struct {
 	EnvNamespace          string                      `json:"envNamespace" yaml:"envNamespace"`
 	ServiceRegistry       string                      `json:"serviceRegistry" yaml:"serviceRegistry"`
 	SchedulingStrategy    string                      `json:"schedulingStrategy" yaml:"schedulingStrategy"`
+	AppMesh               string                      `json:"appMesh" yaml:"appMesh"`
 }
 type DeployContainer struct {
 	ContainerName       string                        `json:"containerName" yaml:"containerName" binding:"required"`

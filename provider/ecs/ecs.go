@@ -527,6 +527,65 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		e.TaskDefinition.SetExecutionRoleArn(aws.StringValue(iamExecutionRoleArn))
 	}
 
+	// app mesh
+	if d.AppMesh != "" {
+		virtualNodeName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
+		proxyConfiguration := &ecs.ProxyConfiguration{
+			Type:          aws.String("APPMESH"),
+			ContainerName: aws.String("envoy"),
+			Properties: []*ecs.KeyValuePair{
+				{
+					Name:  aws.String("IgnoredUID"),
+					Value: aws.String("1337"),
+				},
+				{
+					Name:  aws.String("ProxyIngressPort"),
+					Value: aws.String("15000"),
+				},
+				{
+					Name:  aws.String("ProxyEgressPort"),
+					Value: aws.String("15001"),
+				},
+				{
+					Name:  aws.String("AppPorts"),
+					Value: aws.String(strconv.FormatInt(d.ServicePort, 10)),
+				},
+				{
+					Name:  aws.String("EgressIgnoredIPs"),
+					Value: aws.String("169.254.170.2,169.254.169.254"),
+				},
+			},
+		}
+		e.TaskDefinition.SetProxyConfiguration(proxyConfiguration)
+		for k := range e.TaskDefinition.ContainerDefinitions {
+			e.TaskDefinition.ContainerDefinitions[k].SetDependsOn([]*ecs.ContainerDependency{
+				{
+					Condition:     aws.String("HEALTHY"),
+					ContainerName: aws.String("envoy"),
+				},
+			})
+		}
+		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, &ecs.ContainerDefinition{
+			Name:      aws.String("envoy"),
+			Image:     aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr.us-west-2.amazonaws.com/aws-appmesh-envoy:v1.9.1.0-prod")),
+			Essential: aws.Bool(true),
+			Environment: []*ecs.KeyValuePair{
+				{
+					Name:  aws.String("APPMESH_VIRTUAL_NODE_NAME"),
+					Value: aws.String("mesh/" + d.AppMesh + "/virtualNode/" + virtualNodeName),
+				},
+			},
+			HealthCheck: &ecs.HealthCheck{
+				Command:     aws.StringSlice([]string{"CMD-SHELL", "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"}),
+				StartPeriod: aws.Int64(10),
+				Interval:    aws.Int64(5),
+				Timeout:     aws.Int64(2),
+				Retries:     aws.Int64(3),
+			},
+			User: aws.String("1337"),
+		})
+	}
+
 	return nil
 }
 
