@@ -160,3 +160,7 @@ variable "saml_acs_url" {
   description = "saml acs url, if the default acs url needs to be overwritten"
   default = ""
 }
+
+variable "enable_dynamodb_encryption" {
+  default = false
+}

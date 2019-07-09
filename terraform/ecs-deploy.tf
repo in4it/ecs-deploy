@@ -214,6 +214,7 @@ read_capacity  = 2
 write_capacity = 2
 hash_key       = "ServiceName"
 range_key      = "Time"
+server_side_encryption = var.enable_dynamodb_encryption
 
 attribute {
 name = "ServiceName"
