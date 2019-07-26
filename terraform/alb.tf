@@ -8,7 +8,7 @@ data "aws_acm_certificate" "certificate" {
 }
 
 resource "aws_alb" "alb" {
-  name            = "${var.cluster_name}${var.alb_internal == "true" ? "-private" : ""}"
+  name            = var.cluster_name
   internal        = var.alb_internal
   security_groups = [aws_security_group.alb.id]
   subnets = formatlist(
