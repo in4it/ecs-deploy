@@ -529,7 +529,16 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 
 	// app mesh
 	if d.AppMesh != "" {
+		a := AppMesh{}
 		virtualNodeName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
+		healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck)
+		if err != nil {
+			return err
+		}
+		if err := a.createVirtualNodeName(virtualNodeName, d.AppMesh, d.ServicePort, healthCheck); err != nil {
+			return err
+		}
+
 		proxyConfiguration := &ecs.ProxyConfiguration{
 			Type:          aws.String("APPMESH"),
 			ContainerName: aws.String("envoy"),
@@ -587,6 +596,22 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 	}
 
 	return nil
+}
+
+func (e *ECS) prepareAppMeshHealthcheck(healthCheck service.DeployHealthCheck) (AppMeshHealthCheck, error) {
+	healthCheckPort, err := strconv.ParseInt(healthCheck.Port, 10, 64)
+	if err == nil {
+		return AppMeshHealthCheck{}, err
+	}
+	return AppMeshHealthCheck{
+		HealthyThreshold:   healthCheck.HealthyThreshold,
+		IntervalMillis:     healthCheck.Interval * 1000,
+		Path:               healthCheck.Path,
+		Port:               healthCheckPort,
+		Protocol:           strings.ToLower(healthCheck.Protocol),
+		TimeoutMillis:      healthCheck.Timeout * 1000,
+		UnhealthyThreshold: healthCheck.UnhealthyThreshold,
+	}, nil
 }
 
 func (e *ECS) CreateTaskDefinition(d service.Deploy, secrets map[string]string) (*string, error) {
