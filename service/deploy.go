@@ -30,7 +30,7 @@ type Deploy struct {
 	EnvNamespace          string                      `json:"envNamespace" yaml:"envNamespace"`
 	ServiceRegistry       string                      `json:"serviceRegistry" yaml:"serviceRegistry"`
 	SchedulingStrategy    string                      `json:"schedulingStrategy" yaml:"schedulingStrategy"`
-	AppMesh               string                      `json:"appMesh" yaml:"appMesh"`
+	AppMesh               DeployAppMesh               `json:"appMesh" yaml:"appMesh"`
 }
 type DeployContainer struct {
 	ContainerName       string                        `json:"containerName" yaml:"containerName" binding:"required"`
@@ -249,4 +249,10 @@ type LoadBalancer struct {
 	IPAddressType string
 	Scheme        string
 	Type          string
+}
+
+// AppMesh
+
+type DeployAppMesh struct {
+	Name string `json:"name" yaml:"name"`
 }

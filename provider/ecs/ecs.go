@@ -528,15 +528,38 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 	}
 
 	// app mesh
-	if d.AppMesh != "" {
+	if d.AppMesh.Name != "" && d.NetworkMode == "awsvpc" {
 		a := AppMesh{}
 		virtualNodeName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
-		healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck)
+		virtualServiceName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
+
+		// create virtual node if it doesn't exist yet
+		virtualNodes, err := a.listVirtualNodes(d.AppMesh.Name)
 		if err != nil {
 			return err
 		}
-		if err := a.createVirtualNodeName(virtualNodeName, d.AppMesh, d.ServicePort, healthCheck); err != nil {
+		if _, ok := virtualNodes[virtualNodeName]; !ok {
+			// get healthcheck object
+			healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck)
+			if err != nil {
+				return err
+			}
+			if err := a.createVirtualNodeName(virtualNodeName, d.AppMesh.Name, d.ServicePort, healthCheck); err != nil {
+				return err
+			}
+		} else {
+			// update
+		}
+
+		// create virtual service if it doesn't exist yet
+		virtualServices, err := a.listVirtualServices(d.AppMesh.Name)
+		if err != nil {
 			return err
+		}
+		if _, ok := virtualServices[virtualServiceName]; !ok {
+			if err := a.createVirtualService(virtualServiceName, d.AppMesh.Name); err != nil {
+				return err
+			}
 		}
 
 		proxyConfiguration := &ecs.ProxyConfiguration{
@@ -576,12 +599,12 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		}
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, &ecs.ContainerDefinition{
 			Name:      aws.String("envoy"),
-			Image:     aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr.us-west-2.amazonaws.com/aws-appmesh-envoy:v1.9.1.0-prod")),
+			Image:     aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr.us-west-2.amazonaws.com/aws-appmesh-envoy:v1.11.1.1-prod")),
 			Essential: aws.Bool(true),
 			Environment: []*ecs.KeyValuePair{
 				{
 					Name:  aws.String("APPMESH_VIRTUAL_NODE_NAME"),
-					Value: aws.String("mesh/" + d.AppMesh + "/virtualNode/" + virtualNodeName),
+					Value: aws.String("mesh/" + d.AppMesh.Name + "/virtualNode/" + virtualNodeName),
 				},
 			},
 			HealthCheck: &ecs.HealthCheck{
