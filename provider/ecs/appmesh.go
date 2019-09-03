@@ -69,7 +69,7 @@ func (a *AppMesh) listVirtualServices(meshName string) (map[string]string, error
 	return result, nil
 }
 
-func (a *AppMesh) createVirtualNodeName(virtualNodeName, meshName string, servicePort int64, healthcheck AppMeshHealthCheck) error {
+func (a *AppMesh) createVirtualNodeName(virtualNodeName, virtualNodeDNS, meshName string, servicePort int64, healthcheck AppMeshHealthCheck) error {
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateVirtualNodeInput{
 		MeshName: aws.String(meshName),
@@ -93,7 +93,7 @@ func (a *AppMesh) createVirtualNodeName(virtualNodeName, meshName string, servic
 			},
 			ServiceDiscovery: &appmesh.ServiceDiscovery{
 				Dns: &appmesh.DnsServiceDiscovery{
-					Hostname: aws.String(virtualNodeName),
+					Hostname: aws.String(virtualNodeDNS),
 				},
 			},
 		},
@@ -108,7 +108,7 @@ func (a *AppMesh) createVirtualNodeName(virtualNodeName, meshName string, servic
 	return nil
 }
 
-func (a *AppMesh) createVirtualService(virtualNodeName, meshName string) error {
+func (a *AppMesh) createVirtualService(virtualServiceName, virtualNodeName, meshName string) error {
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateVirtualServiceInput{
 		MeshName: aws.String(meshName),
@@ -119,6 +119,7 @@ func (a *AppMesh) createVirtualService(virtualNodeName, meshName string) error {
 				},
 			},
 		},
+		VirtualServiceName: aws.String(virtualServiceName),
 	}
 
 	_, err := svc.CreateVirtualService(input)

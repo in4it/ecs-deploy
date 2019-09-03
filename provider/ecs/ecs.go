@@ -530,7 +530,8 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 	// app mesh
 	if d.AppMesh.Name != "" && d.NetworkMode == "awsvpc" {
 		a := AppMesh{}
-		virtualNodeName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
+		virtualNodeName := d.ServiceName
+		virtualNodeDNS := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
 		virtualServiceName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
 
 		// create virtual node if it doesn't exist yet
@@ -540,11 +541,11 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		}
 		if _, ok := virtualNodes[virtualNodeName]; !ok {
 			// get healthcheck object
-			healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck)
+			healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck, d.ServicePort, d.ServiceProtocol)
 			if err != nil {
 				return err
 			}
-			if err := a.createVirtualNodeName(virtualNodeName, d.AppMesh.Name, d.ServicePort, healthCheck); err != nil {
+			if err := a.createVirtualNodeName(virtualNodeName, virtualNodeDNS, d.AppMesh.Name, d.ServicePort, healthCheck); err != nil {
 				return err
 			}
 		} else {
@@ -557,7 +558,7 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 			return err
 		}
 		if _, ok := virtualServices[virtualServiceName]; !ok {
-			if err := a.createVirtualService(virtualServiceName, d.AppMesh.Name); err != nil {
+			if err := a.createVirtualService(virtualServiceName, virtualNodeName, d.AppMesh.Name); err != nil {
 				return err
 			}
 		}
@@ -598,9 +599,10 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 			})
 		}
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, &ecs.ContainerDefinition{
-			Name:      aws.String("envoy"),
-			Image:     aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr.us-west-2.amazonaws.com/aws-appmesh-envoy:v1.11.1.1-prod")),
-			Essential: aws.Bool(true),
+			Name:              aws.String("envoy"),
+			Image:             aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr.us-west-2.amazonaws.com/aws-appmesh-envoy:v1.11.1.1-prod")),
+			Essential:         aws.Bool(true),
+			MemoryReservation: aws.Int64(256),
 			Environment: []*ecs.KeyValuePair{
 				{
 					Name:  aws.String("APPMESH_VIRTUAL_NODE_NAME"),
@@ -621,10 +623,38 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 	return nil
 }
 
-func (e *ECS) prepareAppMeshHealthcheck(healthCheck service.DeployHealthCheck) (AppMeshHealthCheck, error) {
-	healthCheckPort, err := strconv.ParseInt(healthCheck.Port, 10, 64)
-	if err == nil {
-		return AppMeshHealthCheck{}, err
+func (e *ECS) prepareAppMeshHealthcheck(healthCheck service.DeployHealthCheck, servicePort int64, serviceProtocol string) (AppMeshHealthCheck, error) {
+	var healthCheckPort int64
+	var err error
+	if healthCheck.HealthyThreshold == 0 {
+		healthCheck.HealthyThreshold = 3
+	}
+	if healthCheck.Interval == 0 {
+		healthCheck.Interval = 60
+	}
+	if healthCheck.Path == "" && strings.ToLower(healthCheck.Protocol) == "http" {
+		return AppMeshHealthCheck{}, fmt.Errorf("Healthcheck path must be set when enabling AppMesh and protocol is http")
+	}
+	if healthCheck.Port == "" {
+		healthCheckPort = servicePort
+	} else {
+		healthCheckPort, err = strconv.ParseInt(healthCheck.Port, 10, 64)
+		if err == nil {
+			return AppMeshHealthCheck{}, err
+		}
+	}
+	if healthCheck.Protocol == "" {
+		if serviceProtocol != "" {
+			healthCheck.Protocol = strings.ToLower(serviceProtocol)
+		} else {
+			healthCheck.Protocol = "http"
+		}
+	}
+	if healthCheck.Timeout == 0 {
+		healthCheck.Timeout = 30
+	}
+	if healthCheck.UnhealthyThreshold == 0 {
+		healthCheck.UnhealthyThreshold = 3
 	}
 	return AppMeshHealthCheck{
 		HealthyThreshold:   healthCheck.HealthyThreshold,
