@@ -153,7 +153,11 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "cognito-idp:DescribeUserPool",
         "cognito-idp:DescribeUserPoolClient",
         "cognito-idp:ListUserPoolClients",
-        "cognito-idp:ListUserPools"
+        "cognito-idp:ListUserPools",
+        "appmesh:CreateVirtualNode",
+        "appmesh:CreateVirtualService",
+        "appmesh:ListVirtualNodes",
+        "appmesh:ListVirtualServices"
       ],
       "Resource": "*"
     },
