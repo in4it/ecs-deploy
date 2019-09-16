@@ -4,6 +4,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/appmesh"
+	"github.com/in4it/ecs-deploy/service"
 	"github.com/juju/loggo"
 )
 
@@ -69,6 +70,28 @@ func (a *AppMesh) listVirtualServices(meshName string) (map[string]string, error
 	return result, nil
 }
 
+func (a *AppMesh) listVirtualRouters(meshName string) (map[string]string, error) {
+	svc := appmesh.New(session.New())
+	pageNum := 0
+	result := make(map[string]string)
+	input := &appmesh.ListVirtualRoutersInput{
+		MeshName: aws.String(meshName),
+	}
+	err := svc.ListVirtualRoutersPages(input,
+		func(page *appmesh.ListVirtualRoutersOutput, lastPage bool) bool {
+			pageNum++
+			for _, virtualRouter := range page.VirtualRouters {
+				result[aws.StringValue(virtualRouter.VirtualRouterName)] = aws.StringValue(virtualRouter.Arn)
+			}
+			return pageNum <= 100
+		})
+	if err != nil {
+		appmeshLogger.Errorf(err.Error())
+		return result, err
+	}
+	return result, nil
+}
+
 func (a *AppMesh) createVirtualNodeName(virtualNodeName, virtualNodeDNS, meshName string, servicePort int64, healthcheck AppMeshHealthCheck) error {
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateVirtualNodeInput{
@@ -123,6 +146,50 @@ func (a *AppMesh) createVirtualService(virtualServiceName, virtualNodeName, mesh
 	}
 
 	_, err := svc.CreateVirtualService(input)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *AppMesh) createVirtualRouter(virtualRouterName string, virtualNodeName string, meshName string, servicePort int64) error {
+	svc := appmesh.New(session.New())
+	input := &appmesh.CreateVirtualRouterInput{
+		MeshName: aws.String(meshName),
+		Spec: &appmesh.VirtualRouterSpec{
+			Listeners: []*appmesh.VirtualRouterListener{
+				{
+					PortMapping: &appmesh.PortMapping{
+						Port:     aws.Int64(servicePort),
+						Protocol: aws.String("http"),
+					},
+				},
+			},
+		},
+		VirtualRouterName: aws.String(virtualRouterName),
+	}
+
+	_, err := svc.CreateVirtualRouter(input)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *AppMesh) createRoute(routeName, virtualRouterName, virtualNodeName, meshName string, mesh service.DeployAppMesh) error {
+	svc := appmesh.New(session.New())
+	input := &appmesh.CreateRouteInput{
+		MeshName: aws.String(meshName),
+		Spec: &appmesh.RouteSpec{
+			HttpRoute: &appmesh.HttpRoute{},
+			TcpRoute:  &appmesh.TcpRoute{},
+		},
+		VirtualRouterName: aws.String(virtualRouterName),
+	}
+
+	_, err := svc.CreateRoute(input)
 	if err != nil {
 		return err
 	}

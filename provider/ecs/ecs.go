@@ -563,6 +563,23 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 			}
 		}
 
+		// retry policy
+		if d.AppMesh.RetryPolicy.MaxRetries > 0 {
+			virtualRouters, err := a.listVirtualRouters(d.AppMesh.Name)
+			if err != nil {
+				return err
+			}
+			virtualRouterName := "retries_" + virtualServiceName
+			if _, ok := virtualRouters[virtualRouterName]; !ok {
+				if err := a.createVirtualRouter(virtualRouterName, virtualNodeName, d.AppMesh.Name, d.ServicePort); err != nil {
+					return err
+				}
+				if err := a.createRoute("retries", virtualRouterName, virtualNodeName, d.AppMesh); err != nil {
+					return err
+				}
+			}
+		}
+
 		proxyConfiguration := &ecs.ProxyConfiguration{
 			Type:          aws.String("APPMESH"),
 			ContainerName: aws.String("envoy"),
