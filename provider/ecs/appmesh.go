@@ -191,6 +191,7 @@ func (a *AppMesh) createRoute(routeName, virtualRouterName, virtualNodeName, hos
 		Spec: &appmesh.RouteSpec{
 			HttpRoute: &appmesh.HttpRoute{
 				Match: &appmesh.HttpRouteMatch{
+					Prefix: aws.String("/"),
 					Headers: []*appmesh.HttpRouteHeader{
 						{
 							Name: aws.String("Host"),
@@ -219,7 +220,6 @@ func (a *AppMesh) createRoute(routeName, virtualRouterName, virtualNodeName, hos
 				},
 			},
 			Priority: aws.Int64(100),
-			TcpRoute: &appmesh.TcpRoute{},
 		},
 		RouteName:         aws.String(routeName),
 		VirtualRouterName: aws.String(virtualRouterName),

@@ -569,7 +569,7 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 			if err != nil {
 				return err
 			}
-			virtualRouterName := "retries_" + virtualServiceName
+			virtualRouterName := "retries_" + d.ServiceName
 			if _, ok := virtualRouters[virtualRouterName]; !ok {
 				if err := a.createVirtualRouter(virtualRouterName, d.AppMesh.Name, d.ServicePort); err != nil {
 					return err
