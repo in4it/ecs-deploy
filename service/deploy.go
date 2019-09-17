@@ -259,8 +259,8 @@ type DeployAppMesh struct {
 }
 
 type DeployAppMeshRetryPolicy struct {
-	HTTPRetryEvents string `json:"httpRetryEvents" yaml:"httpRetryEvents"`
-	MaxRetries      int64  `json:"maxRetries" yaml:"maxRetries"`
-	PerRetryTimeout string `json:"perRetryTimeout" yaml:"perRetryTimeout"`
-	TcpRetryEvents  string `json:"tcpRetryEvents" yaml:"tcpRetryEvents"`
+	HTTPRetryEvents []string `json:"httpRetryEvents" yaml:"httpRetryEvents"`
+	MaxRetries      int64    `json:"maxRetries" yaml:"maxRetries"`
+	PerRetryTimeout string   `json:"perRetryTimeout" yaml:"perRetryTimeout"`
+	TcpRetryEvents  []string `json:"tcpRetryEvents" yaml:"tcpRetryEvents"`
 }

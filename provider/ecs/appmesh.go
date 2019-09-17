@@ -1,6 +1,8 @@
 package ecs
 
 import (
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/appmesh"
@@ -153,7 +155,7 @@ func (a *AppMesh) createVirtualService(virtualServiceName, virtualNodeName, mesh
 	return nil
 }
 
-func (a *AppMesh) createVirtualRouter(virtualRouterName string, virtualNodeName string, meshName string, servicePort int64) error {
+func (a *AppMesh) createVirtualRouter(virtualRouterName string, meshName string, servicePort int64) error {
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateVirtualRouterInput{
 		MeshName: aws.String(meshName),
@@ -178,18 +180,52 @@ func (a *AppMesh) createVirtualRouter(virtualRouterName string, virtualNodeName 
 	return nil
 }
 
-func (a *AppMesh) createRoute(routeName, virtualRouterName, virtualNodeName, meshName string, mesh service.DeployAppMesh) error {
+func (a *AppMesh) createRoute(routeName, virtualRouterName, virtualNodeName, hostname string, mesh service.DeployAppMesh) error {
+	perRetryTimeout, err := time.ParseDuration(mesh.RetryPolicy.PerRetryTimeout)
+	if err != nil {
+		return err
+	}
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateRouteInput{
-		MeshName: aws.String(meshName),
+		MeshName: aws.String(mesh.Name),
 		Spec: &appmesh.RouteSpec{
-			HttpRoute: &appmesh.HttpRoute{},
-			TcpRoute:  &appmesh.TcpRoute{},
+			HttpRoute: &appmesh.HttpRoute{
+				Match: &appmesh.HttpRouteMatch{
+					Headers: []*appmesh.HttpRouteHeader{
+						{
+							Name: aws.String("Host"),
+							Match: &appmesh.HeaderMatchMethod{
+								Exact: aws.String(hostname),
+							},
+						},
+					},
+				},
+				Action: &appmesh.HttpRouteAction{
+					WeightedTargets: []*appmesh.WeightedTarget{
+						{
+							VirtualNode: aws.String(virtualNodeName),
+							Weight:      aws.Int64(100),
+						},
+					},
+				},
+				RetryPolicy: &appmesh.HttpRetryPolicy{
+					HttpRetryEvents: aws.StringSlice(mesh.RetryPolicy.HTTPRetryEvents),
+					MaxRetries:      aws.Int64(mesh.RetryPolicy.MaxRetries),
+					PerRetryTimeout: &appmesh.Duration{
+						Unit:  aws.String("ms"),
+						Value: aws.Int64(perRetryTimeout.Milliseconds()),
+					},
+					TcpRetryEvents: aws.StringSlice(mesh.RetryPolicy.TcpRetryEvents),
+				},
+			},
+			Priority: aws.Int64(100),
+			TcpRoute: &appmesh.TcpRoute{},
 		},
+		RouteName:         aws.String(routeName),
 		VirtualRouterName: aws.String(virtualRouterName),
 	}
 
-	_, err := svc.CreateRoute(input)
+	_, err = svc.CreateRoute(input)
 	if err != nil {
 		return err
 	}

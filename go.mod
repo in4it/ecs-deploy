@@ -7,7 +7,7 @@ replace github.com/ugorji/go v1.1.4 => github.com/ugorji/go/codec v0.0.0-2019020
 require (
 	github.com/appleboy/gin-jwt v2.5.0+incompatible
 	github.com/appleboy/gin-jwt/v2 v2.6.2
-	github.com/aws/aws-sdk-go v1.20.2
+	github.com/aws/aws-sdk-go v1.23.22
 	github.com/beevik/etree v1.1.0 // indirect
 	github.com/crewjam/saml v0.0.0-20170522121329-6b5dd2d26974
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
