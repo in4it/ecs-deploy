@@ -159,7 +159,7 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "appmesh:CreateVirtualRouters",
         "appmesh:CreateRoute",
         "appmesh:ListVirtualNodes",
-        "appmesh:ListVirtualServices"
+        "appmesh:ListVirtualServices",
         "appmesh:ListVirtualNodes",
         "appmesh:ListVirtualServices",
         "appmesh:ListVirtualRouters",
