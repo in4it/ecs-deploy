@@ -94,11 +94,22 @@ func (a *AppMesh) listVirtualRouters(meshName string) (map[string]string, error)
 	return result, nil
 }
 
-func (a *AppMesh) createVirtualNodeName(virtualNodeName, virtualNodeDNS, meshName string, servicePort int64, healthcheck AppMeshHealthCheck) error {
+func (a *AppMesh) createVirtualNode(virtualNodeName, virtualNodeDNS, meshName string, servicePort int64, healthcheck AppMeshHealthCheck, backends []string) error {
+	var appmeshBackends []*appmesh.Backend
+
+	for _, backend := range backends {
+		appmeshBackends = append(appmeshBackends, &appmesh.Backend{
+			VirtualService: &appmesh.VirtualServiceBackend{
+				VirtualServiceName: aws.String(backend),
+			},
+		})
+	}
+
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateVirtualNodeInput{
 		MeshName: aws.String(meshName),
 		Spec: &appmesh.VirtualNodeSpec{
+			Backends: appmeshBackends,
 			Listeners: []*appmesh.Listener{
 				{
 					HealthCheck: &appmesh.HealthCheckPolicy{
@@ -133,7 +144,57 @@ func (a *AppMesh) createVirtualNodeName(virtualNodeName, virtualNodeDNS, meshNam
 	return nil
 }
 
-func (a *AppMesh) createVirtualService(virtualServiceName, virtualNodeName, meshName string) error {
+func (a *AppMesh) updateVirtualNode(virtualNodeName, virtualNodeDNS, meshName string, servicePort int64, healthcheck AppMeshHealthCheck, backends []string) error {
+	var appmeshBackends []*appmesh.Backend
+
+	for _, backend := range backends {
+		appmeshBackends = append(appmeshBackends, &appmesh.Backend{
+			VirtualService: &appmesh.VirtualServiceBackend{
+				VirtualServiceName: aws.String(backend),
+			},
+		})
+	}
+
+	svc := appmesh.New(session.New())
+	input := &appmesh.UpdateVirtualNodeInput{
+		MeshName: aws.String(meshName),
+		Spec: &appmesh.VirtualNodeSpec{
+			Backends: appmeshBackends,
+			Listeners: []*appmesh.Listener{
+				{
+					HealthCheck: &appmesh.HealthCheckPolicy{
+						HealthyThreshold:   aws.Int64(healthcheck.HealthyThreshold),
+						IntervalMillis:     aws.Int64(healthcheck.IntervalMillis),
+						Path:               aws.String(healthcheck.Path),
+						Port:               aws.Int64(healthcheck.Port),
+						Protocol:           aws.String(healthcheck.Protocol),
+						TimeoutMillis:      aws.Int64(healthcheck.TimeoutMillis),
+						UnhealthyThreshold: aws.Int64(healthcheck.UnhealthyThreshold),
+					},
+					PortMapping: &appmesh.PortMapping{
+						Port:     aws.Int64(servicePort),
+						Protocol: aws.String("http"),
+					},
+				},
+			},
+			ServiceDiscovery: &appmesh.ServiceDiscovery{
+				Dns: &appmesh.DnsServiceDiscovery{
+					Hostname: aws.String(virtualNodeDNS),
+				},
+			},
+		},
+		VirtualNodeName: aws.String(virtualNodeName),
+	}
+
+	_, err := svc.UpdateVirtualNode(input)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *AppMesh) createVirtualServiceWithVirtualNode(virtualServiceName, virtualNodeName, meshName string) error {
 	svc := appmesh.New(session.New())
 	input := &appmesh.CreateVirtualServiceInput{
 		MeshName: aws.String(meshName),
@@ -148,6 +209,50 @@ func (a *AppMesh) createVirtualService(virtualServiceName, virtualNodeName, mesh
 	}
 
 	_, err := svc.CreateVirtualService(input)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *AppMesh) createVirtualServiceWithVirtualRouter(virtualServiceName, virtualRouterName, meshName string) error {
+	svc := appmesh.New(session.New())
+	input := &appmesh.CreateVirtualServiceInput{
+		MeshName: aws.String(meshName),
+		Spec: &appmesh.VirtualServiceSpec{
+			Provider: &appmesh.VirtualServiceProvider{
+				VirtualRouter: &appmesh.VirtualRouterServiceProvider{
+					VirtualRouterName: aws.String(virtualRouterName),
+				},
+			},
+		},
+		VirtualServiceName: aws.String(virtualServiceName),
+	}
+
+	_, err := svc.CreateVirtualService(input)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *AppMesh) updateVirtualServiceWithVirtualRouter(virtualServiceName, virtualRouterName, meshName string) error {
+	svc := appmesh.New(session.New())
+	input := &appmesh.UpdateVirtualServiceInput{
+		MeshName: aws.String(meshName),
+		Spec: &appmesh.VirtualServiceSpec{
+			Provider: &appmesh.VirtualServiceProvider{
+				VirtualRouter: &appmesh.VirtualRouterServiceProvider{
+					VirtualRouterName: aws.String(virtualRouterName),
+				},
+			},
+		},
+		VirtualServiceName: aws.String(virtualServiceName),
+	}
+
+	_, err := svc.UpdateVirtualService(input)
 	if err != nil {
 		return err
 	}
@@ -192,14 +297,14 @@ func (a *AppMesh) createRoute(routeName, virtualRouterName, virtualNodeName, hos
 			HttpRoute: &appmesh.HttpRoute{
 				Match: &appmesh.HttpRouteMatch{
 					Prefix: aws.String("/"),
-					Headers: []*appmesh.HttpRouteHeader{
+					/*Headers: []*appmesh.HttpRouteHeader{
 						{
 							Name: aws.String("Host"),
 							Match: &appmesh.HeaderMatchMethod{
 								Exact: aws.String(hostname),
 							},
 						},
-					},
+					},*/
 				},
 				Action: &appmesh.HttpRouteAction{
 					WeightedTargets: []*appmesh.WeightedTarget{

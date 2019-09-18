@@ -255,6 +255,7 @@ type LoadBalancer struct {
 
 type DeployAppMesh struct {
 	Name        string                   `json:"name" yaml:"name"`
+	Backends    []string                 `json:"backends" yaml:"backends"`
 	RetryPolicy DeployAppMeshRetryPolicy `json:"retryPolicy" yaml:"retryPolicy"`
 }
 

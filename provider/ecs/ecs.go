@@ -534,31 +534,29 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		virtualNodeDNS := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
 		virtualServiceName := strings.ToLower(d.ServiceName + "." + d.ServiceRegistry)
 
-		// create virtual node if it doesn't exist yet
+		// list virtual nodes and services
 		virtualNodes, err := a.listVirtualNodes(d.AppMesh.Name)
 		if err != nil {
 			return err
 		}
-		if _, ok := virtualNodes[virtualNodeName]; !ok {
-			// get healthcheck object
-			healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck, d.ServicePort, d.ServiceProtocol)
-			if err != nil {
-				return err
-			}
-			if err := a.createVirtualNodeName(virtualNodeName, virtualNodeDNS, d.AppMesh.Name, d.ServicePort, healthCheck); err != nil {
-				return err
-			}
-		} else {
-			// update
-		}
-
-		// create virtual service if it doesn't exist yet
 		virtualServices, err := a.listVirtualServices(d.AppMesh.Name)
 		if err != nil {
 			return err
 		}
-		if _, ok := virtualServices[virtualServiceName]; !ok {
-			if err := a.createVirtualService(virtualServiceName, virtualNodeName, d.AppMesh.Name); err != nil {
+		// get healthcheck object
+		healthCheck, err := e.prepareAppMeshHealthcheck(d.HealthCheck, d.ServicePort, d.ServiceProtocol)
+		if err != nil {
+			return err
+		}
+
+		// create virtual node if it doesn't exist yet
+		if _, ok := virtualNodes[virtualNodeName]; !ok {
+			if err := a.createVirtualNode(virtualNodeName, virtualNodeDNS, d.AppMesh.Name, d.ServicePort, healthCheck, d.AppMesh.Backends); err != nil {
+				return err
+			}
+		} else {
+			// update
+			if err := a.updateVirtualNode(virtualNodeName, virtualNodeDNS, d.AppMesh.Name, d.ServicePort, healthCheck, d.AppMesh.Backends); err != nil {
 				return err
 			}
 		}
@@ -575,6 +573,23 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 					return err
 				}
 				if err := a.createRoute("retries", virtualRouterName, virtualNodeName, virtualNodeDNS, d.AppMesh); err != nil {
+					return err
+				}
+			}
+			// create virtual service if it doesn't exist yet, or update existing with new virtualRouter
+			if _, ok := virtualServices[virtualServiceName]; !ok {
+				if err := a.createVirtualServiceWithVirtualRouter(virtualServiceName, virtualRouterName, d.AppMesh.Name); err != nil {
+					return err
+				}
+			} else {
+				if err := a.updateVirtualServiceWithVirtualRouter(virtualServiceName, virtualRouterName, d.AppMesh.Name); err != nil {
+					return err
+				}
+			}
+		} else {
+			// create virtual service if it doesn't exist yet
+			if _, ok := virtualServices[virtualServiceName]; !ok {
+				if err := a.createVirtualServiceWithVirtualNode(virtualServiceName, virtualNodeName, d.AppMesh.Name); err != nil {
 					return err
 				}
 			}
