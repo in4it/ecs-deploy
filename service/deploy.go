@@ -254,5 +254,14 @@ type LoadBalancer struct {
 // AppMesh
 
 type DeployAppMesh struct {
-	Name string `json:"name" yaml:"name"`
+	Name        string                   `json:"name" yaml:"name"`
+	Backends    []string                 `json:"backends" yaml:"backends"`
+	RetryPolicy DeployAppMeshRetryPolicy `json:"retryPolicy" yaml:"retryPolicy"`
+}
+
+type DeployAppMeshRetryPolicy struct {
+	HTTPRetryEvents []string `json:"httpRetryEvents" yaml:"httpRetryEvents"`
+	MaxRetries      int64    `json:"maxRetries" yaml:"maxRetries"`
+	PerRetryTimeout string   `json:"perRetryTimeout" yaml:"perRetryTimeout"`
+	TcpRetryEvents  []string `json:"tcpRetryEvents" yaml:"tcpRetryEvents"`
 }

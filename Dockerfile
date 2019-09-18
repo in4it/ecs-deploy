@@ -21,7 +21,7 @@ RUN cd /webapp && $(npm bin)/ng build --prod --base-href ${PREFIX}/webapp/
 #
 # Build go project
 #
-FROM golang:1.11-alpine as go-builder
+FROM golang:1.13-alpine as go-builder
 
 WORKDIR /ecs-deploy/
 
