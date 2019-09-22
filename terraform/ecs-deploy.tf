@@ -15,7 +15,7 @@ data "aws_caller_identity" "current" {
 resource "aws_ecs_service" "ecs-deploy" {
   name                               = "ecs-deploy"
   cluster                            = aws_ecs_cluster.cluster.id
-  task_definition                    = aws_ecs_task_definition.ecs-deploy.arn
+  task_definition                    = var.ecs_deploy_enable_appmesh ? aws_ecs_task_definition.ecs-deploy-appmesh.arn : aws_ecs_task_definition.ecs-deploy.arn
   iam_role                           = var.ecs_deploy_awsvpc ? "" : aws_iam_role.cluster-service-role.arn
   desired_count                      = 1
   deployment_minimum_healthy_percent = 100
@@ -39,24 +39,48 @@ resource "aws_ecs_service" "ecs-deploy" {
 }
 
 data "template_file" "ecs-deploy" {
-  template = file("${path.module}/templates/ecs-deploy.json")
+  template = ecs_deploy_enable_appmesh ? file("${path.module}/templates/ecs-deploy-appmesh.json") : file("${path.module}/templates/ecs-deploy.json")
 
   vars = {
-    AWS_REGION         = var.aws_region
-    ENVIRONMENT        = var.aws_env
-    PARAMSTORE_ENABLED = var.paramstore_enabled
-    CLUSTER_NAME       = var.cluster_name
-    ECS_DEPLOY_VERSION = var.ecs_deploy_version
-    DEBUG              = var.ecs_deploy_debug
+    AWS_REGION            = var.aws_region
+    ENVIRONMENT           = var.aws_env
+    PARAMSTORE_ENABLED    = var.paramstore_enabled
+    CLUSTER_NAME          = var.cluster_name
+    ECS_DEPLOY_VERSION    = var.ecs_deploy_version
+    DEBUG                 = var.ecs_deploy_debug
+    APPMESH_NAME          = var.ecs_deploy_appmesh_name
+    APPMESH_ENVOY_RELEASE = var.ecs_deploy_appmesh_release
   }
 }
 
 resource "aws_ecs_task_definition" "ecs-deploy" {
+  count                 = var.ecs_deploy_enable_appmesh ? 0 : 1
   family                = "ecs-deploy"
   container_definitions = data.template_file.ecs-deploy.rendered
   task_role_arn         = aws_iam_role.ecs-deploy.arn
   network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
   execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : "" 
+}
+
+resource "aws_ecs_task_definition" "ecs-deploy-appmesh" {
+  count                 = var.ecs_deploy_enable_appmesh ? 1 : 0
+  family                = "ecs-deploy"
+  container_definitions = data.template_file.ecs-deploy.rendered
+  task_role_arn         = aws_iam_role.ecs-deploy.arn
+  network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
+  execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : "" 
+
+  proxy_configuration {
+    type           = "APPMESH"
+    container_name = "envoy"
+    properties = {
+      AppPorts         = "10000"
+      EgressIgnoredIPs = "169.254.170.2,169.254.169.254"
+      IgnoredUID       = "1337"
+      ProxyEgressPort  = 15001
+      ProxyIngressPort = 15000
+    }
+  }
 }
 
 #

@@ -22,8 +22,24 @@ variable "ecs_deploy_awsvpc_allowsg" {
 }
 
 variable "ecs_deploy_service_discovery_id" {
-  description = "join a service discovery domain"
+  description = "join a service discovery domain providing the id"
   default     = ""
+}
+variable "ecs_deploy_service_discovery_domain" {
+  description = "service discovery domain"
+  default     = ""
+}
+variable "ecs_deploy_enable_appmesh" {
+  description = "enable appmesh"
+  default     = false
+}
+variable "ecs_deploy_appmesh_name" {
+  description = "appmesh name"
+  default     = ""
+}
+variable "ecs_deploy_appmesh_release" {
+  description = "appmesh release version"
+  default     = "v1.11.1.1-prod"
 }
 
 variable "cluster_name" {
