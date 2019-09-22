@@ -15,7 +15,7 @@ data "aws_caller_identity" "current" {
 resource "aws_ecs_service" "ecs-deploy" {
   name                               = "ecs-deploy"
   cluster                            = aws_ecs_cluster.cluster.id
-  task_definition                    = var.ecs_deploy_enable_appmesh ? aws_ecs_task_definition.ecs-deploy-appmesh.arn : aws_ecs_task_definition.ecs-deploy.arn
+  task_definition                    = var.ecs_deploy_enable_appmesh ? aws_ecs_task_definition.ecs-deploy-appmesh[0].arn : aws_ecs_task_definition.ecs-deploy[0].arn
   iam_role                           = var.ecs_deploy_awsvpc ? "" : aws_iam_role.cluster-service-role.arn
   desired_count                      = 1
   deployment_minimum_healthy_percent = 100
@@ -39,7 +39,7 @@ resource "aws_ecs_service" "ecs-deploy" {
 }
 
 data "template_file" "ecs-deploy" {
-  template = ecs_deploy_enable_appmesh ? file("${path.module}/templates/ecs-deploy-appmesh.json") : file("${path.module}/templates/ecs-deploy.json")
+  template = var.ecs_deploy_enable_appmesh ? file("${path.module}/templates/ecs-deploy-appmesh.json") : file("${path.module}/templates/ecs-deploy.json")
 
   vars = {
     AWS_REGION            = var.aws_region

@@ -1,7 +1,7 @@
 resource "aws_appmesh_virtual_node" "ecs-deploy" {
   count     = var.ecs_deploy_enable_appmesh ? 1 : 0
   name      = "ecs-deploy"
-  mesh_name = "${var.appmesh_name}"
+  mesh_name = "${var.ecs_deploy_appmesh_name}"
 
   spec {
     listener {
