@@ -53,7 +53,7 @@
           "options": {
             "awslogs-group": "ecs-deploy",
             "awslogs-region": "${AWS_REGION}",
-            "awslogs-stream-prefix": "ecs-deploy"
+            "awslogs-stream-prefix": "ecs-deploy-envoy"
           }
         },
         "healthCheck" : {
