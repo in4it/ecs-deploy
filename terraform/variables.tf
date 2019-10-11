@@ -169,7 +169,7 @@ variable "ecs_ec2_extra_sg" {
 }
 
 variable "ecs_ec2_vpc_cidr_sg" {
-  default = "[0.0.0.0/0]"
+  default = "["0.0.0.0/0"]"
 }
 
 variable "sns_endpoint" {
