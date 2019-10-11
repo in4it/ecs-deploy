@@ -168,6 +168,10 @@ variable "ecs_ec2_extra_sg" {
   default = ""
 }
 
+variable "ecs_ec2_vpc_cidr_sg" {
+  default = "[0.0.0.0/0]"
+}
+
 variable "sns_endpoint" {
   default = ""
 }
