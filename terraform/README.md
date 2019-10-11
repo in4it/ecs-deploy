@@ -49,4 +49,5 @@ aws ssm put-parameter --name '/mycluster-prod/ecs-deploy/DEPLOY_PASSWORD' --type
 | -------- | ----------- |
 | ecs\_init\_script | Provide new (local) path to the ecs init script |
 | ecs\_ecs2\_extra\_sg | Provide extra security group for EC2 instance |
+| ecs\_ecs2\_vpc\_cidr\_sg | Provide change egress CIDR in the cluster sg for EC2 instance |
 | sns\_endpoint | Override sns endpoint domain |
