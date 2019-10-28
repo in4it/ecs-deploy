@@ -47,6 +47,8 @@ aws ssm put-parameter --name '/mycluster-prod/ecs-deploy/DEPLOY_PASSWORD' --type
 # More Configuration Options
 | Variable | Description |
 | -------- | ----------- |
+| enable\_lb\_logs | Provide new logs from elb with true value  |
+| bucket_lb_logs | Provide location of the bucket (.bucket) to the elb logs if enable\_lb\_logs is true |
 | ecs\_init\_script | Provide new (local) path to the ecs init script |
 | ecs\_ecs2\_extra\_sg | Provide extra security group for EC2 instance |
 | ecs\_ecs2\_vpc\_cidr\_sg | Provide change egress CIDR in the cluster sg for EC2 instance |
