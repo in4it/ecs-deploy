@@ -56,6 +56,15 @@ variable "alb_internal" {
   default     = "false"
 }
 
+variable "enable_lb_logs" {
+  description = "true if needs logs for ALB"
+  default     = "false"
+}
+
+variable bucket_lb_logs {
+  description = "Name bucket located alb logs if logs is true"
+}
+
 variable "vpc_id" {
   description = "VPC ID"
 }

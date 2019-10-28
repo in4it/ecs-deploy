@@ -17,6 +17,12 @@ resource "aws_alb" "alb" {
     var.vpc_public_subnets,
   )
 
+   access_logs {
+    bucket  = var.bucket_lb_logs
+    prefix  = "${var.cluster_domain}-lb"
+    enabled = var.enable_lb_logs
+  }
+
   enable_deletion_protection = true
 }
 
