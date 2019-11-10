@@ -254,9 +254,10 @@ type LoadBalancer struct {
 // AppMesh
 
 type DeployAppMesh struct {
-	Name        string                   `json:"name" yaml:"name"`
-	Backends    []string                 `json:"backends" yaml:"backends"`
-	RetryPolicy DeployAppMeshRetryPolicy `json:"retryPolicy" yaml:"retryPolicy"`
+	Name          string                     `json:"name" yaml:"name"`
+	Backends      []string                   `json:"backends" yaml:"backends"`
+	RetryPolicy   DeployAppMeshRetryPolicy   `json:"retryPolicy" yaml:"retryPolicy"`
+	Configuration DeployAppMeshConfiguration `json:"configuration" yaml:"configuration"`
 }
 
 type DeployAppMeshRetryPolicy struct {
@@ -264,4 +265,7 @@ type DeployAppMeshRetryPolicy struct {
 	MaxRetries      int64    `json:"maxRetries" yaml:"maxRetries"`
 	PerRetryTimeout string   `json:"perRetryTimeout" yaml:"perRetryTimeout"`
 	TcpRetryEvents  []string `json:"tcpRetryEvents" yaml:"tcpRetryEvents"`
+}
+type DeployAppMeshConfiguration struct {
+	EgressIgnoredPorts []string `json:"egressIgnoredPorts" yaml:"egressIgnoredPorts"`
 }

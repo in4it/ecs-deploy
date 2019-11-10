@@ -621,6 +621,12 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 				},
 			},
 		}
+		if len(d.AppMesh.Configuration.EgressIgnoredPorts) != 0 {
+			proxyConfiguration.Properties = append(proxyConfiguration.Properties, &ecs.KeyValuePair{
+				Name:  aws.String("EgressIgnoredPorts"),
+				Value: aws.String(strings.Join(d.AppMesh.Configuration.EgressIgnoredPorts, ",")),
+			})
+		}
 		e.TaskDefinition.SetProxyConfiguration(proxyConfiguration)
 		for k := range e.TaskDefinition.ContainerDefinitions {
 			e.TaskDefinition.ContainerDefinitions[k].SetDependsOn([]*ecs.ContainerDependency{
