@@ -25,6 +25,7 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/swaggo/gin-swagger v1.1.0
 	github.com/swaggo/swag v1.5.1
-	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+	golang.org/x/crypto v0.0.0-20190510104115-cbcb75029529
 	gopkg.in/dgrijalva/jwt-go.v3 v3.2.0 // indirect
+	honnef.co/go/tools v0.0.1-2019.2.3 // indirect
 )
