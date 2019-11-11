@@ -524,10 +524,10 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 					asAutoscalingControllerLogger.Errorf("Error occured during describe services: %v", err)
 				}
 				for _, rs := range rss {
-					if rs.DesiredCount > rs.RunningCount {
+					if c.checkForUnschedulableServices(rs) {
 						scaled := false
 						if servicesFound[clusterName+":"+rs.ServiceName] < 6 {
-							servicesFound[clusterName+":"+rs.ServiceName] += 1
+							servicesFound[clusterName+":"+rs.ServiceName]++
 						}
 						asAutoscalingControllerLogger.Debugf("Checking service %v for unschedulable tasks where desired count > running count (count: %d)", rs.ServiceName, servicesFound[clusterName+":"+rs.ServiceName])
 						for _, event := range rs.Events {
@@ -557,6 +557,18 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 		}
 		time.Sleep(60 * time.Second)
 	}
+}
+
+func (c *AutoscalingController) checkForUnschedulableServices(rs service.RunningService) bool {
+	if rs.DesiredCount > rs.RunningCount {
+		return true
+	}
+	for _, deployment := range rs.Deployments {
+		if deployment.DesiredCount > deployment.RunningCount {
+			return true
+		}
+	}
+	return false
 }
 func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, message string) bool {
 	if strings.Contains(message, "was unable to place a task because no container instance met all of its requirements") && strings.Contains(message, "has insufficient") {
