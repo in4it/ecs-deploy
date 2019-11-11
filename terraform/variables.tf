@@ -2,6 +2,11 @@
 # variables
 #
 
+variable "ecs_deploy_image" {
+  description = "image location of ecs-deploy"
+  default     = "in4it/ecs-deploy"
+}
+
 variable "ecs_deploy_version" {
   description = "ecs deploy version"
   default     = "latest"

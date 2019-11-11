@@ -46,6 +46,7 @@ data "template_file" "ecs-deploy" {
     ENVIRONMENT           = var.aws_env
     PARAMSTORE_ENABLED    = var.paramstore_enabled
     CLUSTER_NAME          = var.cluster_name
+    ECS_DEPLOY_IMAGE      = var.ecs_deploy_image
     ECS_DEPLOY_VERSION    = var.ecs_deploy_version
     DEBUG                 = var.ecs_deploy_debug
     APPMESH_NAME          = var.ecs_deploy_appmesh_name

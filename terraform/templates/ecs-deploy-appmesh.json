@@ -1,7 +1,7 @@
 [
     {
       "name": "ecs-deploy",
-      "image": "in4it/ecs-deploy:${ECS_DEPLOY_VERSION}",
+      "image": "${ECS_DEPLOY_IMAGE}:${ECS_DEPLOY_VERSION}",
       "cpu": 128,
       "memoryReservation": 64,
       "essential": true,
