@@ -638,7 +638,7 @@ func (e *ECS) CreateTaskDefinitionInput(d service.Deploy, secrets map[string]str
 		}
 		e.TaskDefinition.ContainerDefinitions = append(e.TaskDefinition.ContainerDefinitions, &ecs.ContainerDefinition{
 			Name:              aws.String("envoy"),
-			Image:             aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr.us-west-2.amazonaws.com/aws-appmesh-envoy:v1.11.1.1-prod")),
+			Image:             aws.String(util.GetEnv("APPMESH_IMAGE", "111345817488.dkr.ecr."+util.GetEnv("AWS_REGION", "us-west-2")+".amazonaws.com/aws-appmesh-envoy:v1.11.1.1-prod")),
 			Essential:         aws.Bool(true),
 			MemoryReservation: aws.Int64(256),
 			Environment: []*ecs.KeyValuePair{
