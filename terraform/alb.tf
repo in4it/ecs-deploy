@@ -94,3 +94,16 @@ resource "aws_alb_listener" "alb-http" {
   }
 }
 
+# extra TLS certificates
+
+data "aws_acm_certificate" "extra-certificates" {
+  count    = length(var.extra_domains)
+  domain   = element(var.extra_domains, count.index)
+  statuses = ["ISSUED"]
+}
+
+resource "aws_lb_listener_certificate" "extra-certificates" {
+  count           = length(var.extra_domains)
+  listener_arn    = aws_alb_listener.alb-https.arn
+  certificate_arn = element(data.aws_acm_certificate.extra-certificates.*.arn, count.index)
+}
