@@ -56,6 +56,11 @@ variable "cluster_domain" {
   description = "Domain to use for ALB"
 }
 
+variable "extra_domains" {
+  description = "extra domain that need to be supported by the ALB"
+  default     = []
+}
+
 variable "alb_internal" {
   description = "true if ALB needs to be internal"
   default     = "false"
