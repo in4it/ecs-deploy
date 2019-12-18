@@ -18,3 +18,6 @@ output "sg-cluster" {
   value = aws_security_group.cluster.id
 }
 
+output "cluster-ec2-role-arn" {
+  value = aws_iam_role.cluster-ec2-role.arn
+}
