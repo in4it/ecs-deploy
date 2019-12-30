@@ -92,41 +92,29 @@ func (e *IAM) RoleExists(roleName string) (*string, error) {
 	return result.Role.Arn, nil
 }
 
-func (e *IAM) CreateRole(roleName, assumePolicyDocument string) (*string, error) {
+func (e *IAM) CreateRoleWithPermissionBoundary(roleName, assumePolicyDocument, permissionBoundaryARN string) (*string, error) {
 	svc := iam.New(session.New())
 	input := &iam.CreateRoleInput{
 		AssumeRolePolicyDocument: aws.String(assumePolicyDocument),
-		Path:     aws.String("/"),
-		RoleName: aws.String(roleName),
+		Path:                     aws.String("/"),
+		RoleName:                 aws.String(roleName),
+	}
+
+	if permissionBoundaryARN != "" {
+		input.SetPermissionsBoundary(permissionBoundaryARN)
 	}
 
 	result, err := svc.CreateRole(input)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			switch aerr.Code() {
-			case iam.ErrCodeLimitExceededException:
-				iamLogger.Errorf(iam.ErrCodeLimitExceededException+": %v", aerr.Error())
-			case iam.ErrCodeInvalidInputException:
-				iamLogger.Errorf(iam.ErrCodeInvalidInputException+": %v", aerr.Error())
-			case iam.ErrCodeEntityAlreadyExistsException:
-				iamLogger.Errorf(iam.ErrCodeEntityAlreadyExistsException+": %v", aerr.Error())
-			case iam.ErrCodeMalformedPolicyDocumentException:
-				iamLogger.Errorf(iam.ErrCodeMalformedPolicyDocumentException+": %v", aerr.Error())
-			case iam.ErrCodeServiceFailureException:
-				iamLogger.Errorf(iam.ErrCodeServiceFailureException+": %v", aerr.Error())
-			default:
-				iamLogger.Errorf(aerr.Error())
-			}
-		} else {
-			// Print the error, cast err to awserr.Error to get the Code and
-			// Message from an error.
-			iamLogger.Errorf(err.Error())
-		}
-		// return error
+		iamLogger.Errorf(err.Error())
 		return nil, errors.New(fmt.Sprintf("Could not create role: %v", roleName))
 	} else {
 		return result.Role.Arn, nil
 	}
+}
+
+func (e *IAM) CreateRole(roleName, assumePolicyDocument string) (*string, error) {
+	return e.CreateRoleWithPermissionBoundary(roleName, assumePolicyDocument, "")
 }
 func (e *IAM) DeleteRolePolicy(roleName, policyName string) error {
 	svc := iam.New(session.New())

@@ -64,7 +64,7 @@ func (c *Controller) Deploy(serviceName string, d service.Deploy) (*service.Depl
 		if util.GetEnv("AWS_RESOURCE_CREATION_ENABLED", "yes") == "yes" {
 			// role does not exist, create it
 			controllerLogger.Debugf("Role does not exist, creating: ecs-%v", serviceName)
-			iamRoleArn, err = iam.CreateRole("ecs-"+serviceName, iam.GetEcsTaskIAMTrust())
+			iamRoleArn, err = iam.CreateRoleWithPermissionBoundary("ecs-"+serviceName, iam.GetEcsTaskIAMTrust(), util.GetEnv("ECS_TASK_ROLE_PERMISSION_BOUNDARY_ARN", ""))
 			if err != nil {
 				return nil, err
 			}
