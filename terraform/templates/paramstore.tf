@@ -10,5 +10,5 @@ resource "aws_ssm_parameter" "prefix" {
 resource "aws_ssm_parameter" "kms-arn" {
   name  = "/${var.cluster-name}-${var.aws_env}/ecs-deploy/PARAMSTORE_KMS_ARN"
   type  = "String"
-  value = "${data.aws_kms_key.ssm.arn}"
+  value = data.aws_kms_key.ssm.arn
 }

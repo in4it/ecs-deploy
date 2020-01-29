@@ -53,10 +53,10 @@ resource "aws_alb_listener_rule" "ecs-deploy" {
     type             = "forward"
     target_group_arn = aws_alb_target_group.ecs-deploy.arn
   }
-
   condition {
-    field  = "path-pattern"
-    values = ["/ecs-deploy/*"]
+    path_pattern {
+      values = ["/ecs-deploy/*"]
+    }
   }
 }
 
