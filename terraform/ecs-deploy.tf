@@ -21,14 +21,20 @@ resource "aws_ecs_service" "ecs-deploy" {
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
-  network_configuration {
-    subnets = var.ecs_deploy_awsvpc ? var.vpc_private_subnets : []
-    security_groups = var.ecs_deploy_awsvpc ? [aws_security_group.ecs-deploy-awsvpc.id] : []
-    assign_public_ip = false
+  dynamic "network_configuration" {
+    for_each = var.ecs_deploy_awsvpc ? ["enabled"] : []
+      content {
+        subnets = var.vpc_private_subnets
+        security_groups = [aws_security_group.ecs-deploy-awsvpc.id]
+        assign_public_ip = false
+      }
   }
 
-  service_registries {
-    registry_arn = var.ecs_deploy_service_discovery_id == "" ? "" : aws_service_discovery_service.ecs-deploy[0].arn
+  dynamic "service_registries" {
+    for_each = var.ecs_deploy_service_discovery_id == "" ? [] : ["enabled"]
+      content {
+        registry_arn = aws_service_discovery_service.ecs-deploy[0].arn
+      }
   }
 
   load_balancer {
