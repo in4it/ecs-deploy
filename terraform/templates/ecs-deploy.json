@@ -12,12 +12,12 @@
       }
     ],
     "logConfiguration": {
-          "logDriver": "awslogs",
-          "options": {
-              "awslogs-group": "ecs-deploy",
-              "awslogs-region": "${AWS_REGION}",
-              "awslogs-stream-prefix": "ecs-deploy"
-          }
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "ecs-deploy",
+        "awslogs-region": "${AWS_REGION}",
+        "awslogs-stream-prefix": "ecs-deploy"
+      }
     },
     "environment": [
       {
@@ -32,9 +32,13 @@
         "name": "AWS_ENV_PATH",
         "value": "/${CLUSTER_NAME}-${ENVIRONMENT}/ecs-deploy/"
       },
-      { 
+      {
         "name": "PARAMSTORE_ENABLED",
         "value": "${PARAMSTORE_ENABLED}"
+      },
+      {
+        "name": "ECS_WHITELIST",
+        "value": "${ECS_WHITELIST}"
       }
     ]
   }

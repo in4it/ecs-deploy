@@ -6,6 +6,7 @@ import (
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
 	_ "github.com/in4it/ecs-deploy/docs"
+	"github.com/in4it/ecs-deploy/ipfilter"
 	"github.com/in4it/ecs-deploy/ngserve"
 	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
@@ -83,6 +84,9 @@ func (a *API) createRoutes() {
 	// prefix
 	prefix := util.GetEnv("URL_PREFIX", "")
 	apiPrefix := prefix + util.GetEnv("URL_PREFIX_API", "/api/v1")
+
+	// ip whitelisting
+	r.Use(ipfilter.IPWhiteList(util.GetEnv("ECS_WHITELIST", "0.0.0.0/0")))
 
 	// webapp
 	r.Use(ngserve.ServeWithDefault(prefix+"/webapp", ngserve.LocalFile("./webapp/dist", false), "./webapp/dist/index.html"))
