@@ -73,6 +73,7 @@ variable "enable_lb_logs" {
 
 variable bucket_lb_logs {
   description = "Name bucket located alb logs if logs is true"
+  default     = ""
 }
 
 variable "vpc_id" {
