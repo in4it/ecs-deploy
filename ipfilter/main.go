@@ -17,7 +17,7 @@ func IPWhiteList(whitelist string) gin.HandlerFunc {
 		whitelistLogger.SetLogLevel(2)
 		deny := true
 		clientIP := net.ParseIP(c.ClientIP())
-		whitelistLogger.Debugf("Cliet IP: %s", clientIP)
+		whitelistLogger.Debugf("Client IP: %s", clientIP)
 		whitelistLogger.Debugf("IP whitelist: %s", whitelist)
 		if clientIP == nil {
 			whitelistLogger.Errorf("Error: Missing or unsupported format in header")
@@ -36,7 +36,7 @@ func IPWhiteList(whitelist string) gin.HandlerFunc {
 			whitelistLogger.Debugf("Whitelist: %s", ipnet)
 			whitelistLogger.Debugf("Client: %s", clientIP)
 			if ipnet.Contains(clientIP) {
-				whitelistLogger.Debugf("Clietn IP match subnet: %s", ipnet)
+				whitelistLogger.Debugf("Client IP match subnet: %s", ipnet)
 				deny = false
 			}
 		}
