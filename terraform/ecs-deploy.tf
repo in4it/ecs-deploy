@@ -23,18 +23,18 @@ resource "aws_ecs_service" "ecs-deploy" {
 
   dynamic "network_configuration" {
     for_each = var.ecs_deploy_awsvpc ? ["enabled"] : []
-      content {
-        subnets = var.vpc_private_subnets
-        security_groups = [aws_security_group.ecs-deploy-awsvpc.id]
-        assign_public_ip = false
-      }
+    content {
+      subnets          = var.vpc_private_subnets
+      security_groups  = [aws_security_group.ecs-deploy-awsvpc.id]
+      assign_public_ip = false
+    }
   }
 
   dynamic "service_registries" {
     for_each = var.ecs_deploy_service_discovery_id == "" ? [] : ["enabled"]
-      content {
-        registry_arn = aws_service_discovery_service.ecs-deploy[0].arn
-      }
+    content {
+      registry_arn = aws_service_discovery_service.ecs-deploy[0].arn
+    }
   }
 
   load_balancer {
@@ -57,6 +57,7 @@ data "template_file" "ecs-deploy" {
     DEBUG                 = var.ecs_deploy_debug
     APPMESH_NAME          = var.ecs_deploy_appmesh_name
     APPMESH_ENVOY_RELEASE = var.ecs_deploy_appmesh_release
+    ECS_WHITELIST         = var.ecs_whitelist
   }
 }
 
@@ -66,7 +67,7 @@ resource "aws_ecs_task_definition" "ecs-deploy" {
   container_definitions = data.template_file.ecs-deploy.rendered
   task_role_arn         = aws_iam_role.ecs-deploy.arn
   network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
-  execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : "" 
+  execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : ""
 }
 
 resource "aws_ecs_task_definition" "ecs-deploy-appmesh" {
@@ -75,7 +76,7 @@ resource "aws_ecs_task_definition" "ecs-deploy-appmesh" {
   container_definitions = data.template_file.ecs-deploy.rendered
   task_role_arn         = aws_iam_role.ecs-deploy.arn
   network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
-  execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : "" 
+  execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : ""
 
   proxy_configuration {
     type           = "APPMESH"
@@ -254,62 +255,62 @@ EOF
 # dynamodb
 #
 resource "aws_dynamodb_table" "ecs-deploy" {
-name           = "ecs-deploy"
-read_capacity  = 2
-write_capacity = 2
-hash_key       = "ServiceName"
-range_key      = "Time"
-server_side_encryption {
-  enabled = var.enable_dynamodb_encryption
-} 
+  name           = "ecs-deploy"
+  read_capacity  = 2
+  write_capacity = 2
+  hash_key       = "ServiceName"
+  range_key      = "Time"
+  server_side_encryption {
+    enabled = var.enable_dynamodb_encryption
+  }
 
-attribute {
-name = "ServiceName"
-type = "S"
-}
+  attribute {
+    name = "ServiceName"
+    type = "S"
+  }
 
-attribute {
-name = "Time"
-type = "S"
-}
+  attribute {
+    name = "Time"
+    type = "S"
+  }
 
-attribute {
-name = "Day"
-type = "S"
-}
+  attribute {
+    name = "Day"
+    type = "S"
+  }
 
-attribute {
-name = "Month"
-type = "S"
-}
+  attribute {
+    name = "Month"
+    type = "S"
+  }
 
-ttl {
-attribute_name = "ExpirationTimeTTL"
-enabled        = true
-}
+  ttl {
+    attribute_name = "ExpirationTimeTTL"
+    enabled        = true
+  }
 
-global_secondary_index {
-name            = "DayIndex"
-hash_key        = "Day"
-range_key       = "Time"
-write_capacity  = 2
-read_capacity   = 2
-projection_type = "ALL"
-}
+  global_secondary_index {
+    name            = "DayIndex"
+    hash_key        = "Day"
+    range_key       = "Time"
+    write_capacity  = 2
+    read_capacity   = 2
+    projection_type = "ALL"
+  }
 
-global_secondary_index {
-name            = "MonthIndex"
-hash_key        = "Month"
-range_key       = "Time"
-write_capacity  = 2
-read_capacity   = 2
-projection_type = "ALL"
-}
+  global_secondary_index {
+    name            = "MonthIndex"
+    hash_key        = "Month"
+    range_key       = "Time"
+    write_capacity  = 2
+    read_capacity   = 2
+    projection_type = "ALL"
+  }
 }
 
 # cloudwatch log group
 resource "aws_cloudwatch_log_group" "ecs-deploy" {
-name = "ecs-deploy"
+  name = "ecs-deploy"
 }
 
 #
@@ -317,9 +318,9 @@ name = "ecs-deploy"
 #
 # sns topic for ecs events
 resource "aws_sns_topic" "ecs-deploy" {
-name = "ecs-deploy-events"
+  name = "ecs-deploy-events"
 
-policy = <<EOF
+  policy = <<EOF
 {
   "Version": "2008-10-17",
   "Id": "__default_policy_ID",
@@ -365,18 +366,18 @@ EOF
 
 # post sns to ecs-deploy(https)
 resource "aws_sns_topic_subscription" "ecs-deploy" {
-topic_arn = aws_sns_topic.ecs-deploy.arn
-protocol = "https"
-endpoint = "https://${var.sns_endpoint == "" ? var.cluster_domain : var.sns_endpoint}/ecs-deploy/webhook"
-endpoint_auto_confirms = true
+  topic_arn              = aws_sns_topic.ecs-deploy.arn
+  protocol               = "https"
+  endpoint               = "https://${var.sns_endpoint == "" ? var.cluster_domain : var.sns_endpoint}/ecs-deploy/webhook"
+  endpoint_auto_confirms = true
 }
 
 # Watch for ecs events in the logs
 resource "aws_cloudwatch_event_rule" "ecs-deploy" {
-name = "ecs-event"
-description = "Capture ecs events"
+  name        = "ecs-event"
+  description = "Capture ecs events"
 
-event_pattern = <<PATTERN
+  event_pattern = <<PATTERN
 {
   "source": [
     "aws.ecs"
@@ -427,8 +428,8 @@ PATTERN
 
 # Send ecs-events to sns
 resource "aws_cloudwatch_event_target" "ecs-deploy-autoscaling" {
-  rule = aws_cloudwatch_event_rule.ecs-deploy-autoscaling.name
+  rule      = aws_cloudwatch_event_rule.ecs-deploy-autoscaling.name
   target_id = "SendAutoscalingEventToSNS"
-  arn = aws_sns_topic.ecs-deploy.arn
+  arn       = aws_sns_topic.ecs-deploy.arn
 }
 

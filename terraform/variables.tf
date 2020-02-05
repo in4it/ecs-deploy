@@ -198,9 +198,13 @@ variable "sns_endpoint" {
 
 variable "saml_acs_url" {
   description = "saml acs url, if the default acs url needs to be overwritten"
-  default = ""
+  default     = ""
 }
 
 variable "enable_dynamodb_encryption" {
   default = false
+}
+
+variable "ecs_whitelist" {
+  default = "0.0.0.0/0"
 }
