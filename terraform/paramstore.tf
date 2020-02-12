@@ -81,3 +81,9 @@ resource "aws_ssm_parameter" "ecs-deploy-paramstore-auto-inject" {
   value = var.paramstore_inject
 }
 
+# IP whitelist
+resource "aws_ssm_parameter" "ecs-deploy-paramstore-ip-whitelist" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/ECS_WHITELIST"
+  type  = "String"
+  value = var.ecs_whitelist
+}
