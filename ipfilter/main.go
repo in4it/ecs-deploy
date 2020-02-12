@@ -30,8 +30,10 @@ func IPWhiteList(whitelist string) gin.HandlerFunc {
 			subnets[i] = strings.TrimSpace(subnets[i])
 		}
 		for _, s := range subnets {
-			_, ipnet, _ := net.ParseCIDR(s)
-			if ipnet != nil {
+			_, ipnet, err := net.ParseCIDR(s)
+			if err != nil {
+				whitelistLogger.Errorf("Malformed whitelist argument: %s", s)
+			} else {
 				whitelistLogger.Debugf("Whitelist: %s", ipnet)
 				whitelistLogger.Debugf("Client: %s", clientIP)
 				if ipnet.Contains(clientIP) {
@@ -39,7 +41,6 @@ func IPWhiteList(whitelist string) gin.HandlerFunc {
 					return
 				}
 			}
-			whitelistLogger.Errorf("Mailformed whitelist argument: %s", s)
 		}
 
 		whitelistLogger.Errorf("Blocked access from: %s", clientIP)
