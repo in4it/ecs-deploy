@@ -15,8 +15,8 @@ var whitelistLogger = loggo.GetLogger("whitelist")
 func IPWhiteList(whitelist string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientIP := net.ParseIP(c.ClientIP())
-		whitelistLogger.Debugf("Client IP: %s", clientIP)
-		whitelistLogger.Debugf("IP whitelist: %s", whitelist)
+		whitelistLogger.Tracef("Client IP: %s", clientIP)
+		whitelistLogger.Tracef("IP whitelist: %s", whitelist)
 		if clientIP == nil {
 			whitelistLogger.Errorf("Error: Missing or unsupported format in header")
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
@@ -30,16 +30,17 @@ func IPWhiteList(whitelist string) gin.HandlerFunc {
 			subnets[i] = strings.TrimSpace(subnets[i])
 		}
 		for _, s := range subnets {
-			_, ipnet, _ := net.ParseCIDR(s)
-			if ipnet != nil {
-				whitelistLogger.Debugf("Whitelist: %s", ipnet)
-				whitelistLogger.Debugf("Client: %s", clientIP)
+			_, ipnet, err := net.ParseCIDR(s)
+			if err != nil {
+				whitelistLogger.Errorf("Malformed whitelist argument: %s", s)
+			} else {
+				whitelistLogger.Tracef("Whitelist: %s", ipnet)
+				whitelistLogger.Tracef("Client: %s", clientIP)
 				if ipnet.Contains(clientIP) {
-					whitelistLogger.Debugf("Client IP match subnet: %s", ipnet)
+					whitelistLogger.Tracef("Client IP match subnet: %s", ipnet)
 					return
 				}
 			}
-			whitelistLogger.Errorf("Mailformed whitelist argument: %s", s)
 		}
 
 		whitelistLogger.Errorf("Blocked access from: %s", clientIP)
