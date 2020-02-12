@@ -6,13 +6,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/juju/loggo"
 	"github.com/stretchr/testify/assert"
 )
 
-func setupMiddleware(whitelist string, loglevel loggo.Level) *gin.Engine {
+func setupMiddleware(whitelist string) *gin.Engine {
 	r := gin.Default()
-	r.Use(IPWhiteList(whitelist, loglevel))
+	r.Use(IPWhiteList(whitelist))
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(200, "pong")
 	})
@@ -20,7 +19,7 @@ func setupMiddleware(whitelist string, loglevel loggo.Level) *gin.Engine {
 }
 
 func TestPingRoute(t *testing.T) {
-	router := setupMiddleware("0.0.0.0/0", 2)
+	router := setupMiddleware("0.0.0.0/0")
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
@@ -32,7 +31,7 @@ func TestPingRoute(t *testing.T) {
 }
 
 func TestProcessingInput(t *testing.T) {
-	router := setupMiddleware("10.10.10.0/24,20.20.20.0/24,30.30.30.0/24,0.0.0.0/0", 2)
+	router := setupMiddleware("10.10.10.0/24,20.20.20.0/24,30.30.30.0/24,0.0.0.0/0")
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
 	req.Header.Add("X-Forwarded-For", "20.20.20.5")
@@ -43,7 +42,7 @@ func TestProcessingInput(t *testing.T) {
 }
 
 func TestDenyRoute(t *testing.T) {
-	router := setupMiddleware("10.10.10.0/24", 2)
+	router := setupMiddleware("10.10.10.0/24")
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
@@ -55,7 +54,7 @@ func TestDenyRoute(t *testing.T) {
 }
 
 func TestBadClientIPRoute(t *testing.T) {
-	router := setupMiddleware("10.10.10.0/24", 2)
+	router := setupMiddleware("10.10.10.0/24")
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
@@ -67,7 +66,7 @@ func TestBadClientIPRoute(t *testing.T) {
 }
 
 func TestBadInput(t *testing.T) {
-	router := setupMiddleware("0.0.0.0/0badinput", 2)
+	router := setupMiddleware("0.0.0.0/0badinput")
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
 	req.Header.Add("X-Forwarded-For", "127.0.0.1")

@@ -12,9 +12,8 @@ import (
 var whitelistLogger = loggo.GetLogger("whitelist")
 
 // IP filtering handlerfunc
-func IPWhiteList(whitelist string, loglevel loggo.Level) gin.HandlerFunc {
+func IPWhiteList(whitelist string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		whitelistLogger.SetLogLevel(loglevel)
 		clientIP := net.ParseIP(c.ClientIP())
 		whitelistLogger.Debugf("Client IP: %s", clientIP)
 		whitelistLogger.Debugf("IP whitelist: %s", whitelist)

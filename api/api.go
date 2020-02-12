@@ -86,7 +86,7 @@ func (a *API) createRoutes() {
 	apiPrefix := prefix + util.GetEnv("URL_PREFIX_API", "/api/v1")
 
 	// ip whitelisting
-	r.Use(ipfilter.IPWhiteList(util.GetEnv("ECS_WHITELIST", "0.0.0.0/0"), 3))
+	r.Use(ipfilter.IPWhiteList(util.GetEnv("ECS_WHITELIST", "0.0.0.0/0")))
 
 	// webapp
 	r.Use(ngserve.ServeWithDefault(prefix+"/webapp", ngserve.LocalFile("./webapp/dist", false), "./webapp/dist/index.html"))
