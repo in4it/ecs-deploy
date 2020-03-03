@@ -21,3 +21,7 @@ output "sg-cluster" {
 output "cluster-ec2-role-arn" {
   value = aws_iam_role.cluster-ec2-role.arn
 }
+
+output "cluster-ec2-role-name" {
+  value = aws_iam_role.cluster-ec2-role.name
+}
