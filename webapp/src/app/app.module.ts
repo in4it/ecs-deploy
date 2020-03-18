@@ -91,7 +91,7 @@ const appRoutes: Routes = [
       appRoutes,
       { enableTracing: false } // <-- debugging purposes only
     ),
-    NgbModule.forRoot()
+    NgbModule
   ],
   providers: [
     AuthGuard,
