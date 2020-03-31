@@ -87,3 +87,10 @@ resource "aws_ssm_parameter" "ecs-deploy-paramstore-ip-whitelist" {
   type  = "String"
   value = var.ecs_whitelist
 }
+
+# ECR scan on push
+resource "aws_ssm_parameter" "ecs-deploy-paramstore-ecs-ecr-scan-on-push" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/ECR_SCAN_ON_PUSH"
+  type  = "String"
+  value = var.ecs_ecr_scan_on_push
+}

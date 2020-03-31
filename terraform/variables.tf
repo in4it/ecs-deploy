@@ -208,3 +208,7 @@ variable "enable_dynamodb_encryption" {
 variable "ecs_whitelist" {
   default = "0.0.0.0/0"
 }
+
+variable "ecs_ecr_scan_on_push" {
+  default = "false"
+}
