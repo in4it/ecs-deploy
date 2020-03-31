@@ -101,6 +101,10 @@ These will be used when deploying services
 ### DynamoDB specific variables
 * DYNAMODB\_TABLE=Services
 
+### ECR
+
+* ECR\_SCAN\_ON\_PUSH=true
+
 ### SAML
 
 SAML can be enabled using the following environment variables
@@ -158,6 +162,7 @@ The defaults are set for the most common use cases, but can be changed by settin
 | SLACK\_WEBHOOKS | "" | Comma seperated Slack webhooks, optionally with a channel (format: url1:#channel,url2:#channel) |
 | SLACK\_USERNAME | ecs-deploy | Slack username |
 | ECS\_TASK\_ROLE\_PERMISSION\_BOUNDARY\_ARN | "" | permission boundary for ecs task roles |
+| ECR\_SCAN\_ON\_PUSH | false | Enable ECR image scanning |
 
 ### Autoscaling Strategies
 

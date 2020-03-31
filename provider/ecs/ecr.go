@@ -1,10 +1,13 @@
 package ecs
 
 import (
+	"strconv"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecr"
+	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 )
 
@@ -18,9 +21,17 @@ type ECR struct {
 
 // Creates ECR repository
 func (e *ECR) CreateRepository() error {
+	scanOnPush, err := strconv.ParseBool(util.GetEnv("ECR_SCAN_ON_PUSH", "false"))
+	if err != nil {
+		ecrLogger.Errorf(err.Error())
+		scanOnPush = false
+	}
 	svc := ecr.New(session.New())
 	input := &ecr.CreateRepositoryInput{
 		RepositoryName: aws.String(e.RepositoryName),
+		ImageScanningConfiguration: &ecr.ImageScanningConfiguration{
+			ScanOnPush: aws.Bool(scanOnPush),
+		},
 	}
 
 	res, err := svc.CreateRepository(input)
