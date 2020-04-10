@@ -37,7 +37,8 @@ data "template_file" "ecs_init" {
   )
 
   vars = {
-    CLUSTER_NAME = var.cluster_name
+    CLUSTER_NAME  = var.cluster_name
+    YUM_PROXY_URL = var.yum_proxy_url
   }
 }
 

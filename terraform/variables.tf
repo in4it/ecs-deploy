@@ -212,3 +212,8 @@ variable "ecs_whitelist" {
 variable "ecs_ecr_scan_on_push" {
   default = "false"
 }
+
+variable "yum_proxy_url" {
+  description = "yum http proxy url"
+  default     = ""
+}
