@@ -217,3 +217,19 @@ variable "yum_proxy_url" {
   description = "yum http proxy url"
   default     = ""
 }
+
+variable "ecs_capacity_provider_enabled" {
+  default = false
+}
+
+variable "capacity_maximum_scaling_step_size" {
+  default = 1000
+}
+
+variable "capacity_minimum_scaling_step_size" {
+  default = 1
+}
+
+variable "target_capacity" {
+  default = 100
+}

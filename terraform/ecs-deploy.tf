@@ -318,6 +318,7 @@ resource "aws_cloudwatch_log_group" "ecs-deploy" {
 #
 # sns topic for ecs events
 resource "aws_sns_topic" "ecs-deploy" {
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
   name = "ecs-deploy-events"
 
   policy = <<EOF
@@ -366,7 +367,8 @@ EOF
 
 # post sns to ecs-deploy(https)
 resource "aws_sns_topic_subscription" "ecs-deploy" {
-  topic_arn              = aws_sns_topic.ecs-deploy.arn
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
+  topic_arn              = aws_sns_topic.ecs-deploy[0].arn
   protocol               = "https"
   endpoint               = "https://${var.sns_endpoint == "" ? var.cluster_domain : var.sns_endpoint}/ecs-deploy/webhook"
   endpoint_auto_confirms = true
@@ -374,6 +376,7 @@ resource "aws_sns_topic_subscription" "ecs-deploy" {
 
 # Watch for ecs events in the logs
 resource "aws_cloudwatch_event_rule" "ecs-deploy" {
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
   name        = "ecs-event"
   description = "Capture ecs events"
 
@@ -398,13 +401,15 @@ PATTERN
 
 # Send ecs-events to sns
 resource "aws_cloudwatch_event_target" "ecs-deploy" {
-  rule      = aws_cloudwatch_event_rule.ecs-deploy.name
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
+  rule      = aws_cloudwatch_event_rule.ecs-deploy[0].name
   target_id = "SendEcsEventToSNS"
-  arn       = aws_sns_topic.ecs-deploy.arn
+  arn       = aws_sns_topic.ecs-deploy[0].arn
 }
 
 # cloudwatch event for autoscaling
 resource "aws_cloudwatch_event_rule" "ecs-deploy-autoscaling" {
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
   name        = "ecs-deploy-autoscaling"
   description = "Capture autoscaling events"
 
@@ -418,7 +423,7 @@ resource "aws_cloudwatch_event_rule" "ecs-deploy-autoscaling" {
   ],
   "detail": {
     "LifecycleHookName": [
-      "${aws_autoscaling_lifecycle_hook.cluster.name}"
+      "${aws_autoscaling_lifecycle_hook.cluster[0].name}"
     ]
   }
 }
@@ -428,8 +433,9 @@ PATTERN
 
 # Send ecs-events to sns
 resource "aws_cloudwatch_event_target" "ecs-deploy-autoscaling" {
-  rule      = aws_cloudwatch_event_rule.ecs-deploy-autoscaling.name
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
+  rule      = aws_cloudwatch_event_rule.ecs-deploy-autoscaling[0].name
   target_id = "SendAutoscalingEventToSNS"
-  arn       = aws_sns_topic.ecs-deploy.arn
+  arn       = aws_sns_topic.ecs-deploy[0].arn
 }
 
