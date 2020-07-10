@@ -29,13 +29,12 @@ data "aws_ami" "ecs" {
 
 resource "aws_ecs_cluster" "cluster" {
   name = var.cluster_name
-  capacity_providers = [aws_ecs_capacity_provider.deploy[0].name]
-
+  capacity_providers = var.ecs_capacity_provider_enabled ? [aws_ecs_capacity_provider.deploy[0].name] : []
   dynamic "default_capacity_provider_strategy" {
-    for_each = var.ecs_capacity_provider_enabled == true ? [1] : [0]
+    for_each = aws_ecs_capacity_provider.deploy
     content {
       base              = 0
-      capacity_provider = aws_ecs_capacity_provider.deploy[0].name
+      capacity_provider = default_capacity_provider_strategy.value.name
       weight            = 1
     }
   }
