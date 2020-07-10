@@ -25,7 +25,7 @@ module "ecs-deploy" {
   cluster_maxsize          = "1"
   cluster_desired_capacity = "1"
   paramstore_enabled       = "yes"
-  ecs_capacity_provider_enabled true
+  ecs_capacity_provider_enabled = true
 }
 
 # ssh key
