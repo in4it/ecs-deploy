@@ -29,6 +29,16 @@ data "aws_ami" "ecs" {
 
 resource "aws_ecs_cluster" "cluster" {
   name = var.cluster_name
+  capacity_providers = [aws_ecs_capacity_provider.deploy[0].name]
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.ecs_capacity_provider_enabled == true ? [1] : [0]
+    content {
+      base              = 0
+      capacity_provider = aws_ecs_capacity_provider.deploy[0].name
+      weight            = 1
+    }
+  }
 }
 
 data "template_file" "ecs_init" {
@@ -91,6 +101,7 @@ resource "aws_autoscaling_group" "cluster" {
   min_size             = var.cluster_minsize
   max_size             = var.cluster_maxsize
   desired_capacity     = var.cluster_desired_capacity
+  protect_from_scale_in  = var.ecs_capacity_provider_enabled ? true : false
 
   launch_template {
     id      = aws_launch_template.cluster.id
@@ -111,6 +122,7 @@ resource "aws_autoscaling_group" "cluster" {
 }
 
 resource "aws_autoscaling_lifecycle_hook" "cluster" {
+  count = var.ecs_capacity_provider_enabled ? 0 : 1
   name                   = "${var.cluster_name}-hook"
   autoscaling_group_name = aws_autoscaling_group.cluster.name
   default_result         = "CONTINUE"
@@ -118,3 +130,19 @@ resource "aws_autoscaling_lifecycle_hook" "cluster" {
   lifecycle_transition   = "autoscaling:EC2_INSTANCE_TERMINATING"
 }
 
+resource "aws_ecs_capacity_provider" "deploy" {
+  count = var.ecs_capacity_provider_enabled ? 1 : 0
+  name = "deploy"
+
+  auto_scaling_group_provider {
+    auto_scaling_group_arn         = aws_autoscaling_group.cluster.arn
+    managed_termination_protection = "ENABLED"
+
+    managed_scaling {
+        maximum_scaling_step_size = var.capacity_maximum_scaling_step_size
+        minimum_scaling_step_size = var.capacity_minimum_scaling_step_size
+        status                    = "ENABLED"
+        target_capacity           = var.target_capacity
+    }
+  }
+}

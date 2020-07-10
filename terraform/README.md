@@ -25,6 +25,7 @@ module "ecs-deploy" {
   cluster_maxsize          = "1"
   cluster_desired_capacity = "1"
   paramstore_enabled       = "yes"
+  ecs_capacity_provider_enabled true
 }
 
 # ssh key
@@ -53,3 +54,14 @@ aws ssm put-parameter --name '/mycluster-prod/ecs-deploy/DEPLOY_PASSWORD' --type
 | ecs\_ecs2\_extra\_sg | Provide extra security group for EC2 instance |
 | ecs\_ecs2\_vpc\_cidr\_sg | Provide change egress CIDR in the cluster sg for EC2 instance |
 | sns\_endpoint | Override sns endpoint domain |
+| ecs_capacity_provider_enabled | Enable AWS ECS capacity provider |
+| capacity_maximum_scaling_step_size | Capacity provider maximum scaling step |
+| capacity_minimum_scaling_step_size | Capacity provider minimum scaling step |
+| target_capacity | Target capacity |
+
+## Capacity provider migrations notes:
+Before applying ecs-deploy module with `ecs_capacity_provider_enabled` set to `true`, make sure that all instances in AWS ASG have `scale in protection` enabled, otherwise it will result in an error:
+
+```
+Error: error creating capacity provider: ClientException: The managed termination protection setting for the capacity provider is invalid. To enable managed termination protection for a capacity provider, the Auto Scaling group must have instance protection from scale in enabled.
+```
