@@ -8,6 +8,7 @@ data "aws_kms_key" "ssm" {
 resource "aws_kms_key" "ssm" {
   description             = "${var.cluster_name} SSM key"
   deletion_window_in_days = 30
+  enable_key_rotation     = true
   count                   = var.create_kms_key == "true" ? 1 : 0
 }
 
