@@ -256,8 +256,8 @@ EOF
 #
 resource "aws_dynamodb_table" "ecs-deploy" {
   name           = "ecs-deploy"
-  read_capacity  = 2
-  write_capacity = 2
+  read_capacity  = var.dynamodb_read_capacity
+  write_capacity = var.dynamodb_write_capacity
   hash_key       = "ServiceName"
   range_key      = "Time"
   server_side_encryption {

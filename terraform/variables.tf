@@ -205,6 +205,14 @@ variable "enable_dynamodb_encryption" {
   default = false
 }
 
+variable "dynamodb_read_capacity" {
+  default = 2
+}
+
+variable "dynamodb_write_capacity" {
+  default = 2
+}
+
 variable "ecs_whitelist" {
   default = "0.0.0.0/0"
 }
