@@ -26,7 +26,7 @@
     "@angular/platform-server": "^9.0.6",
     "@angular/router": "^9.0.6",
     "@ng-bootstrap/ng-bootstrap": "^6.0.0",
-    "@schematics/angular": "^7.3.9",
+    "@schematics/angular": "^8.3.29",
     "awesome-bootstrap-checkbox": "^1.0.1",
     "bootstrap": "^4.4.1",
     "core-js": "^2.6.11",
@@ -40,7 +40,7 @@
     "rxjs": "^6.5.4",
     "tslib": "^1.10.0",
     "url-parse": "^1.4.7",
-    "webpack-dev-server": "^3.10.3",
+    "webpack-dev-server": "^3.11.0",
     "yargs-parser": "^13.1.2",
     "zone.js": "~0.10.2"
   },
