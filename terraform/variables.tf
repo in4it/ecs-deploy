@@ -241,3 +241,23 @@ variable "capacity_minimum_scaling_step_size" {
 variable "target_capacity" {
   default = 100
 }
+
+# autoscaling variables
+variable "autoscaling_down_cooldown" {
+  default = ""
+}
+variable "autoscaling_down_interval" {
+  default = ""
+}
+variable "autoscaling_down_period" {
+  default = ""
+}
+variable "autoscaling_up_cooldown" {
+  default = ""
+}
+variable "autoscaling_up_interval" {
+  default = ""
+}
+variable "autoscaling_up_period" {
+  default = ""
+}
