@@ -74,6 +74,44 @@ resource "aws_ssm_parameter" "ecs-deploy-autoscaling-strategies" {
   count = var.autoscaling_strategies == "" ? 0 : 1
 }
 
+# Autoscaling config
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-down-cooldown" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_DOWN_COOLDOWN"
+  type  = "String"
+  value = var.autoscaling_down_cooldown
+  count = var.autoscaling_down_cooldown == "" ? 0 : 1
+}
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-down-interval" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_DOWN_INTERVAL"
+  type  = "String"
+  value = var.autoscaling_down_interval
+  count = var.autoscaling_down_interval == "" ? 0 : 1
+}
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-down-period" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_DOWN_PERIOD"
+  type  = "String"
+  value = var.autoscaling_down_period
+  count = var.autoscaling_down_period == "" ? 0 : 1
+}
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-up-cooldown" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_UP_COOLDOWN"
+  type  = "String"
+  value = var.autoscaling_up_cooldown
+  count = var.autoscaling_up_cooldown == "" ? 0 : 1
+}
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-up-interval" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_UP_INTERVAL"
+  type  = "String"
+  value = var.autoscaling_up_interval
+  count = var.autoscaling_up_interval == "" ? 0 : 1
+}
+resource "aws_ssm_parameter" "ecs-deploy-autoscaling-up-period" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/AUTOSCALING_UP_PERIOD"
+  type  = "String"
+  value = var.autoscaling_up_period
+  count = var.autoscaling_up_period == "" ? 0 : 1
+}
+
 # Paramstore auto-inject env vars
 resource "aws_ssm_parameter" "ecs-deploy-paramstore-auto-inject" {
   name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/PARAMSTORE_INJECT"
