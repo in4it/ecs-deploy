@@ -315,6 +315,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 		if scalingOp == "down" {
 			hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, dcNew.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 			if hasFreeResourcesGlobal {
+				// abort if deploy is running
 				deployRunning, err = s.IsDeployRunning()
 				if err != nil {
 					return err
@@ -322,11 +323,16 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 				if deployRunning {
 					abort = true
 				}
+				// abort if not all services are scheduled
+				cc := &Controller{}
+				if !c.areAllTasksRunningInCluster(clusterName, cc) {
+					abort = true
+				}
 			} else {
 				abort = true
 			}
 		} else {
-			// pendign scaling up logic
+			// pending scaling up logic
 			resourcesFit = c.scaleUpDecision(clusterName, dcNew.ContainerInstances, cpuNeeded, memoryNeeded)
 			if resourcesFit {
 				abort = true
@@ -354,6 +360,22 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 	}
 	return nil
 }
+
+func (c *AutoscalingController) areAllTasksRunningInCluster(clusterName string, cc ControllerIf) bool {
+	services, err := cc.describeServices()
+	if err != nil {
+		asAutoscalingControllerLogger.Errorf("Error while executing describeServices: %s", err)
+		return false
+	}
+	for _, service := range services {
+		if service.RunningCount != service.DesiredCount || service.PendingCount != 0 {
+			asAutoscalingControllerLogger.Infof("All tasks are not running in the cluster: Service: %s, RunningCount: %d, DesiredCount: %d, PendingCount: %d", service.ServiceName, service.RunningCount, service.DesiredCount, service.PendingCount)
+			return false
+		}
+	}
+	return true
+}
+
 func (c *AutoscalingController) scaleUpDecision(clusterName string, containerInstances []service.DynamoClusterContainerInstance, cpuNeeded, memoryNeeded int64) bool {
 	resourcesFit := make(map[string]bool)
 	resourcesFitGlobal := true

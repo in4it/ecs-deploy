@@ -22,6 +22,11 @@ import (
 type Controller struct {
 }
 
+// controller interface (for tests)
+type ControllerIf interface {
+	describeServices() ([]service.RunningService, error)
+}
+
 // logging
 var controllerLogger = loggo.GetLogger("controller")
 
