@@ -1130,7 +1130,7 @@ func (e *ECS) LaunchWaitUntilServicesStable(dd, ddLast *service.DynamoDeployment
 	}
 	// set success
 	s.SetDeploymentStatus(dd, "success")
-	if ddLast != nil && ddLast.Status != "success" {
+	if ddLast != nil && ddLast.Status != "success" && ddLast.Status != "aborted" {
 		err = notification.LogRecovery(dd.ServiceName + ": Deployed successfully")
 		if err != nil {
 			ecsLogger.Errorf("Could not send notification: %s", err)
