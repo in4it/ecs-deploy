@@ -1,11 +1,10 @@
 module github.com/in4it/ecs-deploy
 
-go 1.12
+go 1.15
 
 replace github.com/ugorji/go v1.1.4 => github.com/ugorji/go/codec v0.0.0-20190204201341-e444a5086c43
 
 require (
-	github.com/appleboy/gin-jwt v2.5.0+incompatible
 	github.com/appleboy/gin-jwt/v2 v2.6.2
 	github.com/aws/aws-sdk-go v1.29.34
 	github.com/beevik/etree v1.1.0 // indirect
@@ -20,6 +19,7 @@ require (
 	github.com/guregu/dynamo v1.2.1
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8
+	github.com/kr/pretty v0.1.0 // indirect
 	github.com/robbiet480/go.sns v0.0.0-20181124163742-ca087b49e1da
 	github.com/russellhaering/goxmldsig v0.0.0-20180430223755-7acd5e4a6ef7 // indirect
 	github.com/spf13/pflag v1.0.3
@@ -27,6 +27,6 @@ require (
 	github.com/swaggo/gin-swagger v1.1.0
 	github.com/swaggo/swag v1.5.1
 	golang.org/x/crypto v0.0.0-20190510104115-cbcb75029529
-	gopkg.in/dgrijalva/jwt-go.v3 v3.2.0 // indirect
-	honnef.co/go/tools v0.0.1-2019.2.3 // indirect
+	golang.org/x/tools v0.0.0-20190621195816-6e04913cbbac // indirect
+	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
