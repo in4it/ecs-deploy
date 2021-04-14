@@ -44,10 +44,8 @@ resource "aws_ecs_service" "ecs-deploy" {
   }
 }
 
-data "template_file" "ecs-deploy" {
-  template = var.ecs_deploy_enable_appmesh ? file("${path.module}/templates/ecs-deploy-appmesh.json") : file("${path.module}/templates/ecs-deploy.json")
-
-  vars = {
+locals {
+  template_vars = {
     AWS_REGION            = var.aws_region
     ENVIRONMENT           = var.aws_env
     PARAMSTORE_ENABLED    = var.paramstore_enabled
@@ -58,13 +56,16 @@ data "template_file" "ecs-deploy" {
     APPMESH_NAME          = var.ecs_deploy_appmesh_name
     APPMESH_ENVOY_RELEASE = var.ecs_deploy_appmesh_release
     ECS_WHITELIST         = var.ecs_whitelist
+
+    ECS_DEPLOY_CPU                = var.ecs_deploy_cpu
+    ECS_DEPLOY_MEMORY_RESERVATION = var.ecs_deploy_memory_reservation
   }
 }
 
 resource "aws_ecs_task_definition" "ecs-deploy" {
   count                 = var.ecs_deploy_enable_appmesh ? 0 : 1
   family                = "ecs-deploy"
-  container_definitions = data.template_file.ecs-deploy.rendered
+  container_definitions = var.ecs_deploy_enable_appmesh ? templatefile("${path.module}/templates/ecs-deploy-appmesh.json", local.template_vars) : templatefile("${path.module}/templates/ecs-deploy.json", local.template_vars)
   task_role_arn         = aws_iam_role.ecs-deploy.arn
   network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
   execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : ""
@@ -73,7 +74,7 @@ resource "aws_ecs_task_definition" "ecs-deploy" {
 resource "aws_ecs_task_definition" "ecs-deploy-appmesh" {
   count                 = var.ecs_deploy_enable_appmesh ? 1 : 0
   family                = "ecs-deploy"
-  container_definitions = data.template_file.ecs-deploy.rendered
+  container_definitions = var.ecs_deploy_enable_appmesh ? templatefile("${path.module}/templates/ecs-deploy-appmesh.json", local.template_vars) : templatefile("${path.module}/templates/ecs-deploy.json", local.template_vars)
   task_role_arn         = aws_iam_role.ecs-deploy.arn
   network_mode          = var.ecs_deploy_awsvpc ? "awsvpc" : "bridge"
   execution_role_arn    = var.ecs_deploy_awsvpc ? aws_iam_role.ecs-task-execution-role.arn : ""

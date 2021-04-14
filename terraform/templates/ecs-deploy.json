@@ -2,8 +2,8 @@
   {
     "name": "ecs-deploy",
     "image": "${ECS_DEPLOY_IMAGE}:${ECS_DEPLOY_VERSION}",
-    "cpu": 128,
-    "memoryReservation": 64,
+    "cpu": ${ECS_DEPLOY_CPU},
+    "memoryReservation": ${ECS_DEPLOY_MEMORY_RESERVATION},
     "essential": true,
     "mountPoints": [],
     "portMappings": [
