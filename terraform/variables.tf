@@ -261,3 +261,11 @@ variable "autoscaling_up_interval" {
 variable "autoscaling_up_period" {
   default = ""
 }
+
+variable "ecs_deploy_memory_reservation" {
+  default = 64
+}
+
+variable "ecs_deploy_cpu" {
+  default = 128
+}
