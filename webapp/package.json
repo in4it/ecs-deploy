@@ -41,7 +41,7 @@
     "rxjs": "^6.6.6",
     "tree-kill": "^1.2.2",
     "tslib": "^1.10.0",
-    "url-parse": "^1.4.7",
+    "url-parse": "^1.5.0",
     "webpack-dev-server": "^3.11.0",
     "yargs-parser": "^13.1.2",
     "zone.js": "~0.10.2"
