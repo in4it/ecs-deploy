@@ -719,7 +719,7 @@ func (a *ALB) GetTargetGroupArn(serviceName string) (*string, error) {
 		if len(result.TargetGroups) == 0 {
 			return nil, errors.New("No ALB target group found for service: " + serviceName)
 		} else {
-			return nil, errors.New("Multiple target groups found for service: " + serviceName + " (" + string(len(result.TargetGroups)) + ")")
+			return nil, errors.New("Multiple target groups found for service: " + serviceName + " (" + fmt.Sprintf("%d", len(result.TargetGroups)) + ")")
 		}
 	}
 }

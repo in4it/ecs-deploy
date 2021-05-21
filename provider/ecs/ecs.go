@@ -1048,17 +1048,29 @@ func (e *ECS) WaitUntilServicesStable(clusterName, serviceName string, maxWaitMi
 	}
 	return nil
 }
+
+func (e *ECS) getMaxWaitMinutes(gracePeriodSeconds int64) int {
+	// check whether service exists, otherwise wait might give error
+	if maxWaitSecondsString := util.GetEnv("DEPLOY_MAX_WAIT_SECONDS", "900"); maxWaitSecondsString != "900" {
+		maxWaitSeconds, err := strconv.Atoi(maxWaitSecondsString)
+		if err != nil {
+			return 15
+		} else {
+			return int(math.Ceil(float64(maxWaitSeconds) / 60))
+		}
+	} else {
+		if gracePeriodSeconds > 0 {
+			return (1 + int(math.Ceil(float64(gracePeriodSeconds)/60/10))) * 10
+		}
+	}
+	return 15
+}
+
 func (e *ECS) LaunchWaitUntilServicesStable(dd, ddLast *service.DynamoDeployment, notification integrations.Notification) error {
 	var failed bool
-	var maxWaitMinutes int
+
 	s := service.NewService()
-	// check whether service exists, otherwise wait might give error
-	if dd.DeployData.HealthCheck.GracePeriodSeconds > 0 {
-		maxWaitMinutes = (1 + int(math.Ceil(float64(dd.DeployData.HealthCheck.GracePeriodSeconds)/60/10))) * 10
-	} else {
-		maxWaitMinutes = 15
-	}
-	err := e.WaitUntilServicesStable(dd.DeployData.Cluster, dd.ServiceName, maxWaitMinutes)
+	err := e.WaitUntilServicesStable(dd.DeployData.Cluster, dd.ServiceName, e.getMaxWaitMinutes(dd.DeployData.HealthCheck.GracePeriodSeconds))
 	if err != nil {
 		ecsLogger.Debugf("waitUntilServiceStable didn't succeed: %v", err)
 		failed = true

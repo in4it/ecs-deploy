@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -220,5 +221,22 @@ func TestEcsTaskMetadata(t *testing.T) {
 	}
 	if len(split[1]) == 0 {
 		t.Errorf("Error: %v", err)
+	}
+}
+
+func TestGetMaxWaitMinutes(t *testing.T) {
+	ecs := ECS{}
+	if num := ecs.getMaxWaitMinutes(0); num != 15 {
+		t.Errorf("Got wrong maxWaitMinutes: %d", num)
+	}
+	if num := ecs.getMaxWaitMinutes(100); num != 20 {
+		t.Errorf("Got wrong maxWaitMinutes: %d", num)
+	}
+	os.Setenv("DEPLOY_MAX_WAIT_SECONDS", "1800")
+	if num := ecs.getMaxWaitMinutes(0); num != 30 {
+		t.Errorf("Got wrong maxWaitMinutes: %d", num)
+	}
+	if num := ecs.getMaxWaitMinutes(300); num != 30 {
+		t.Errorf("Got wrong maxWaitMinutes: %d", num)
 	}
 }

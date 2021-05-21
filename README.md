@@ -163,6 +163,7 @@ The defaults are set for the most common use cases, but can be changed by settin
 | SLACK\_USERNAME | ecs-deploy | Slack username |
 | ECS\_TASK\_ROLE\_PERMISSION\_BOUNDARY\_ARN | "" | permission boundary for ecs task roles |
 | ECR\_SCAN\_ON\_PUSH | false | Enable ECR image scanning |
+| DEPLOY_MAX_WAIT_SECONDS | 900 | wait 15 minutes for a deployment to complete |
 
 ### Autoscaling Strategies
 
