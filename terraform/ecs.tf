@@ -88,6 +88,15 @@ resource "aws_launch_template" "cluster" {
   lifecycle {
     create_before_destroy = true
   }
+
+  dynamic "metadata_options" {
+    for_each = length(var.metadata_options_http_tokens) == 0 ? [] : [1]
+    content {
+      http_endpoint               = "enabled"
+      http_tokens                 = var.metadata_options_http_tokens
+      http_put_response_hop_limit = 1
+    }
+  }
 }
 
 #

@@ -273,3 +273,8 @@ variable "ecs_deploy_cpu" {
 variable "ecs_deploy_max_wait_seconds" {
   default = 900
 }
+
+variable "metadata_options_http_tokens" {
+  description = "metadata options IMDSv1 or IMDSv2"
+  default     = ""
+}
