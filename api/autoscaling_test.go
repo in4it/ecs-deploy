@@ -25,25 +25,25 @@ type MockAutoScaling struct {
 	GetAutoScalingGroupByTagOutput string
 }
 
-func (m MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
+func (m *MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
 	return m.GetAutoScalingGroupByTagOutput, nil
 }
 
-func (m MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change int64) error {
+func (m *MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change int64) error {
 	return nil
 
 }
-func (m MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
+func (m *MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.PutClusterInfoCounter, 1)
 	m.GetClusterInfoOutput.ScalingOperation.PendingAction = pendingAction
 	return m.PutClusterInfoOutput, nil
 }
-func (m MockService) GetClusterInfo() (*service.DynamoCluster, error) {
+func (m *MockService) GetClusterInfo() (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.GetClusterInfoCounter, 1)
 	return m.GetClusterInfoOutput, nil
 }
 
-func (m MockService) IsDeployRunning() (bool, error) {
+func (m *MockService) IsDeployRunning() (bool, error) {
 	return m.IsDeployRunningOutput, nil
 }
 
@@ -96,10 +96,10 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	os.Setenv("AUTOSCALING_DOWN_INTERVAL", "1")
 	asAutoscalingControllerLogger.SetLogLevel(loggo.DEBUG)
 	// mock
-	am := MockAutoScaling{
+	am := &MockAutoScaling{
 		GetAutoScalingGroupByTagOutput: "ecs-deploy",
 	}
-	s := MockService{
+	s := &MockService{
 		IsDeployRunningOutput: false,
 		GetClusterInfoOutput: &service.DynamoCluster{
 			Identifier: "myService",
@@ -188,4 +188,11 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	}()
 	<-wait1
 	<-wait2
+
+	if s.PutClusterInfoCounter != 1 {
+		t.Errorf("PutClusterInfoCounter is %d (expected 1)", s.PutClusterInfoCounter)
+	}
+	if s.GetClusterInfoCounter != 3 {
+		t.Errorf("GetClusterInfoCounter is %d (expected 3)", s.GetClusterInfoCounter)
+	}
 }

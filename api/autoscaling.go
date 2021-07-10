@@ -19,7 +19,8 @@ import (
 )
 
 type AutoscalingController struct {
-	mu sync.Mutex
+	muUp   sync.Mutex
+	muDown sync.Mutex
 }
 
 var asAutoscalingControllerLogger = loggo.GetLogger("as-controller")
@@ -291,13 +292,21 @@ func (c *AutoscalingController) getAutoscalingPeriodInterval(scalingOp string) (
 func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
 
 	// lock scaling operation
-	asAutoscalingControllerLogger.Debugf("Getting autoscaling lock")
-	c.mu.Lock()
+	asAutoscalingControllerLogger.Debugf("Getting autoscaling lock for scaling %s", scalingOp)
+	if scalingOp == "down" {
+		c.muDown.Lock()
+	} else {
+		c.muUp.Lock()
+	}
 	// execute launchProcessPendingScalingOp
 	err := c.launchProcessPendingScalingOp(clusterName, scalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 	// unlock
-	asAutoscalingControllerLogger.Debugf("Releasing autoscaling lock")
-	c.mu.Unlock()
+	asAutoscalingControllerLogger.Debugf("Releasing autoscaling lock for scaling %s", scalingOp)
+	if scalingOp == "down" {
+		c.muDown.Unlock()
+	} else {
+		c.muUp.Unlock()
+	}
 	if err != nil {
 		asAutoscalingControllerLogger.Errorf("launchProcessPendingScalingOp error: %s", err)
 		return err
