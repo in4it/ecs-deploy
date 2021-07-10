@@ -25,6 +25,7 @@ type Controller struct {
 // controller interface (for tests)
 type ControllerIf interface {
 	describeServices() ([]service.RunningService, error)
+	getServices() ([]*service.DynamoServicesElement, error)
 }
 
 // logging
@@ -1009,8 +1010,9 @@ func (c *Controller) Resume() error {
 					return err
 				}
 				if pendingAction == scalingOp {
+					cc := &Controller{}
 					controllerLogger.Infof("Launching process for pending scaling operation: %s ", pendingAction)
-					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory)
+					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc)
 				}
 			}
 		}
