@@ -1011,8 +1011,9 @@ func (c *Controller) Resume() error {
 				}
 				if pendingAction == scalingOp {
 					cc := &Controller{}
+					autoscaling := &ecs.AutoScaling{}
 					controllerLogger.Infof("Launching process for pending scaling operation: %s ", pendingAction)
-					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc)
+					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 				}
 			}
 		}

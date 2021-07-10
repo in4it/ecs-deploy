@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
 )
 
@@ -12,6 +13,20 @@ type MockService struct {
 	GetClusterInfoOutput  *service.DynamoCluster
 	IsDeployRunningOutput bool
 	service.ServiceIf
+}
+
+type MockAutoScaling struct {
+	ecs.AutoScalingIf
+	GetAutoScalingGroupByTagOutput string
+}
+
+func (m MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
+	return m.GetAutoScalingGroupByTagOutput, nil
+}
+
+func (m MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change int64) error {
+	return nil
+
 }
 
 func (m MockService) GetClusterInfo() (*service.DynamoCluster, error) {
@@ -70,6 +85,9 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	os.Setenv("AUTOSCALING_DOWN_PERIOD", "2")
 	os.Setenv("AUTOSCALING_DOWN_INTERVAL", "1")
 	// mock
+	am := MockAutoScaling{
+		GetAutoScalingGroupByTagOutput: "ecs-deploy",
+	}
 	s := MockService{
 		IsDeployRunningOutput: false,
 		GetClusterInfoOutput: &service.DynamoCluster{
@@ -124,7 +142,7 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	pendingScalingOp := "down"
 	registeredInstanceCpu := int64(1024)
 	registeredInstanceMemory := int64(2048)
-	err := as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1)
+	err := as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am)
 	if err != nil {
 		t.Errorf("Error: %s", err)
 	}

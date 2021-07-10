@@ -255,8 +255,9 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	}
 	if pendingScalingOp != "" {
 		cc := &Controller{}
+		autoscaling := &ecs.AutoScaling{}
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
-		go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc)
+		go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 	}
 	return nil
 }
@@ -287,13 +288,13 @@ func (c *AutoscalingController) getAutoscalingPeriodInterval(scalingOp string) (
 	return period, interval
 }
 
-func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf) error {
+func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
 
 	// lock scaling operation
 	asAutoscalingControllerLogger.Debugf("Getting autoscaling lock")
 	c.mu.Lock()
 	// execute launchProcessPendingScalingOp
-	err := c.launchProcessPendingScalingOp(clusterName, scalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc)
+	err := c.launchProcessPendingScalingOp(clusterName, scalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 	// unlock
 	asAutoscalingControllerLogger.Debugf("Releasing autoscaling lock")
 	c.mu.Unlock()
@@ -303,7 +304,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(cluster
 	}
 	return nil
 }
-func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf) error {
+func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
 	var err error
 	var dcNew *service.DynamoCluster
 	var sizeChange int64
@@ -360,7 +361,6 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 
 	if !abort {
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s now (%d)", scalingOp, sizeChange)
-		autoscaling := ecs.AutoScaling{}
 		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 		if err != nil {
 			return err
