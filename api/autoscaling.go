@@ -380,7 +380,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 			return err
 		}
 	} else {
-		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s aborted. deploy running: %v, free resources (scaling down): %v, resources fit (scaling up): %v", scalingOp, deployRunning, hasFreeResourcesGlobal, resourcesFit)
+		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s aborted. deploy running: %v, free resources (scaling down): %v, resources fit (scaling up): %v, pendingAction: %s", scalingOp, deployRunning, hasFreeResourcesGlobal, resourcesFit, dcNew.ScalingOperation.PendingAction)
 	}
 	return nil
 }

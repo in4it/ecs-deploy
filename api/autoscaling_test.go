@@ -13,6 +13,7 @@ import (
 
 type MockService struct {
 	GetClusterInfoOutput  *service.DynamoCluster
+	GetClusterInfoCounter uint64
 	IsDeployRunningOutput bool
 	PutClusterInfoOutput  *service.DynamoCluster
 	PutClusterInfoCounter uint64
@@ -34,9 +35,11 @@ func (m MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change i
 }
 func (m MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.PutClusterInfoCounter, 1)
+	m.GetClusterInfoOutput.ScalingOperation.PendingAction = pendingAction
 	return m.PutClusterInfoOutput, nil
 }
 func (m MockService) GetClusterInfo() (*service.DynamoCluster, error) {
+	atomic.AddUint64(&m.GetClusterInfoCounter, 1)
 	return m.GetClusterInfoOutput, nil
 }
 
@@ -159,8 +162,30 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	pendingScalingOp := "down"
 	registeredInstanceCpu := int64(1024)
 	registeredInstanceMemory := int64(2048)
-	err := as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am)
-	if err != nil {
-		t.Errorf("Error: %s", err)
-	}
+	var (
+		err1 error
+		err2 error
+	)
+
+	wait1 := make(chan struct{})
+	wait2 := make(chan struct{})
+
+	go func() {
+		err1 = as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am)
+		if err1 != nil {
+			t.Errorf("Error: %s", err1)
+		}
+		close(wait1)
+
+	}()
+	go func() {
+		err2 = as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am)
+		if err2 != nil {
+			t.Errorf("Error: %s", err2)
+		}
+		close(wait2)
+
+	}()
+	<-wait1
+	<-wait2
 }
