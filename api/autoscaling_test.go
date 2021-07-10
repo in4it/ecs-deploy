@@ -2,16 +2,20 @@ package api
 
 import (
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
+	"github.com/juju/loggo"
 )
 
 type MockService struct {
 	GetClusterInfoOutput  *service.DynamoCluster
 	IsDeployRunningOutput bool
+	PutClusterInfoOutput  *service.DynamoCluster
+	PutClusterInfoCounter uint64
 	service.ServiceIf
 }
 
@@ -28,7 +32,10 @@ func (m MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change i
 	return nil
 
 }
-
+func (m MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
+	atomic.AddUint64(&m.PutClusterInfoCounter, 1)
+	return m.PutClusterInfoOutput, nil
+}
 func (m MockService) GetClusterInfo() (*service.DynamoCluster, error) {
 	return m.GetClusterInfoOutput, nil
 }
@@ -84,6 +91,7 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	// configuration
 	os.Setenv("AUTOSCALING_DOWN_PERIOD", "2")
 	os.Setenv("AUTOSCALING_DOWN_INTERVAL", "1")
+	asAutoscalingControllerLogger.SetLogLevel(loggo.DEBUG)
 	// mock
 	am := MockAutoScaling{
 		GetAutoScalingGroupByTagOutput: "ecs-deploy",
@@ -93,6 +101,11 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 		GetClusterInfoOutput: &service.DynamoCluster{
 			Identifier: "myService",
 			Time:       time.Now(),
+			ScalingOperation: service.DynamoClusterScalingOperation{
+				ClusterName:   "testCluster",
+				Action:        "down",
+				PendingAction: "down",
+			},
 			ContainerInstances: []service.DynamoClusterContainerInstance{
 				{
 					ClusterName:         "testCluster",
@@ -116,6 +129,10 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 					Status:              "ACTIVE",
 				},
 			},
+		},
+		PutClusterInfoOutput: &service.DynamoCluster{
+			Identifier: "myService",
+			Time:       time.Now(),
 		},
 	}
 	mc1 := &MockController{

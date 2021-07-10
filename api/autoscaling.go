@@ -331,8 +331,14 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 		if err != nil {
 			return err
 		}
+		// check if scaling operation is still present
+		if dcNew.ScalingOperation.PendingAction != scalingOp {
+			asAutoscalingControllerLogger.Infof("Abort scaling operation: scaling %s not found anymore in dynamodb (scalingOp in db: %s)", scalingOp, dcNew.ScalingOperation.PendingAction)
+			abort = true
+		}
 		// pending scaling down logic
 		if scalingOp == "down" {
+			// make scaling decision
 			hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, dcNew.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 			if hasFreeResourcesGlobal {
 				// abort if deploy is running
