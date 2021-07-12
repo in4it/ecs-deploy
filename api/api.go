@@ -35,7 +35,8 @@ var apiVersion = "1.2"
 type API struct {
 	authMiddleware *jwt.GinJWTMiddleware
 	//sp             saml.ServiceProviderSettings
-	samlHelper *SAML
+	samlHelper   *SAML
+	asController AutoscalingController
 }
 
 type User struct {
@@ -53,6 +54,8 @@ func (a *API) Launch() error {
 			return err
 		}
 	}
+
+	a.asController = AutoscalingController{}
 
 	a.createAuthMiddleware()
 	a.createRoutes()
@@ -693,7 +696,6 @@ func (a *API) scaleServiceHandler(c *gin.Context) {
 }
 
 func (a *API) webhookHandler(c *gin.Context) {
-	asController := AutoscalingController{}
 	var err error
 
 	snsMessageType := c.GetHeader("x-amz-sns-message-type")
@@ -715,13 +717,13 @@ func (a *API) webhookHandler(c *gin.Context) {
 						var ecsMessage ecs.SNSPayloadEcs
 						if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
 							apiLogger.Tracef("ECS Message: %v", snsPayload.Message)
-							err = asController.processEcsMessage(ecsMessage)
+							err = a.asController.processEcsMessage(ecsMessage)
 						}
 					} else if genericMessage.DetailType == "EC2 Instance-terminate Lifecycle Action" {
 						var lifecycleMessage ecs.SNSPayloadLifecycle
 						if err = json.Unmarshal([]byte(snsPayload.Message), &lifecycleMessage); err == nil {
 							apiLogger.Debugf("Lifecycle Message: %v", snsPayload.Message)
-							err = asController.processLifecycleMessage(lifecycleMessage)
+							err = a.asController.processLifecycleMessage(lifecycleMessage)
 						}
 					}
 				}

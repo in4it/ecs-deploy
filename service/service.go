@@ -26,6 +26,13 @@ type Service struct {
 	Listeners   []string
 }
 
+// Service interface (for tests)
+type ServiceIf interface {
+	GetClusterInfo() (*DynamoCluster, error)
+	IsDeployRunning() (bool, error)
+	PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error)
+}
+
 type DynamoDeployment struct {
 	ServiceName       string    `dynamo:"ServiceName,hash"`
 	Time              time.Time `dynamo:"Time,range" index:"DayIndex,range" index:"MonthIndex,range"`

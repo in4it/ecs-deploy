@@ -1,6 +1,8 @@
 package api
 
 import (
+	"sync"
+
 	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/in4it/ecs-deploy/util"
@@ -17,15 +19,16 @@ import (
 )
 
 type AutoscalingController struct {
+	muUp   sync.Mutex
+	muDown sync.Mutex
 }
 
 var asAutoscalingControllerLogger = loggo.GetLogger("as-controller")
 
-func (c *AutoscalingController) getClusterInfoWithCache(clusterName string) (*service.DynamoCluster, error) {
-	return c.getClusterInfo(clusterName, true)
+func (c *AutoscalingController) getClusterInfoWithCache(clusterName string, s service.ServiceIf) (*service.DynamoCluster, error) {
+	return c.getClusterInfo(clusterName, true, s)
 }
-func (c *AutoscalingController) getClusterInfo(clusterName string, withCache bool) (*service.DynamoCluster, error) {
-	s := service.NewService()
+func (c *AutoscalingController) getClusterInfo(clusterName string, withCache bool, s service.ServiceIf) (*service.DynamoCluster, error) {
 	e := ecs.ECS{}
 
 	var dc *service.DynamoCluster
@@ -61,8 +64,7 @@ func (c *AutoscalingController) getClusterInfo(clusterName string, withCache boo
 }
 
 // return minimal cpu/memory resources that are needed for the cluster
-func (c *AutoscalingController) getResourcesNeeded(clusterName string) (int64, int64, error) {
-	cc := Controller{}
+func (c *AutoscalingController) getResourcesNeeded(clusterName string, cc ControllerIf) (int64, int64, error) {
 	dss, _ := cc.getServices()
 	memoryNeeded := make(map[string]int64)
 	cpuNeeded := make(map[string]int64)
@@ -111,6 +113,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	apiLogger.Debugf("found ecs notification")
 	s := service.NewService()
 	e := ecs.ECS{}
+	cc := &Controller{}
 	autoscaling := ecs.AutoScaling{}
 	// determine cluster name
 	sp := strings.Split(message.Detail.ClusterArn, "/")
@@ -119,7 +122,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	}
 	clusterName := sp[1]
 	// determine max reservation
-	memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName)
+	memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc)
 	if err != nil {
 		return err
 	}
@@ -131,7 +134,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	registeredInstanceCpu := f.RegisteredCpu
 	registeredInstanceMemory := f.RegisteredMemory
 	// determine minimum reservations
-	dc, err := c.getClusterInfoWithCache(clusterName)
+	dc, err := c.getClusterInfoWithCache(clusterName, s)
 	if err != nil {
 		return err
 	}
@@ -252,8 +255,10 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 		return err
 	}
 	if pendingScalingOp != "" {
+		cc := &Controller{}
+		autoscaling := &ecs.AutoScaling{}
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
-		go c.launchProcessPendingScalingOp(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory)
+		go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 	}
 	return nil
 }
@@ -283,11 +288,35 @@ func (c *AutoscalingController) getAutoscalingPeriodInterval(scalingOp string) (
 	}
 	return period, interval
 }
-func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64) error {
+
+func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
+
+	// lock scaling operation
+	asAutoscalingControllerLogger.Debugf("Getting autoscaling lock for scaling %s", scalingOp)
+	if scalingOp == "down" {
+		c.muDown.Lock()
+	} else {
+		c.muUp.Lock()
+	}
+	// execute launchProcessPendingScalingOp
+	err := c.launchProcessPendingScalingOp(clusterName, scalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
+	// unlock
+	asAutoscalingControllerLogger.Debugf("Releasing autoscaling lock for scaling %s", scalingOp)
+	if scalingOp == "down" {
+		c.muDown.Unlock()
+	} else {
+		c.muUp.Unlock()
+	}
+	if err != nil {
+		asAutoscalingControllerLogger.Errorf("launchProcessPendingScalingOp error: %s", err)
+		return err
+	}
+	return nil
+}
+func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
 	var err error
 	var dcNew *service.DynamoCluster
 	var sizeChange int64
-	s := service.NewService()
 
 	if scalingOp == "up" {
 		sizeChange = 1
@@ -303,16 +332,22 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 	var i int64
 	for i = 0; i < period && !abort; i++ {
 		time.Sleep(time.Duration(interval) * time.Second)
-		dcNew, err = c.getClusterInfo(clusterName, true)
+		dcNew, err = c.getClusterInfo(clusterName, true, s)
 		if err != nil {
 			return err
 		}
-		memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName)
+		memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc)
 		if err != nil {
 			return err
+		}
+		// check if scaling operation is still present
+		if dcNew.ScalingOperation.PendingAction != scalingOp {
+			asAutoscalingControllerLogger.Infof("Abort scaling operation: scaling %s not found anymore in dynamodb (scalingOp in db: %s)", scalingOp, dcNew.ScalingOperation.PendingAction)
+			abort = true
 		}
 		// pending scaling down logic
 		if scalingOp == "down" {
+			// make scaling decision
 			hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, dcNew.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 			if hasFreeResourcesGlobal {
 				// abort if deploy is running
@@ -324,7 +359,6 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 					abort = true
 				}
 				// abort if not all services are scheduled
-				cc := &Controller{}
 				if !c.areAllTasksRunningInCluster(clusterName, cc) {
 					abort = true
 				}
@@ -342,7 +376,6 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 
 	if !abort {
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s now (%d)", scalingOp, sizeChange)
-		autoscaling := ecs.AutoScaling{}
 		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 		if err != nil {
 			return err
@@ -356,7 +389,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 			return err
 		}
 	} else {
-		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s aborted. deploy running: %v, free resources (scaling down): %v, resources fit (scaling up): %v", scalingOp, deployRunning, hasFreeResourcesGlobal, resourcesFit)
+		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s aborted. deploy running: %v, free resources (scaling down): %v, resources fit (scaling up): %v, pendingAction: %s", scalingOp, deployRunning, hasFreeResourcesGlobal, resourcesFit, dcNew.ScalingOperation.PendingAction)
 	}
 	return nil
 }
