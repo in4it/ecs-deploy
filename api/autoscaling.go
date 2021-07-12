@@ -249,12 +249,13 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 			}
 		}
 	}
-	// write object
-	_, err = s.PutClusterInfo(*dc, clusterName, scalingOp, pendingScalingOp)
-	if err != nil {
-		return err
-	}
 	if pendingScalingOp != "" {
+		// write object
+		_, err = s.PutClusterInfo(*dc, clusterName, scalingOp, pendingScalingOp)
+		if err != nil {
+			return err
+		}
+		// launch scaling operation
 		cc := &Controller{}
 		autoscaling := &ecs.AutoScaling{}
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
