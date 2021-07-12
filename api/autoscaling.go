@@ -25,12 +25,10 @@ type AutoscalingController struct {
 
 var asAutoscalingControllerLogger = loggo.GetLogger("as-controller")
 
-func (c *AutoscalingController) getClusterInfoWithCache(clusterName string, s service.ServiceIf) (*service.DynamoCluster, error) {
-	return c.getClusterInfo(clusterName, true, s)
+func (c *AutoscalingController) getClusterInfoWithCache(clusterName string, s service.ServiceIf, e ecs.ECSIf) (*service.DynamoCluster, error) {
+	return c.getClusterInfo(clusterName, true, s, e)
 }
-func (c *AutoscalingController) getClusterInfo(clusterName string, withCache bool, s service.ServiceIf) (*service.DynamoCluster, error) {
-	e := ecs.ECS{}
-
+func (c *AutoscalingController) getClusterInfo(clusterName string, withCache bool, s service.ServiceIf, e ecs.ECSIf) (*service.DynamoCluster, error) {
 	var dc *service.DynamoCluster
 	var err error
 
@@ -43,7 +41,16 @@ func (c *AutoscalingController) getClusterInfo(clusterName string, withCache boo
 	if dc == nil || dc.Time.Before(time.Now().Add(-4*time.Minute /* 4 minutes cache */)) {
 		// no cache, need to retrieve everything
 		asAutoscalingControllerLogger.Debugf("No cache found, need to retrieve using API calls")
-		dc = &service.DynamoCluster{}
+		if dc == nil {
+			dc = &service.DynamoCluster{}
+		} else {
+			scalingOperation := dc.ScalingOperation
+			dc = &service.DynamoCluster{
+				ContainerInstances: []service.DynamoClusterContainerInstance{},
+				ScalingOperation:   scalingOperation,
+			}
+		}
+
 		// calculate free resources
 		firs, _, err := e.GetInstanceResources(clusterName)
 		if err != nil {
@@ -112,7 +119,7 @@ func (c *AutoscalingController) getAutoscalingStrategy() (bool, bool) {
 func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) error {
 	apiLogger.Debugf("found ecs notification")
 	s := service.NewService()
-	e := ecs.ECS{}
+	e := &ecs.ECS{}
 	cc := &Controller{}
 	autoscaling := ecs.AutoScaling{}
 	// determine cluster name
@@ -134,7 +141,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	registeredInstanceCpu := f.RegisteredCpu
 	registeredInstanceMemory := f.RegisteredMemory
 	// determine minimum reservations
-	dc, err := c.getClusterInfoWithCache(clusterName, s)
+	dc, err := c.getClusterInfoWithCache(clusterName, s, e)
 	if err != nil {
 		return err
 	}
@@ -319,6 +326,8 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 	var dcNew *service.DynamoCluster
 	var sizeChange int64
 
+	e := &ecs.ECS{}
+
 	if scalingOp == "up" {
 		sizeChange = 1
 	} else if scalingOp == "down" {
@@ -333,7 +342,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 	var i int64
 	for i = 0; i < period && !abort; i++ {
 		time.Sleep(time.Duration(interval) * time.Second)
-		dcNew, err = c.getClusterInfo(clusterName, true, s)
+		dcNew, err = c.getClusterInfo(clusterName, true, s, e)
 		if err != nil {
 			return err
 		}

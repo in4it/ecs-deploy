@@ -11,6 +11,12 @@ import (
 	"github.com/juju/loggo"
 )
 
+type MockECS struct {
+	ecs.ECSIf
+	GetInstanceResourcesOutputFree       []ecs.FreeInstanceResource
+	GetInstanceResourcesOutputRegistered []ecs.RegisteredInstanceResource
+}
+
 type MockService struct {
 	GetClusterInfoOutput  *service.DynamoCluster
 	GetClusterInfoCounter uint64
@@ -23,6 +29,10 @@ type MockService struct {
 type MockAutoScaling struct {
 	ecs.AutoScalingIf
 	GetAutoScalingGroupByTagOutput string
+}
+
+func (m *MockECS) GetInstanceResources(clusterName string) ([]ecs.FreeInstanceResource, []ecs.RegisteredInstanceResource, error) {
+	return m.GetInstanceResourcesOutputFree, m.GetInstanceResourcesOutputRegistered, nil
 }
 
 func (m *MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
@@ -194,5 +204,75 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	}
 	if s.GetClusterInfoCounter != 3 {
 		t.Errorf("GetClusterInfoCounter is %d (expected 3)", s.GetClusterInfoCounter)
+	}
+}
+
+func TestGetClusterInfoWithExpiredCache(t *testing.T) {
+	scalingOp := service.DynamoClusterScalingOperation{
+		ClusterName:   "testCluster",
+		Action:        "down",
+		PendingAction: "down",
+	}
+	e := &MockECS{
+		GetInstanceResourcesOutputFree: []ecs.FreeInstanceResource{
+			{
+				InstanceId:       "i-123",
+				AvailabilityZone: "eu-west-1a",
+				Status:           "ACTIVE",
+			},
+			{
+				InstanceId:       "i-456",
+				AvailabilityZone: "eu-west-1b",
+				Status:           "ACTIVE",
+			},
+		},
+		GetInstanceResourcesOutputRegistered: []ecs.RegisteredInstanceResource{},
+	}
+	s := &MockService{
+		IsDeployRunningOutput: false,
+		GetClusterInfoOutput: &service.DynamoCluster{
+			Identifier:       "myService",
+			Time:             time.Now().Truncate(10 * time.Minute),
+			ScalingOperation: scalingOp,
+			ContainerInstances: []service.DynamoClusterContainerInstance{
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-4",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+				},
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-5",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+				},
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-6",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+				},
+			},
+		},
+	}
+	as := AutoscalingController{}
+
+	res, err := as.getClusterInfo("myCluster", true, s, e)
+
+	if err != nil {
+		t.Errorf("Error getClusterInfo: %s", err)
+	}
+	if res.ScalingOperation.PendingAction != scalingOp.PendingAction {
+		t.Errorf("Scaling Operation not found in result: expected %s, got %s", scalingOp.PendingAction, res.ScalingOperation.PendingAction)
+	}
+	if len(res.ContainerInstances) != 2 {
+		t.Errorf("wrong number of container instances, got: %d", len(res.ContainerInstances))
+	}
+	if res.ContainerInstances[0].ContainerInstanceId != "i-123" {
+		t.Errorf("wrong container instance returned")
 	}
 }
