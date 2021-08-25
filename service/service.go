@@ -26,6 +26,13 @@ type Service struct {
 	Listeners   []string
 }
 
+// Service interface (for tests)
+type ServiceIf interface {
+	GetClusterInfo() (*DynamoCluster, error)
+	IsDeployRunning() (bool, error)
+	PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error)
+}
+
 type DynamoDeployment struct {
 	ServiceName       string    `dynamo:"ServiceName,hash"`
 	Time              time.Time `dynamo:"Time,range" index:"DayIndex,range" index:"MonthIndex,range"`
@@ -652,12 +659,12 @@ func (s *Service) GetScalingActivity(clusterName string, startTime time.Time) (s
 	for _, dc := range dcs {
 		// check actions
 		if dc.ScalingOperation.ClusterName == clusterName && dc.ScalingOperation.Action != "no" {
-			serviceLogger.Debugf("Found a previous scaling operation (action %v, start time: %v)", dc.ScalingOperation.Action, startTime.UTC().Format("2006-01-02T15:04:05-0700"))
+			serviceLogger.Debugf("Found a previous scaling operation (action %v, time: %v)", dc.ScalingOperation.Action, dc.Time.UTC().Format("2006-01-02T15:04:05-0700"))
 			return dc.ScalingOperation.Action, "", nil
 		}
 		// check pending actions
 		if dc.ScalingOperation.ClusterName == clusterName && dc.ScalingOperation.PendingAction != "" {
-			serviceLogger.Debugf("Found a previous pending scaling operation (action %v, start time: %v)", dc.ScalingOperation.PendingAction, startTime.UTC().Format("2006-01-02T15:04:05-0700"))
+			serviceLogger.Debugf("Found a previous pending scaling operation (action %v, time: %v)", dc.ScalingOperation.PendingAction, dc.Time.UTC().Format("2006-01-02T15:04:05-0700"))
 			return "no", dc.ScalingOperation.PendingAction, nil
 		}
 	}

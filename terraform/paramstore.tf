@@ -132,3 +132,11 @@ resource "aws_ssm_parameter" "ecs-deploy-paramstore-ecs-ecr-scan-on-push" {
   type  = "String"
   value = var.ecs_ecr_scan_on_push
 }
+
+
+# Deploy max wait
+resource "aws_ssm_parameter" "ecs-deploy-paramstore-deploy-max-wait" {
+  name  = "/${var.cluster_name}-${var.aws_env}/ecs-deploy/DEPLOY_MAX_WAIT_SECONDS"
+  type  = "String"
+  value = var.ecs_deploy_max_wait_seconds
+}

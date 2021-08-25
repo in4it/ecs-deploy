@@ -38,6 +38,10 @@ type ECS struct {
 	TargetGroupArn *string
 }
 
+type ECSIf interface {
+	GetInstanceResources(clusterName string) ([]FreeInstanceResource, []RegisteredInstanceResource, error)
+}
+
 // Task definition and Container definition
 type TaskDefinition struct {
 	Family               string                `json:"family"`

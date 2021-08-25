@@ -21,6 +21,11 @@ var autoscalingLogger = loggo.GetLogger("autoscaling")
 type AutoScaling struct {
 }
 
+type AutoScalingIf interface {
+	GetAutoScalingGroupByTag(clusterName string) (string, error)
+	ScaleClusterNodes(autoScalingGroupName string, change int64) error
+}
+
 func (a *AutoScaling) CompleteLifecycleAction(autoScalingGroupName, instanceId, action, lifecycleHookName, lifecycleToken string) error {
 	svc := autoscaling.New(session.New())
 	input := &autoscaling.CompleteLifecycleActionInput{
