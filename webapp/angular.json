@@ -31,7 +31,7 @@
             "sourceMap": true,
             "optimization": false,
             "namedChunks": true,
-            "aot": false
+            "aot": true
           },
           "configurations": {
             "production": {
@@ -44,7 +44,6 @@
               "optimization": true,
               "outputHashing": "all",
               "sourceMap": false,
-              "extractCss": true,
               "namedChunks": false,
               "extractLicenses": true,
               "vendorChunk": false,

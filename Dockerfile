@@ -1,7 +1,7 @@
 #
 # build angular project
 #
-FROM node:14 as webapp-builder
+FROM node:16 as webapp-builder
 
 # change PREFIX if you need another url prefix for the webapp
 ENV PREFIX /ecs-deploy
@@ -16,7 +16,7 @@ WORKDIR /webapp
 
 COPY webapp /webapp
 
-RUN cd /webapp && $(npm bin)/ng build --prod --base-href ${PREFIX}/webapp/
+RUN cd /webapp && $(npm bin)/ng build --configuration production --base-href ${PREFIX}/webapp/
 
 #
 # Build go project
