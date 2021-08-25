@@ -21,7 +21,7 @@ export class DeploymentListService {
 
   constructor(private http: HttpClient, private auth: AuthService) { } 
 
-  dateOptions = { year: 'numeric', month: 'numeric', day: 'numeric', hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: 'short'};
+  dateOptions = { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short"} as const;
 
   getDeploymentList(serviceName: string) {
     this.dl$ = new BehaviorSubject<DeploymentList>(new DeploymentList([], []))
