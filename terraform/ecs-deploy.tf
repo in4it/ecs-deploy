@@ -312,6 +312,7 @@ resource "aws_dynamodb_table" "ecs-deploy" {
 # cloudwatch log group
 resource "aws_cloudwatch_log_group" "ecs-deploy" {
   name = "ecs-deploy"
+  kms_key_id = var.cloudwatch_log_group_kms_arn
 }
 
 #
