@@ -25,3 +25,11 @@ output "cluster-ec2-role-arn" {
 output "cluster-ec2-role-name" {
   value = aws_iam_role.cluster-ec2-role.name
 }
+
+output "ecs-deploy-cloudwatch-log-group-name" {
+  value = aws_cloudwatch_log_group.ecs-deploy.name
+}
+
+output "cluster-cloudwatch-log-group-name" {
+  value = aws_cloudwatch_log_group.cluster.name
+}

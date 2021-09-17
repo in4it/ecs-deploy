@@ -278,3 +278,8 @@ variable "metadata_options_http_tokens" {
   description = "metadata options IMDSv1 or IMDSv2"
   default     = ""
 }
+
+variable "cloudwatch_log_group_kms_arn" {
+  description = "cloudwatch log group kms arn"
+  default     = ""
+}
