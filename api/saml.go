@@ -4,6 +4,8 @@ package api
 // uses saml/samlsp with parts rewritten to make it work with gin-gonic and gin-jwt
 
 import (
+	"context"
+
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/dgrijalva/jwt-go"
@@ -80,11 +82,18 @@ func newSAML(strIdpMetadataURL string, X509KeyPair, keyPEMBlock []byte) (*SAML, 
 		return nil, err
 	}
 
+	idpMetadataURL := *s.idpMetadataURL
+
+	idpMetadata, err := samlsp.FetchMetadata(
+		context.Background(),
+		http.DefaultClient,
+		idpMetadataURL)
+
 	samlSP, _ := samlsp.New(samlsp.Options{
-		URL:            *rootURL,
-		Key:            keyPair.PrivateKey.(*rsa.PrivateKey),
-		Certificate:    keyPair.Leaf,
-		IDPMetadataURL: s.idpMetadataURL,
+		URL:         *rootURL,
+		Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
+		Certificate: keyPair.Leaf,
+		IDPMetadata: idpMetadata,
 	})
 
 	s.sp = samlSP.ServiceProvider
@@ -158,7 +167,7 @@ func (s *SAML) samlInitHandler(c *gin.Context) {
 		bindingLocation = s.sp.GetSSOBindingLocation(binding)
 	}
 
-	req, err := s.sp.MakeAuthenticationRequest(bindingLocation)
+	req, err := s.sp.MakeAuthenticationRequest(bindingLocation, binding)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
@@ -190,7 +199,13 @@ func (s *SAML) samlInitHandler(c *gin.Context) {
 	})
 
 	if binding == saml.HTTPRedirectBinding {
-		redirectURL := req.Redirect(relayState)
+		redirectURL, err := req.Redirect(relayState, &s.sp)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
 		c.Redirect(http.StatusFound, redirectURL.String())
 		return
 	}
