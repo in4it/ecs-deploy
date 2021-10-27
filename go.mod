@@ -10,11 +10,11 @@ require (
 	github.com/crewjam/httperr v0.2.0 // indirect
 	github.com/crewjam/saml v0.4.6-0.20210521115923-29c6295245bd
 	github.com/dchest/uniuri v0.0.0-20200228104902-7aecb25e1fe5 // indirect
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/form3tech-oss/jwt-go v3.2.2+incompatible // indirect
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-contrib/location v0.0.2
 	github.com/gin-gonic/gin v1.7.4
+	github.com/golang-jwt/jwt/v4 v4.1.0
 	github.com/google/go-cmp v0.5.5
 	github.com/gorilla/context v1.1.1
 	github.com/gorilla/sessions v1.1.3

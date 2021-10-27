@@ -6,9 +6,10 @@ package api
 import (
 	"context"
 
+	jwt "github.com/golang-jwt/jwt/v4"
+
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
 	"github.com/in4it/ecs-deploy/util"
