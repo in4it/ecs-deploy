@@ -3,6 +3,7 @@
 #
 
 data "aws_ami" "ecs" {
+  for_each    = toset(var.architectures)
   most_recent = true
 
   filter {
@@ -12,7 +13,7 @@ data "aws_ami" "ecs" {
 
   filter {
     name   = "architecture"
-    values = ["x86_64"]
+    values = ["${each.value}"]
   }
 
   filter {
@@ -22,6 +23,7 @@ data "aws_ami" "ecs" {
 
   owners = ["591542846629"] # AWS
 }
+
 
 #
 # ECS cluster
@@ -55,9 +57,9 @@ data "template_file" "ecs_init" {
 # launch template
 #
 resource "aws_launch_template" "cluster" {
-  name                                 = "ecs-${var.cluster_name}-launchtemplate"
-  image_id                             = data.aws_ami.ecs.id
-  instance_type                        = var.instance_type
+  for_each                             = toset(var.architectures)
+  name                                 = "ecs-${var.cluster_name}-launchtemplate-${each.value}"
+  image_id                             = data.aws_ami.ecs[each.value].id
   key_name                             = var.ssh_key_name
   instance_initiated_shutdown_behavior = "terminate"
 
@@ -111,9 +113,53 @@ resource "aws_autoscaling_group" "cluster" {
   desired_capacity     = var.cluster_desired_capacity
   protect_from_scale_in  = var.ecs_capacity_provider_enabled ? true : false
 
-  launch_template {
-    id      = aws_launch_template.cluster.id
-    version = "$Latest"
+  mixed_instances_policy { 
+    launch_template {
+      
+      dynamic "launch_template_specification" {
+        for_each = var.architectures == ["x86_64"] || length(var.architectures) == 2 ? [1] : []
+        content {  
+          launch_template_id   = aws_launch_template.cluster["x86_64"].id
+          launch_template_name = "ecs-${var.cluster_name}-launchtemplate-x86_64"
+          version              = "$Default"
+        }
+      }
+
+      dynamic "override" {
+        for_each = var.architectures == ["x86_64"] || length(var.architectures) == 2 ? [1] : []
+        content {  
+          instance_type     = var.instance_type
+        }
+      }  
+
+      dynamic "launch_template_specification" {
+        for_each = var.architectures == ["arm64"] ? [1] : []
+        content {  
+          launch_template_id   = aws_launch_template.cluster["arm64"].id
+          launch_template_name = "ecs-${var.cluster_name}-launchtemplate-arm64"
+          version              = "$Default"
+        }
+      }
+
+      dynamic "override" {
+        for_each = var.architectures == ["arm64"] ? [1] : []
+        content {  
+          instance_type     = var.instance_type_arm64
+        }
+      }
+
+      dynamic "override" {
+        for_each = length(var.architectures) == 2 ? [1] : []
+        content {    
+          instance_type = var.instance_type_arm64
+          launch_template_specification {
+            launch_template_id   = aws_launch_template.cluster["arm64"].id
+            launch_template_name = "ecs-${var.cluster_name}-launchtemplate-arm64"
+            version              = "$Default"
+          }
+        }
+      }
+    }
   }
 
   tag {

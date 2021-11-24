@@ -102,6 +102,10 @@ variable "instance_type" {
   description = "instance type"
 }
 
+variable "instance_type_arm64" {
+  description = "instance type arm64"
+}
+
 variable "ssh_key_name" {
   description = "ssh key name"
 }
@@ -282,4 +286,9 @@ variable "metadata_options_http_tokens" {
 variable "cloudwatch_log_group_kms_arn" {
   description = "cloudwatch log group kms arn"
   default     = ""
+}
+
+variable "architectures" {
+  description = "ECS cluster multi arch support"
+  default     = ["x86_64"]
 }
