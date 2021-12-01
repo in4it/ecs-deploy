@@ -214,7 +214,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 		var pendingScalingOp string
 		if asStrategyLargestContainerUp {
 			if desiredCapacity < maxSize {
-				resourcesFitGlobal = c.scaleUpDecision(clusterName, dc.ContainerInstances, cpuNeeded, memoryNeeded)
+				resourcesFitGlobal = c.scaleUpDecision(clusterName, instancesPerArch[arch], cpuNeeded, memoryNeeded)
 				if !resourcesFitGlobal {
 					cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
 					if err != nil {
@@ -245,7 +245,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 		}
 		// make scaling (down) decision
 		if asStrategyLargestContainerDown && desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
-			hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, dc.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
+			hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, instancesPerArch[arch], registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 			if hasFreeResourcesGlobal {
 				// check cooldown period
 				cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
