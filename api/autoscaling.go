@@ -188,103 +188,98 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 	}
 
-	var clusterArch string
+	architectures := []string{"x86_64", "arm64"}
+	instancesPerArch := make(map[string][]service.DynamoClusterContainerInstance)
 
-	if strings.Contains(clusterName, "arm64") {
-		clusterArch = "arm64"
-	} else {
-		clusterArch = "x86_64"
-	}
-
-	var archContainerInstances []service.DynamoClusterContainerInstance
 	for _, v := range dc.ContainerInstances {
-		if v.CPUArchitecture == clusterArch {
-			archContainerInstances = append(archContainerInstances, v)
-		}
+		instancesPerArch[v.CPUArchitecture] = append(instancesPerArch[v.CPUArchitecture], v)
 	}
 
-	// check whether at min/max capacity
-	autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
-	if err != nil {
-		return err
-	}
-	minSize, desiredCapacity, maxSize, err := autoscaling.GetClusterNodeDesiredCount(autoScalingGroupName)
-	if err != nil {
-		return err
-	}
-	// Check whether Strategy is enabled
-	asStrategyLargestContainerUp, asStrategyLargestContainerDown := c.getAutoscalingStrategy()
-	// make scaling (up) decision
-	var resourcesFitGlobal bool
-	var scalingOp = "no"
-	var pendingScalingOp string
-	if asStrategyLargestContainerUp {
-		if desiredCapacity < maxSize {
-			resourcesFitGlobal = c.scaleUpDecision(clusterName, archContainerInstances, cpuNeeded, memoryNeeded)
-			if !resourcesFitGlobal {
-				cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
-				if err != nil {
-					cooldownMin = 5
-				}
-				startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
-				lastScalingOp, _, err := s.GetScalingActivity(clusterName, startTime)
-				if err != nil {
-					return err
-				}
-				if lastScalingOp == "no" {
-					if util.GetEnv("AUTOSCALING_UP_STRATEGY", "immediately") == "gracefully" {
-						pendingScalingOp = "up"
-					} else {
-						asAutoscalingControllerLogger.Infof("Initiating scaling activity")
-						scalingOp = "up"
-						err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
-						if err != nil {
-							return err
+	for _, arch := range architectures {
+
+		// check whether at min/max capacity
+		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTags(clusterName, arch)
+		if err != nil {
+			return err
+		}
+		minSize, desiredCapacity, maxSize, err := autoscaling.GetClusterNodeDesiredCount(autoScalingGroupName)
+		if err != nil {
+			return err
+		}
+		// Check whether Strategy is enabled
+		asStrategyLargestContainerUp, asStrategyLargestContainerDown := c.getAutoscalingStrategy()
+		// make scaling (up) decision
+		var resourcesFitGlobal bool
+		var scalingOp = "no"
+		var pendingScalingOp string
+		if asStrategyLargestContainerUp {
+			if desiredCapacity < maxSize {
+				resourcesFitGlobal = c.scaleUpDecision(clusterName, dc.ContainerInstances, cpuNeeded, memoryNeeded)
+				if !resourcesFitGlobal {
+					cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
+					if err != nil {
+						cooldownMin = 5
+					}
+					startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
+					lastScalingOp, _, err := s.GetScalingActivity(clusterName, startTime)
+					if err != nil {
+						return err
+					}
+					if lastScalingOp == "no" {
+						if util.GetEnv("AUTOSCALING_UP_STRATEGY", "immediately") == "gracefully" {
+							pendingScalingOp = "up"
+						} else {
+							asAutoscalingControllerLogger.Infof("Initiating scaling activity")
+							scalingOp = "up"
+							err = autoscaling.ScaleClusterNodes(autoScalingGroupName, 1)
+							if err != nil {
+								return err
+							}
 						}
 					}
 				}
 			}
+		} else {
+			// if strategy is "latgestContainerUp" is disabled, resources always fit, and scaling down always needs to be checked
+			resourcesFitGlobal = true
 		}
-	} else {
-		// if strategy is "latgestContainerUp" is disabled, resources always fit, and scaling down always needs to be checked
-		resourcesFitGlobal = true
-	}
-	// make scaling (down) decision
-	if asStrategyLargestContainerDown && desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
-		hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, archContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
-		if hasFreeResourcesGlobal {
-			// check cooldown period
-			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
-			if err != nil {
-				cooldownMin = 5
+		// make scaling (down) decision
+		if asStrategyLargestContainerDown && desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
+			hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, dc.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
+			if hasFreeResourcesGlobal {
+				// check cooldown period
+				cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
+				if err != nil {
+					cooldownMin = 5
+				}
+				startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
+				lastScalingOp, tmpPendingScalingOp, err := s.GetScalingActivity(clusterName, startTime)
+				if err != nil {
+					return err
+				}
+				// check whether there is a deploy running
+				deployRunning, err := s.IsDeployRunning()
+				if err != nil {
+					return err
+				}
+				// only scale down if the cooldown period is not active and if there are no deploys currently running
+				if lastScalingOp == "no" && tmpPendingScalingOp == "" && !deployRunning {
+					pendingScalingOp = "down"
+				}
 			}
-			startTime := time.Now().Add(-1 * time.Duration(cooldownMin) * time.Minute)
-			lastScalingOp, tmpPendingScalingOp, err := s.GetScalingActivity(clusterName, startTime)
+		}
+		if pendingScalingOp != "" {
+			// write object
+			_, err = s.PutClusterInfo(*dc, clusterName, scalingOp, pendingScalingOp)
 			if err != nil {
 				return err
 			}
-			// check whether there is a deploy running
-			deployRunning, err := s.IsDeployRunning()
-			if err != nil {
-				return err
-			}
-			// only scale down if the cooldown period is not active and if there are no deploys currently running
-			if lastScalingOp == "no" && tmpPendingScalingOp == "" && !deployRunning {
-				pendingScalingOp = "down"
-			}
+			// launch scaling operation
+			cc := &Controller{}
+			autoscaling := &ecs.AutoScaling{}
+			asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
+			go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 		}
-	}
-	if pendingScalingOp != "" {
-		// write object
-		_, err = s.PutClusterInfo(*dc, clusterName, scalingOp, pendingScalingOp)
-		if err != nil {
-			return err
-		}
-		// launch scaling operation
-		cc := &Controller{}
-		autoscaling := &ecs.AutoScaling{}
-		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
-		go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
 	}
 	return nil
 }

@@ -23,6 +23,7 @@ type AutoScaling struct {
 
 type AutoScalingIf interface {
 	GetAutoScalingGroupByTag(clusterName string) (string, error)
+	GetAutoScalingGroupByTags(name string, arch string) (string, error)
 	ScaleClusterNodes(autoScalingGroupName string, change int64) error
 	GetClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error)
 }
@@ -300,6 +301,44 @@ func (a *AutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, erro
 	}
 	if result == "" {
 		return result, errors.New("ClusterNotFound: Could not find cluster by tag key=Cluster,Value=" + clusterName)
+	}
+	return result, nil
+}
+
+func (a *AutoScaling) GetAutoScalingGroupByTags(clusterName string, architecture string) (string, error) {
+	var result string
+	svc := autoscaling.New(session.New())
+	input := &autoscaling.DescribeAutoScalingGroupsInput{}
+	pageNum := 0
+	err := svc.DescribeAutoScalingGroupsPages(input,
+		func(page *autoscaling.DescribeAutoScalingGroupsOutput, lastPage bool) bool {
+			pageNum++
+			for _, v := range page.AutoScalingGroups {
+				found := 0
+				for _, tag := range v.Tags {
+					if aws.StringValue(tag.Key) == "Cluster" && aws.StringValue(tag.Value) == clusterName {
+						found++
+					}
+					if aws.StringValue(tag.Key) == "Architecture" && aws.StringValue(tag.Value) == architecture {
+						found++
+					}
+				}
+				if found == 2 {
+					result = aws.StringValue(v.AutoScalingGroupName)
+				}
+			}
+			return pageNum <= 100
+		})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			ecsLogger.Errorf(aerr.Error())
+		} else {
+			ecsLogger.Errorf(err.Error())
+		}
+	}
+	if result == "" {
+		return result, errors.New("ClusterNotFound: Could not find cluster by tag key=Cluster,Value=" + clusterName + " and by tag key=Architecture,Value=" + architecture)
 	}
 	return result, nil
 }
