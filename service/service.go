@@ -94,6 +94,7 @@ type DynamoClusterContainerInstance struct {
 	ClusterName         string
 	ContainerInstanceId string
 	AvailabilityZone    string
+	CPUArchitecture     string
 	FreeMemory          int64
 	FreeCpu             int64
 	Status              string

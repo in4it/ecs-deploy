@@ -162,6 +162,9 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 				if v.Name == "ecs.availability-zone" {
 					dc.ContainerInstances[k].AvailabilityZone = v.Value
 				}
+				if v.Name == "ecs.cpu-architecture" {
+					dc.ContainerInstances[k].CPUArchitecture = v.Value
+				}
 			}
 		}
 	}
@@ -182,9 +185,28 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 			if v.Name == "ecs.availability-zone" {
 				dcci.AvailabilityZone = v.Value
 			}
+			if v.Name == "ecs.cpu-architecture" {
+				dcci.CPUArchitecture = v.Value
+			}
 		}
 		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 	}
+
+	var clusterArch string
+
+	if strings.Contains(clusterName, "arm64") {
+		clusterArch = "arm64"
+	} else {
+		clusterArch = "x86_64"
+	}
+
+	var archContainerInstances []service.DynamoClusterContainerInstance
+	for _, v := range dc.ContainerInstances {
+		if v.CPUArchitecture == clusterArch {
+			archContainerInstances = append(archContainerInstances, v)
+		}
+	}
+
 	// check whether at min/max capacity
 	autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
 	if err != nil {
@@ -202,7 +224,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	var pendingScalingOp string
 	if asStrategyLargestContainerUp {
 		if desiredCapacity < maxSize {
-			resourcesFitGlobal = c.scaleUpDecision(clusterName, dc.ContainerInstances, cpuNeeded, memoryNeeded)
+			resourcesFitGlobal = c.scaleUpDecision(clusterName, archContainerInstances, cpuNeeded, memoryNeeded)
 			if !resourcesFitGlobal {
 				cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_UP_COOLDOWN", "5"), 10, 64)
 				if err != nil {
@@ -233,7 +255,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) err
 	}
 	// make scaling (down) decision
 	if asStrategyLargestContainerDown && desiredCapacity > minSize && (resourcesFitGlobal || desiredCapacity == maxSize) {
-		hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, dc.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
+		hasFreeResourcesGlobal := c.scaleDownDecision(clusterName, archContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 		if hasFreeResourcesGlobal {
 			// check cooldown period
 			cooldownMin, err := strconv.ParseInt(util.GetEnv("AUTOSCALING_DOWN_COOLDOWN", "5"), 10, 64)
