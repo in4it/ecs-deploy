@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"encoding/json"
+
 	ecsv2types "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -42,6 +43,8 @@ type ECS struct {
 
 type ECSIf interface {
 	GetInstanceResources(clusterName string) ([]FreeInstanceResource, []RegisteredInstanceResource, error)
+	ConvertResourceToFir(cir []ContainerInstanceResource) (FreeInstanceResource, error)
+	ConvertResourceToRir(cir []ContainerInstanceResource) (RegisteredInstanceResource, error)
 }
 
 // Task definition and Container definition

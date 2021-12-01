@@ -116,12 +116,8 @@ func (c *AutoscalingController) getAutoscalingStrategy() (bool, bool) {
 }
 
 // Process ECS event message and determine to scale or not
-func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs) error {
+func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc ControllerIf, e ecs.ECSIf, s service.ServiceIf, autoscaling ecs.AutoScalingIf) error {
 	apiLogger.Debugf("found ecs notification")
-	s := service.NewService()
-	e := &ecs.ECS{}
-	cc := &Controller{}
-	autoscaling := ecs.AutoScaling{}
 	// determine cluster name
 	sp := strings.Split(message.Detail.ClusterArn, "/")
 	if len(sp) != 2 {

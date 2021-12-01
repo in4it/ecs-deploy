@@ -24,6 +24,7 @@ type AutoScaling struct {
 type AutoScalingIf interface {
 	GetAutoScalingGroupByTag(clusterName string) (string, error)
 	ScaleClusterNodes(autoScalingGroupName string, change int64) error
+	GetClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error)
 }
 
 func (a *AutoScaling) CompleteLifecycleAction(autoScalingGroupName, instanceId, action, lifecycleHookName, lifecycleToken string) error {

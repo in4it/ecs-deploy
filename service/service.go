@@ -31,6 +31,7 @@ type ServiceIf interface {
 	GetClusterInfo() (*DynamoCluster, error)
 	IsDeployRunning() (bool, error)
 	PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error)
+	GetScalingActivity(clusterName string, startTime time.Time) (string, string, error)
 }
 
 type DynamoDeployment struct {

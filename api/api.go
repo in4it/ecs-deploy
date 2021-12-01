@@ -717,7 +717,7 @@ func (a *API) webhookHandler(c *gin.Context) {
 						var ecsMessage ecs.SNSPayloadEcs
 						if err = json.Unmarshal([]byte(snsPayload.Message), &ecsMessage); err == nil {
 							apiLogger.Tracef("ECS Message: %v", snsPayload.Message)
-							err = a.asController.processEcsMessage(ecsMessage)
+							err = a.asController.processEcsMessage(ecsMessage, &Controller{}, &ecs.ECS{}, service.NewService(), &ecs.AutoScaling{})
 						}
 					} else if genericMessage.DetailType == "EC2 Instance-terminate Lifecycle Action" {
 						var lifecycleMessage ecs.SNSPayloadLifecycle

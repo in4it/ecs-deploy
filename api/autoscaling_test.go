@@ -15,6 +15,8 @@ type MockECS struct {
 	ecs.ECSIf
 	GetInstanceResourcesOutputFree       []ecs.FreeInstanceResource
 	GetInstanceResourcesOutputRegistered []ecs.RegisteredInstanceResource
+	ConvertResourceToRirOutput           ecs.RegisteredInstanceResource
+	ConvertResourceToFirOutput           ecs.FreeInstanceResource
 }
 
 type MockService struct {
@@ -34,6 +36,12 @@ type MockAutoScaling struct {
 func (m *MockECS) GetInstanceResources(clusterName string) ([]ecs.FreeInstanceResource, []ecs.RegisteredInstanceResource, error) {
 	return m.GetInstanceResourcesOutputFree, m.GetInstanceResourcesOutputRegistered, nil
 }
+func (m *MockECS) ConvertResourceToFir(cir []ecs.ContainerInstanceResource) (ecs.FreeInstanceResource, error) {
+	return m.ConvertResourceToFirOutput, nil
+}
+func (m *MockECS) ConvertResourceToRir(cir []ecs.ContainerInstanceResource) (ecs.RegisteredInstanceResource, error) {
+	return m.ConvertResourceToRirOutput, nil
+}
 
 func (m *MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
 	return m.GetAutoScalingGroupByTagOutput, nil
@@ -41,8 +49,11 @@ func (m *MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, 
 
 func (m *MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change int64) error {
 	return nil
-
 }
+func (m *MockAutoScaling) GetClusterNodeDesiredCount(autoScalingGroupName string) (int64, int64, int64, error) {
+	return 1, 1, 5, nil
+}
+
 func (m *MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.PutClusterInfoCounter, 1)
 	m.GetClusterInfoOutput.ScalingOperation.PendingAction = pendingAction
@@ -274,5 +285,79 @@ func TestGetClusterInfoWithExpiredCache(t *testing.T) {
 	}
 	if res.ContainerInstances[0].ContainerInstanceId != "i-123" {
 		t.Errorf("wrong container instance returned")
+	}
+}
+
+func TestProcessEcsMessage(t *testing.T) {
+
+	asAutoscalingControllerLogger.SetLogLevel(loggo.DEBUG)
+	message := ecs.SNSPayloadEcs{
+		Detail: ecs.SNSPayloadEcsDetail{
+			ClusterArn: "arn:aws:ecs:us-west-2:123456789012:cluster/testCluster",
+		},
+	}
+	mc := &MockController{
+		runningServices: []service.RunningService{
+			{
+				ServiceName:  "test-service1",
+				RunningCount: 1,
+				PendingCount: 0,
+				DesiredCount: 1,
+			},
+			{
+				ServiceName:  "test-service2",
+				RunningCount: 3,
+				PendingCount: 0,
+				DesiredCount: 3,
+			},
+		},
+		getServicesOutput: []*service.DynamoServicesElement{
+			{
+				C:                 "testCluster",
+				S:                 "test-service1",
+				MemoryReservation: int64(2048),
+				CpuReservation:    int64(1024),
+			},
+			{
+				C:                 "testCluster",
+				S:                 "test-service2",
+				MemoryReservation: int64(4096),
+				CpuReservation:    int64(1024),
+			},
+		},
+	}
+	e := &MockECS{
+		ConvertResourceToRirOutput: ecs.RegisteredInstanceResource{
+			InstanceId:       "i-test",
+			RegisteredMemory: 16384,
+			RegisteredCpu:    4096,
+		},
+		ConvertResourceToFirOutput: ecs.FreeInstanceResource{
+			InstanceId:       "i-test",
+			AvailabilityZone: "us-east-1a",
+			Status:           "ACTIVE",
+			FreeMemory:       2048,
+			FreeCpu:          1024,
+		},
+		GetInstanceResourcesOutputFree: []ecs.FreeInstanceResource{
+			{
+				InstanceId:       "i-test",
+				AvailabilityZone: "eu-east-1a",
+				Status:           "ACTIVE",
+				FreeMemory:       6144,
+				FreeCpu:          1024,
+			},
+		},
+	}
+	s := &MockService{}
+
+	mockAutoscaling := &MockAutoScaling{
+		GetAutoScalingGroupByTagOutput: "autoscalingGroup",
+	}
+
+	as := AutoscalingController{}
+	err := as.processEcsMessage(message, mc, e, s, mockAutoscaling)
+	if err != nil {
+		t.Errorf("processEcsMessage error: %s", err)
 	}
 }
