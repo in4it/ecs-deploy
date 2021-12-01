@@ -10,3 +10,4 @@ webapp/dist/
 vendor/
 bin/
 .vscode/
+.idea/
