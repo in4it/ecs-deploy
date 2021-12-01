@@ -283,3 +283,8 @@ variable "cloudwatch_log_group_kms_arn" {
   description = "cloudwatch log group kms arn"
   default     = ""
 }
+
+variable "architectures" {
+  type = list(string)
+  default = "x86_64"
+}
