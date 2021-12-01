@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	ecsv2types "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/juju/loggo"
@@ -17,6 +18,7 @@ type MockECS struct {
 	GetInstanceResourcesOutputRegistered []ecs.RegisteredInstanceResource
 	ConvertResourceToRirOutput           ecs.RegisteredInstanceResource
 	ConvertResourceToFirOutput           ecs.FreeInstanceResource
+	DescribeServicesWithOptionsOutput    []service.RunningService
 }
 
 type MockService struct {
@@ -25,6 +27,7 @@ type MockService struct {
 	IsDeployRunningOutput bool
 	PutClusterInfoOutput  *service.DynamoCluster
 	PutClusterInfoCounter uint64
+	GetServicesOutput     *service.DynamoServices
 	service.ServiceIf
 }
 
@@ -42,6 +45,9 @@ func (m *MockECS) ConvertResourceToFir(cir []ecs.ContainerInstanceResource) (ecs
 }
 func (m *MockECS) ConvertResourceToRir(cir []ecs.ContainerInstanceResource) (ecs.RegisteredInstanceResource, error) {
 	return m.ConvertResourceToRirOutput, nil
+}
+func (m *MockECS) DescribeServicesWithOptions(clusterName string, serviceNames []*string, showEvents bool, showTasks bool, showStoppedTasks bool, options map[string]string) ([]service.RunningService, error) {
+	return m.DescribeServicesWithOptionsOutput, nil
 }
 
 func (m *MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
@@ -61,6 +67,7 @@ func (m *MockAutoScaling) GetClusterNodeDesiredCount(autoScalingGroupName string
 func (m *MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.PutClusterInfoCounter, 1)
 	m.GetClusterInfoOutput.ScalingOperation.PendingAction = pendingAction
+	m.GetClusterInfoOutput.ScalingOperation.Action = action
 	return m.PutClusterInfoOutput, nil
 }
 func (m *MockService) GetClusterInfo() (*service.DynamoCluster, error) {
@@ -72,6 +79,18 @@ func (m *MockService) IsDeployRunning() (bool, error) {
 }
 func (m *MockService) GetScalingActivity(clusterName string, startTime time.Time) (string, string, error) {
 	return "no", "", nil
+}
+
+func (m *MockService) AutoscalingPullInit() error {
+	return nil
+}
+func (m *MockService) AutoscalingPullAcquireLock(localId string) (bool, error) {
+	return true, nil
+}
+func (m *MockService) GetServices(ds *service.DynamoServices) error {
+	ds.ServiceName = "__SERVICES"
+	ds.Services = m.GetServicesOutput.Services
+	return nil
 }
 
 func TestAreAllTasksRunningInCluster(t *testing.T) {
@@ -198,7 +217,7 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	wait2 := make(chan struct{})
 
 	go func() {
-		err1 = as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am)
+		err1 = as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am, "x86_64")
 		if err1 != nil {
 			t.Errorf("Error: %s", err1)
 		}
@@ -206,7 +225,7 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 
 	}()
 	go func() {
-		err2 = as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am)
+		err2 = as.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, mc1, am, "x86_64")
 		if err2 != nil {
 			t.Errorf("Error: %s", err2)
 		}
@@ -375,5 +394,74 @@ func TestProcessEcsMessage(t *testing.T) {
 	err := as.processEcsMessage(message, mc, e, s, mockAutoscaling)
 	if err != nil {
 		t.Errorf("processEcsMessage error: %s", err)
+	}
+}
+
+func TestStartAutoscalingPollingStrategy(t *testing.T) {
+	asAutoscalingControllerLogger.SetLogLevel(loggo.DEBUG)
+	e := &MockECS{
+		ConvertResourceToRirOutput: ecs.RegisteredInstanceResource{
+			InstanceId:       "i-test",
+			RegisteredMemory: 16384,
+			RegisteredCpu:    4096,
+		},
+		ConvertResourceToFirOutput: ecs.FreeInstanceResource{
+			InstanceId:       "i-test",
+			AvailabilityZone: "us-east-1a",
+			Status:           "ACTIVE",
+			FreeMemory:       2048,
+			FreeCpu:          1024,
+		},
+		GetInstanceResourcesOutputFree: []ecs.FreeInstanceResource{
+			{
+				InstanceId:       "i-test",
+				AvailabilityZone: "eu-east-1a",
+				Status:           "ACTIVE",
+				FreeMemory:       6144,
+				FreeCpu:          1024,
+			},
+		},
+		DescribeServicesWithOptionsOutput: []service.RunningService{
+			{
+				ServiceName:  "test-service-1",
+				ClusterName:  "testCluster",
+				RunningCount: 1,
+				PendingCount: 1,
+				DesiredCount: 2,
+				Status:       "ACTIVE",
+				Events: []service.RunningServiceEvent{
+					{
+						CreatedAt: time.Now(),
+						Id:        "1-2-3-4",
+						Message:   "... was unable to place a task because no container instance met all of its requirements ... has insufficient ...",
+					},
+				},
+				TaskDefinition: ecsv2types.TaskDefinition{
+					RuntimePlatform: &ecsv2types.RuntimePlatform{},
+				},
+			},
+		},
+	}
+	s := &MockService{
+		GetServicesOutput: &service.DynamoServices{
+			ServiceName: "__SERVICES",
+			Services: []*service.DynamoServicesElement{
+				{
+					C: "testCluster",
+					S: "test-service1",
+				},
+			},
+		},
+		PutClusterInfoOutput: &service.DynamoCluster{},
+		GetClusterInfoOutput: &service.DynamoCluster{},
+	}
+	ma := &MockAutoScaling{}
+	as := AutoscalingController{}
+	as.startAutoscalingPollingStrategy(0, e, s, ma)
+	if s.PutClusterInfoCounter != 1 {
+		t.Errorf("s.PutClusterInfoCounter is not 1, didn't went through scaling operation")
+	}
+	if s.GetClusterInfoOutput.ScalingOperation.Action != "up" {
+		t.Errorf("Expected scaling operation to be 'up', got %s", s.GetClusterInfoOutput.ScalingOperation.Action)
 	}
 }

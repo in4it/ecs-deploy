@@ -567,9 +567,7 @@ func (c *AutoscalingController) processLifecycleMessage(message ecs.SNSPayloadLi
 }
 
 // start autoscaling polling
-func (c *AutoscalingController) startAutoscalingPollingStrategy() {
-	e := ecs.ECS{}
-	s := service.NewService()
+func (c *AutoscalingController) startAutoscalingPollingStrategy(pollingTime int, e ecs.ECSIf, s service.ServiceIf, ecsAutoscaling ecs.AutoScalingIf) {
 	showEvents := true
 	showTasks := false
 	showStoppedTasks := false
@@ -618,11 +616,11 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 						asAutoscalingControllerLogger.Debugf("Checking service %v for unschedulable tasks where desired count > running count (count: %d)", rs.ServiceName, servicesFound[clusterName+":"+rs.ServiceName])
 						for _, event := range rs.Events {
 							if event.CreatedAt.After(lastChecked) {
-								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message, string(cpuArch))
+								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message, string(cpuArch), ecsAutoscaling)
 							}
 						}
 						if len(rs.Events) > 0 && servicesFound[clusterName+":"+rs.ServiceName] == 5 {
-							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message, string(cpuArch))
+							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message, string(cpuArch), ecsAutoscaling)
 						}
 						if scaled {
 							servicesFound[clusterName+":"+rs.ServiceName] = 0
@@ -641,7 +639,11 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 			}
 			lastChecked = time.Now()
 		}
-		time.Sleep(60 * time.Second)
+		if pollingTime > 0 { // loop as long as pollingTime > 0, so that we can pass 0 in our unit tests
+			time.Sleep(time.Duration(pollingTime) * time.Second)
+		} else { // if 0 exit
+			return
+		}
 	}
 }
 
@@ -656,9 +658,8 @@ func (c *AutoscalingController) checkForUnschedulableServices(rs service.Running
 	}
 	return false
 }
-func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, message, cpuArch string) bool {
+func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, message, cpuArch string, autoscaling ecs.AutoScalingIf) bool {
 	if strings.Contains(message, "was unable to place a task because no container instance met all of its requirements") && strings.Contains(message, "has insufficient") {
-		autoscaling := ecs.AutoScaling{}
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling up now")
 		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName + "_" + cpuArch)
 		if err != nil {

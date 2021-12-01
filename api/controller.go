@@ -1013,7 +1013,7 @@ func (c *Controller) Resume() error {
 					cc := &Controller{}
 					autoscaling := &ecs.AutoScaling{}
 					controllerLogger.Infof("Launching process for pending scaling operation: %s ", pendingAction)
-					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
+					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling, "x86_64")
 				}
 			}
 		}
@@ -1024,7 +1024,7 @@ func (c *Controller) Resume() error {
 		if strings.ToLower(v) == "polling" {
 			asc := AutoscalingController{}
 			controllerLogger.Debugf("Starting AutoscalingPollingStrategy in goroutine")
-			go asc.startAutoscalingPollingStrategy()
+			go asc.startAutoscalingPollingStrategy(60, &ecs.ECS{}, service.NewService(), &ecs.AutoScaling{})
 		}
 	}
 	controllerLogger.Debugf("Finished controller resume. Checked %d services", len(dds))

@@ -29,9 +29,12 @@ type Service struct {
 // Service interface (for tests)
 type ServiceIf interface {
 	GetClusterInfo() (*DynamoCluster, error)
+	GetServices(ds *DynamoServices) error
 	IsDeployRunning() (bool, error)
 	PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error)
 	GetScalingActivity(clusterName string, startTime time.Time) (string, string, error)
+	AutoscalingPullInit() error
+	AutoscalingPullAcquireLock(localId string) (bool, error)
 }
 
 type DynamoDeployment struct {

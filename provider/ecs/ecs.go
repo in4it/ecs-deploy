@@ -45,6 +45,7 @@ type ECSIf interface {
 	GetInstanceResources(clusterName string) ([]FreeInstanceResource, []RegisteredInstanceResource, error)
 	ConvertResourceToFir(cir []ContainerInstanceResource) (FreeInstanceResource, error)
 	ConvertResourceToRir(cir []ContainerInstanceResource) (RegisteredInstanceResource, error)
+	DescribeServicesWithOptions(clusterName string, serviceNames []*string, showEvents bool, showTasks bool, showStoppedTasks bool, options map[string]string) ([]service.RunningService, error)
 }
 
 // Task definition and Container definition
