@@ -30,7 +30,8 @@ type MockService struct {
 
 type MockAutoScaling struct {
 	ecs.AutoScalingIf
-	GetAutoScalingGroupByTagOutput string
+	GetAutoScalingGroupByTagOutput  string
+	GetAutoScalingGroupByTagsOutput string
 }
 
 func (m *MockECS) GetInstanceResources(clusterName string) ([]ecs.FreeInstanceResource, []ecs.RegisteredInstanceResource, error) {
@@ -45,6 +46,9 @@ func (m *MockECS) ConvertResourceToRir(cir []ecs.ContainerInstanceResource) (ecs
 
 func (m *MockAutoScaling) GetAutoScalingGroupByTag(clusterName string) (string, error) {
 	return m.GetAutoScalingGroupByTagOutput, nil
+}
+func (m *MockAutoScaling) GetAutoScalingGroupByTags(name string, arch string) (string, error) {
+	return m.GetAutoScalingGroupByTagsOutput, nil
 }
 
 func (m *MockAutoScaling) ScaleClusterNodes(autoScalingGroupName string, change int64) error {
@@ -63,9 +67,11 @@ func (m *MockService) GetClusterInfo() (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.GetClusterInfoCounter, 1)
 	return m.GetClusterInfoOutput, nil
 }
-
 func (m *MockService) IsDeployRunning() (bool, error) {
 	return m.IsDeployRunningOutput, nil
+}
+func (m *MockService) GetScalingActivity(clusterName string, startTime time.Time) (string, string, error) {
+	return "no", "", nil
 }
 
 func TestAreAllTasksRunningInCluster(t *testing.T) {
@@ -289,11 +295,20 @@ func TestGetClusterInfoWithExpiredCache(t *testing.T) {
 }
 
 func TestProcessEcsMessage(t *testing.T) {
-
 	asAutoscalingControllerLogger.SetLogLevel(loggo.DEBUG)
 	message := ecs.SNSPayloadEcs{
 		Detail: ecs.SNSPayloadEcsDetail{
 			ClusterArn: "arn:aws:ecs:us-west-2:123456789012:cluster/testCluster",
+			Attributes: []ecs.SNSPayloadEcsDetailAttributes{
+				{
+					Name:  "ecs.cpu-architecture",
+					Value: "x86_64",
+				},
+				{
+					Name:  "ecs.availability-zone",
+					Value: "us-east-1a",
+				},
+			},
 		},
 	}
 	mc := &MockController{
@@ -352,7 +367,8 @@ func TestProcessEcsMessage(t *testing.T) {
 	s := &MockService{}
 
 	mockAutoscaling := &MockAutoScaling{
-		GetAutoScalingGroupByTagOutput: "autoscalingGroup",
+		GetAutoScalingGroupByTagOutput:  "autoscalingGroup",
+		GetAutoScalingGroupByTagsOutput: "autoscalingGroup",
 	}
 
 	as := AutoscalingController{}
