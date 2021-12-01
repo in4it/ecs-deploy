@@ -278,7 +278,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 			cc := &Controller{}
 			autoscaling := &ecs.AutoScaling{}
 			asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s pending", pendingScalingOp)
-			go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
+			go c.launchProcessPendingScalingOpWithLocking(clusterName, pendingScalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling, arch)
 		}
 	}
 	return nil
@@ -310,7 +310,7 @@ func (c *AutoscalingController) getAutoscalingPeriodInterval(scalingOp string) (
 	return period, interval
 }
 
-func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
+func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf, arch string) error {
 
 	// lock scaling operation
 	asAutoscalingControllerLogger.Debugf("Getting autoscaling lock for scaling %s", scalingOp)
@@ -320,7 +320,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(cluster
 		c.muUp.Lock()
 	}
 	// execute launchProcessPendingScalingOp
-	err := c.launchProcessPendingScalingOp(clusterName, scalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling)
+	err := c.launchProcessPendingScalingOp(clusterName, scalingOp, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling, arch)
 	// unlock
 	asAutoscalingControllerLogger.Debugf("Releasing autoscaling lock for scaling %s", scalingOp)
 	if scalingOp == "down" {
@@ -334,7 +334,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOpWithLocking(cluster
 	}
 	return nil
 }
-func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf) error {
+func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scalingOp string, registeredInstanceCpu, registeredInstanceMemory int64, s service.ServiceIf, cc ControllerIf, autoscaling ecs.AutoScalingIf, arch string) error {
 	var err error
 	var dcNew *service.DynamoCluster
 	var sizeChange int64
@@ -368,10 +368,17 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 			asAutoscalingControllerLogger.Infof("Abort scaling operation: scaling %s not found anymore in dynamodb (scalingOp in db: %s)", scalingOp, dcNew.ScalingOperation.PendingAction)
 			abort = true
 		}
+
+		instancesPerArch := make(map[string][]service.DynamoClusterContainerInstance)
+
+		for _, v := range dcNew.ContainerInstances {
+			instancesPerArch[v.CPUArchitecture] = append(instancesPerArch[v.CPUArchitecture], v)
+		}
+
 		// pending scaling down logic
 		if scalingOp == "down" {
 			// make scaling decision
-			hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, dcNew.ContainerInstances, registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
+			hasFreeResourcesGlobal = c.scaleDownDecision(clusterName, instancesPerArch[arch], registeredInstanceCpu, registeredInstanceMemory, cpuNeeded, memoryNeeded)
 			if hasFreeResourcesGlobal {
 				// abort if deploy is running
 				deployRunning, err = s.IsDeployRunning()
@@ -390,7 +397,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 			}
 		} else {
 			// pending scaling up logic
-			resourcesFit = c.scaleUpDecision(clusterName, dcNew.ContainerInstances, cpuNeeded, memoryNeeded)
+			resourcesFit = c.scaleUpDecision(clusterName, instancesPerArch[arch], cpuNeeded, memoryNeeded)
 			if resourcesFit {
 				abort = true
 			}
@@ -399,7 +406,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 
 	if !abort {
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling %s now (%d)", scalingOp, sizeChange)
-		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
+		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTags(clusterName, arch)
 		if err != nil {
 			return err
 		}
