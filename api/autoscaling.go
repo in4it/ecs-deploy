@@ -589,6 +589,7 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 					asAutoscalingControllerLogger.Errorf("Error occured during describe services: %v", err)
 				}
 				for _, rs := range rss {
+					cpuArch := rs.TaskDefinition.RuntimePlatform.CpuArchitecture
 					if c.checkForUnschedulableServices(rs) {
 						scaled := false
 						if servicesFound[clusterName+":"+rs.ServiceName] < 6 {
@@ -597,11 +598,11 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy() {
 						asAutoscalingControllerLogger.Debugf("Checking service %v for unschedulable tasks where desired count > running count (count: %d)", rs.ServiceName, servicesFound[clusterName+":"+rs.ServiceName])
 						for _, event := range rs.Events {
 							if event.CreatedAt.After(lastChecked) {
-								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message)
+								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message, string(cpuArch))
 							}
 						}
 						if len(rs.Events) > 0 && servicesFound[clusterName+":"+rs.ServiceName] == 5 {
-							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message)
+							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message, string(cpuArch))
 						}
 						if scaled {
 							servicesFound[clusterName+":"+rs.ServiceName] = 0
@@ -635,11 +636,11 @@ func (c *AutoscalingController) checkForUnschedulableServices(rs service.Running
 	}
 	return false
 }
-func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, message string) bool {
+func (c *AutoscalingController) scaleWhenUnschedulableMessage(clusterName, message, cpuArch string) bool {
 	if strings.Contains(message, "was unable to place a task because no container instance met all of its requirements") && strings.Contains(message, "has insufficient") {
 		autoscaling := ecs.AutoScaling{}
 		asAutoscalingControllerLogger.Infof("Scaling operation: scaling up now")
-		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
+		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName + "_" + cpuArch)
 		if err != nil {
 			asAutoscalingControllerLogger.Errorf("Error: %v", err)
 		} else {

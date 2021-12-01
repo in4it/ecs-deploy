@@ -1,6 +1,7 @@
 package service
 
 import (
+	ecsv2types "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"time"
 )
 
@@ -153,15 +154,16 @@ type DeployServiceParameter struct {
 }
 
 type RunningService struct {
-	ServiceName  string                     `json:"serviceName" yaml:"serviceName"`
-	ClusterName  string                     `json:"clusterName" yaml:"clusterName"`
-	RunningCount int64                      `json:"runningCount" yaml:"runningCount"`
-	PendingCount int64                      `json:"pendingCount" yaml:"pendingCount"`
-	DesiredCount int64                      `json:"desiredCount" yaml:"desiredCount"`
-	Status       string                     `json:"status" yaml:"status"`
-	Events       []RunningServiceEvent      `json:"events" yaml:"events"`
-	Deployments  []RunningServiceDeployment `json:"deployments" yaml:"deployments"`
-	Tasks        []RunningTask              `json:"tasks" yaml:"tasks"`
+	ServiceName    string                     `json:"serviceName" yaml:"serviceName"`
+	ClusterName    string                     `json:"clusterName" yaml:"clusterName"`
+	RunningCount   int64                      `json:"runningCount" yaml:"runningCount"`
+	PendingCount   int64                      `json:"pendingCount" yaml:"pendingCount"`
+	DesiredCount   int64                      `json:"desiredCount" yaml:"desiredCount"`
+	Status         string                     `json:"status" yaml:"status"`
+	TaskDefinition ecsv2types.TaskDefinition  `json:"taskDefinition" yaml:"taskDefinition"`
+	Events         []RunningServiceEvent      `json:"events" yaml:"events"`
+	Deployments    []RunningServiceDeployment `json:"deployments" yaml:"deployments"`
+	Tasks          []RunningTask              `json:"tasks" yaml:"tasks"`
 }
 type RunningServiceDeployment struct {
 	Status         string    `json:"status" yaml:"status"`

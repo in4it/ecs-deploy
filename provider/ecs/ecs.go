@@ -1,6 +1,8 @@
 package ecs
 
 import (
+	"encoding/json"
+	ecsv2types "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -1230,6 +1232,14 @@ func (e *ECS) DescribeServicesWithOptions(clusterName string, serviceNames []*st
 			rs.PendingCount = *ecsService.PendingCount
 			rs.DesiredCount = *ecsService.DesiredCount
 			rs.Status = *ecsService.Status
+
+			var taskDef ecsv2types.TaskDefinition
+			err = json.Unmarshal([]byte(*ecsService.TaskDefinition), &taskDef)
+			if err != nil {
+				return rss, err
+			}
+			rs.TaskDefinition = taskDef
+
 			for _, deployment := range ecsService.Deployments {
 				var ds service.RunningServiceDeployment
 				ds.Status = *deployment.Status
