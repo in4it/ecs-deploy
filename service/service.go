@@ -31,7 +31,7 @@ type ServiceIf interface {
 	GetClusterInfo() (*DynamoCluster, error)
 	GetServices(ds *DynamoServices) error
 	IsDeployRunning() (bool, error)
-	PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error)
+	PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string, architecture string) (*DynamoCluster, error)
 	GetScalingActivity(clusterName string, startTime time.Time) (string, string, error)
 	AutoscalingPullInit() error
 	AutoscalingPullAcquireLock(localId string) (bool, error)
@@ -90,9 +90,10 @@ type DynamoCluster struct {
 	ExpirationTimeTTL  int64
 }
 type DynamoClusterScalingOperation struct {
-	ClusterName   string
-	Action        string
-	PendingAction string
+	ClusterName     string
+	Action          string
+	PendingAction   string
+	CPUArchitecture string
 }
 type DynamoClusterContainerInstance struct {
 	ClusterName         string
@@ -627,8 +628,8 @@ func (s *Service) GetClusterInfo() (*DynamoCluster, error) {
 	}
 	return &dc, nil
 }
-func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string) (*DynamoCluster, error) {
-	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action, PendingAction: pendingAction}
+func (s *Service) PutClusterInfo(dc DynamoCluster, clusterName string, action string, pendingAction string, architecture string) (*DynamoCluster, error) {
+	dc.ScalingOperation = DynamoClusterScalingOperation{ClusterName: clusterName, Action: action, PendingAction: pendingAction, CPUArchitecture: architecture}
 	dc.Identifier = "__CLUSTERS"
 	dc.Time = time.Now()
 	dc.ExpirationTime = time.Now().AddDate(0, 0, 30)

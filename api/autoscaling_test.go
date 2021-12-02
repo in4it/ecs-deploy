@@ -1,12 +1,13 @@
 package api
 
 import (
+	"github.com/aws/aws-sdk-go/aws"
 	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	ecsv2types "github.com/aws/aws-sdk-go-v2/service/ecs/types"
+	ecsService "github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/in4it/ecs-deploy/provider/ecs"
 	"github.com/in4it/ecs-deploy/service"
 	"github.com/juju/loggo"
@@ -64,10 +65,11 @@ func (m *MockAutoScaling) GetClusterNodeDesiredCount(autoScalingGroupName string
 	return 1, 1, 5, nil
 }
 
-func (m *MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string) (*service.DynamoCluster, error) {
+func (m *MockService) PutClusterInfo(dc service.DynamoCluster, clusterName string, action string, pendingAction string, arch string) (*service.DynamoCluster, error) {
 	atomic.AddUint64(&m.PutClusterInfoCounter, 1)
 	m.GetClusterInfoOutput.ScalingOperation.PendingAction = pendingAction
 	m.GetClusterInfoOutput.ScalingOperation.Action = action
+	m.GetClusterInfoOutput.ScalingOperation.CPUArchitecture = arch
 	return m.PutClusterInfoOutput, nil
 }
 func (m *MockService) GetClusterInfo() (*service.DynamoCluster, error) {
@@ -143,7 +145,8 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 	asAutoscalingControllerLogger.SetLogLevel(loggo.DEBUG)
 	// mock
 	am := &MockAutoScaling{
-		GetAutoScalingGroupByTagOutput: "ecs-deploy",
+		GetAutoScalingGroupByTagOutput:  "ecs-deploy",
+		GetAutoScalingGroupByTagsOutput: "ecs-deploy",
 	}
 	s := &MockService{
 		IsDeployRunningOutput: false,
@@ -245,9 +248,10 @@ func TestLaunchProcessPendingScalingOpWithLocking(t *testing.T) {
 
 func TestGetClusterInfoWithExpiredCache(t *testing.T) {
 	scalingOp := service.DynamoClusterScalingOperation{
-		ClusterName:   "testCluster",
-		Action:        "down",
-		PendingAction: "down",
+		ClusterName:     "testCluster",
+		Action:          "down",
+		PendingAction:   "down",
+		CPUArchitecture: "x86_64",
 	}
 	e := &MockECS{
 		GetInstanceResourcesOutputFree: []ecs.FreeInstanceResource{
@@ -277,6 +281,7 @@ func TestGetClusterInfoWithExpiredCache(t *testing.T) {
 					FreeMemory:          int64(2048),
 					FreeCpu:             int64(1024),
 					Status:              "ACTIVE",
+					CPUArchitecture:     "x86_64",
 				},
 				{
 					ClusterName:         "testCluster",
@@ -284,6 +289,7 @@ func TestGetClusterInfoWithExpiredCache(t *testing.T) {
 					FreeMemory:          int64(2048),
 					FreeCpu:             int64(1024),
 					Status:              "ACTIVE",
+					CPUArchitecture:     "x86_64",
 				},
 				{
 					ClusterName:         "testCluster",
@@ -291,6 +297,97 @@ func TestGetClusterInfoWithExpiredCache(t *testing.T) {
 					FreeMemory:          int64(2048),
 					FreeCpu:             int64(1024),
 					Status:              "ACTIVE",
+					CPUArchitecture:     "x86_64",
+				},
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-7",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+					CPUArchitecture:     "arm64",
+				},
+			},
+		},
+	}
+	as := AutoscalingController{}
+
+	res, err := as.getClusterInfo("myCluster", true, s, e)
+
+	if err != nil {
+		t.Errorf("Error getClusterInfo: %s", err)
+	}
+	if res.ScalingOperation.PendingAction != scalingOp.PendingAction {
+		t.Errorf("Scaling Operation not found in result: expected %s, got %s", scalingOp.PendingAction, res.ScalingOperation.PendingAction)
+	}
+	if len(res.ContainerInstances) != 2 {
+		t.Errorf("wrong number of container instances, got: %d", len(res.ContainerInstances))
+	}
+	if res.ContainerInstances[0].ContainerInstanceId != "i-123" {
+		t.Errorf("wrong container instance returned")
+	}
+}
+
+func TestGetClusterInfoWithExpiredCacheARM(t *testing.T) {
+	scalingOp := service.DynamoClusterScalingOperation{
+		ClusterName:     "testCluster",
+		Action:          "down",
+		PendingAction:   "down",
+		CPUArchitecture: "arm64",
+	}
+	e := &MockECS{
+		GetInstanceResourcesOutputFree: []ecs.FreeInstanceResource{
+			{
+				InstanceId:       "i-123",
+				AvailabilityZone: "eu-west-1a",
+				Status:           "ACTIVE",
+			},
+			{
+				InstanceId:       "i-456",
+				AvailabilityZone: "eu-west-1b",
+				Status:           "ACTIVE",
+			},
+		},
+		GetInstanceResourcesOutputRegistered: []ecs.RegisteredInstanceResource{},
+	}
+	s := &MockService{
+		IsDeployRunningOutput: false,
+		GetClusterInfoOutput: &service.DynamoCluster{
+			Identifier:       "myService",
+			Time:             time.Now().Truncate(10 * time.Minute),
+			ScalingOperation: scalingOp,
+			ContainerInstances: []service.DynamoClusterContainerInstance{
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-4",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+					CPUArchitecture:     "x86_64",
+				},
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-5",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+					CPUArchitecture:     "x86_64",
+				},
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-6",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+					CPUArchitecture:     "x86_64",
+				},
+				{
+					ClusterName:         "testCluster",
+					ContainerInstanceId: "1-2-3-7",
+					FreeMemory:          int64(2048),
+					FreeCpu:             int64(1024),
+					Status:              "ACTIVE",
+					CPUArchitecture:     "arm64",
 				},
 			},
 		},
@@ -429,15 +526,18 @@ func TestStartAutoscalingPollingStrategy(t *testing.T) {
 				PendingCount: 1,
 				DesiredCount: 2,
 				Status:       "ACTIVE",
+				PlacementStrategy: []*ecsService.PlacementStrategy{
+					{
+						Type:  aws.String("x86_64"),
+						Field: aws.String("ecs.cpu-architecture"),
+					},
+				},
 				Events: []service.RunningServiceEvent{
 					{
 						CreatedAt: time.Now(),
 						Id:        "1-2-3-4",
 						Message:   "... was unable to place a task because no container instance met all of its requirements ... has insufficient ...",
 					},
-				},
-				TaskDefinition: ecsv2types.TaskDefinition{
-					RuntimePlatform: &ecsv2types.RuntimePlatform{},
 				},
 			},
 		},

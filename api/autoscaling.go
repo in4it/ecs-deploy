@@ -270,7 +270,7 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 		}
 		if pendingScalingOp != "" {
 			// write object
-			_, err = s.PutClusterInfo(*dc, clusterName, scalingOp, pendingScalingOp)
+			_, err = s.PutClusterInfo(*dc, clusterName, scalingOp, pendingScalingOp, arch)
 			if err != nil {
 				return err
 			}
@@ -414,7 +414,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 		if err != nil {
 			return err
 		}
-		_, err = s.PutClusterInfo(*dcNew, clusterName, scalingOp, "")
+		_, err = s.PutClusterInfo(*dcNew, clusterName, scalingOp, "", arch)
 		if err != nil {
 			return err
 		}
@@ -550,16 +550,18 @@ func (c *AutoscalingController) processLifecycleMessage(message ecs.SNSPayloadLi
 	}
 	// write new record to switch container instance to draining
 	var writeRecord bool
+	var arch string
 	if dc != nil {
 		for i, dcci := range dc.ContainerInstances {
 			if clusterName == dcci.ClusterName && message.Detail.EC2InstanceId == dcci.ContainerInstanceId {
 				dc.ContainerInstances[i].Status = "DRAINING"
 				writeRecord = true
+				arch = dc.ContainerInstances[i].CPUArchitecture
 			}
 		}
 	}
 	if writeRecord {
-		s.PutClusterInfo(*dc, clusterName, "no", "")
+		s.PutClusterInfo(*dc, clusterName, "no", "", arch)
 	}
 	// monitor drained node
 	go e.LaunchWaitForDrainedNode(clusterName, containerInstanceArn, message.Detail.EC2InstanceId, message.Detail.AutoScalingGroupName, message.Detail.LifecycleHookName, message.Detail.LifecycleActionToken)
@@ -607,7 +609,14 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy(pollingTime int,
 					asAutoscalingControllerLogger.Errorf("Error occured during describe services: %v", err)
 				}
 				for _, rs := range rss {
-					cpuArch := rs.TaskDefinition.RuntimePlatform.CpuArchitecture
+
+					//Get TaskDefinition destination architecture from placement contraints
+					var cpuArch string
+					for _, v := range rs.PlacementStrategy {
+						if *v.Field == "ecs.cpu-architecture" {
+							cpuArch = *v.Type
+						}
+					}
 					if c.checkForUnschedulableServices(rs) {
 						scaled := false
 						if servicesFound[clusterName+":"+rs.ServiceName] < 6 {
@@ -616,11 +625,11 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy(pollingTime int,
 						asAutoscalingControllerLogger.Debugf("Checking service %v for unschedulable tasks where desired count > running count (count: %d)", rs.ServiceName, servicesFound[clusterName+":"+rs.ServiceName])
 						for _, event := range rs.Events {
 							if event.CreatedAt.After(lastChecked) {
-								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message, string(cpuArch), ecsAutoscaling)
+								scaled = c.scaleWhenUnschedulableMessage(clusterName, event.Message, cpuArch, ecsAutoscaling)
 							}
 						}
 						if len(rs.Events) > 0 && servicesFound[clusterName+":"+rs.ServiceName] == 5 {
-							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message, string(cpuArch), ecsAutoscaling)
+							scaled = c.scaleWhenUnschedulableMessage(clusterName, rs.Events[0].Message, cpuArch, ecsAutoscaling)
 						}
 						if scaled {
 							servicesFound[clusterName+":"+rs.ServiceName] = 0
@@ -629,7 +638,7 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy(pollingTime int,
 							if err != nil {
 								asAutoscalingControllerLogger.Debugf("Error while doing GetClusterInfo: %v", err)
 							}
-							_, err = s.PutClusterInfo(*dc, clusterName, "up", "")
+							_, err = s.PutClusterInfo(*dc, clusterName, "up", "", cpuArch)
 							if err != nil {
 								asAutoscalingControllerLogger.Debugf("Error while doing PutClusterInfo: %v", err)
 							}

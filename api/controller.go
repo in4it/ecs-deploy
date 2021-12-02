@@ -974,16 +974,18 @@ func (c *Controller) Resume() error {
 					if ci.Status == "DRAINING" {
 						// write new record to switch container instance to draining (in case there's a record left with DRAINING)
 						var writeRecord bool
+						var arch string
 						if dc != nil {
 							for i, dcci := range dc.ContainerInstances {
 								if clusterName == dcci.ClusterName && ci.Ec2InstanceId == dcci.ContainerInstanceId && dcci.Status != "DRAINING" {
 									dc.ContainerInstances[i].Status = "DRAINING"
 									writeRecord = true
+									arch = dc.ContainerInstances[i].CPUArchitecture
 								}
 							}
 						}
 						if writeRecord {
-							s.PutClusterInfo(*dc, clusterName, "no", "")
+							s.PutClusterInfo(*dc, clusterName, "no", "", arch)
 						}
 						// launch wait for drained
 						controllerLogger.Infof("Launching waitForDrainedNode for cluster=%v, instance=%v, autoscalingGroupName=%v", clusterName, ci.Ec2InstanceId, autoScalingGroupName)
