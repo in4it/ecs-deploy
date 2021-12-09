@@ -71,11 +71,14 @@ func (c *AutoscalingController) getClusterInfo(clusterName string, withCache boo
 }
 
 // return minimal cpu/memory resources that are needed for the cluster
-func (c *AutoscalingController) getResourcesNeeded(clusterName string, cc ControllerIf) (int64, int64, error) {
+func (c *AutoscalingController) getResourcesNeeded(clusterName string, cc ControllerIf, arch string) (int64, int64, error) {
 	dss, _ := cc.getServices()
 	memoryNeeded := make(map[string]int64)
 	cpuNeeded := make(map[string]int64)
 	for _, ds := range dss {
+		if ds.CPUArchitecture != arch {
+			continue
+		}
 		if val, ok := memoryNeeded[ds.C]; ok {
 			if ds.MemoryReservation > val {
 				memoryNeeded[ds.C] = ds.MemoryReservation
@@ -124,11 +127,6 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 		return errors.New("Could not determine cluster name from message (arn: " + message.Detail.ClusterArn + ")")
 	}
 	clusterName := sp[1]
-	// determine max reservation
-	memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc)
-	if err != nil {
-		return err
-	}
 	// calculate registered resources of the EC2 instance
 	f, err := e.ConvertResourceToRir(message.Detail.RegisteredResources)
 	if err != nil {
@@ -196,6 +194,11 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 	}
 
 	for _, arch := range architectures {
+		// determine max reservation
+		memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc, arch)
+		if err != nil {
+			return err
+		}
 
 		// check whether at min/max capacity
 		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTags(clusterName, arch)
@@ -359,7 +362,7 @@ func (c *AutoscalingController) launchProcessPendingScalingOp(clusterName, scali
 		if err != nil {
 			return err
 		}
-		memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc)
+		memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc, arch)
 		if err != nil {
 			return err
 		}

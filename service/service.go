@@ -78,6 +78,7 @@ type DynamoServicesElement struct {
 	CpuLimit          int64    `dynamo:"CL"`
 	CpuReservation    int64    `dynamo:"CR"`
 	Listeners         []string `dynamo:"L"`
+	CPUArchitecture   string   `dynamo:"AR"`
 }
 
 // dynamo cluster struct
