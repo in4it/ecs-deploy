@@ -62,6 +62,7 @@ type ContainerInstance struct {
 	ContainerInstanceArn string
 	Ec2InstanceId        string
 	AvailabilityZone     string
+	CPUArchitecture      string
 	PendingTasksCount    int64
 	RegisteredAt         time.Time
 	RegisteredResources  []ContainerInstanceResource
@@ -1503,6 +1504,9 @@ func (e *ECS) DescribeContainerInstances(clusterName string, containerInstances 
 		for _, ciAttr := range ci.Attributes {
 			if aws.StringValue(ciAttr.Name) == "ecs.availability-zone" {
 				c.AvailabilityZone = aws.StringValue(ciAttr.Value)
+			}
+			if aws.StringValue(ciAttr.Name) == "ecs.cpu-architecture" {
+				c.CPUArchitecture = aws.StringValue(ciAttr.Value)
 			}
 		}
 		cis = append(cis, c)
