@@ -18,6 +18,10 @@ import (
 	"time"
 )
 
+const DefaultArchitecture = "x86_64"
+
+var Architectures = []string{"x86_64", "arm64"}
+
 type AutoscalingController struct {
 	muUp   sync.Mutex
 	muDown sync.Mutex
@@ -186,14 +190,13 @@ func (c *AutoscalingController) processEcsMessage(message ecs.SNSPayloadEcs, cc 
 		dc.ContainerInstances = append(dc.ContainerInstances, dcci)
 	}
 
-	architectures := []string{"x86_64", "arm64"}
 	instancesPerArch := make(map[string][]service.DynamoClusterContainerInstance)
 
 	for _, v := range dc.ContainerInstances {
 		instancesPerArch[v.CPUArchitecture] = append(instancesPerArch[v.CPUArchitecture], v)
 	}
 
-	for _, arch := range architectures {
+	for _, arch := range Architectures {
 		// determine max reservation
 		memoryNeeded, cpuNeeded, err := c.getResourcesNeeded(clusterName, cc, arch)
 		if err != nil {
@@ -619,6 +622,9 @@ func (c *AutoscalingController) startAutoscalingPollingStrategy(pollingTime int,
 						if *v.Field == "ecs.cpu-architecture" {
 							cpuArch = *v.Type
 						}
+					}
+					if cpuArch == "" {
+						cpuArch = DefaultArchitecture
 					}
 					if c.checkForUnschedulableServices(rs) {
 						scaled := false
