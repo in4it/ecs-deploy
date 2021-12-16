@@ -938,84 +938,94 @@ func (c *Controller) Resume() error {
 		services[ds.C] = append(services[ds.C], dss[i].S)
 	}
 	for clusterName, _ := range services {
-		var clusterNotFound bool
-		autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTag(clusterName)
-		if err != nil {
-			if strings.HasPrefix(err.Error(), "ClusterNotFound:") {
-				controllerLogger.Infof("Cluster %v not running - skipping resume for this cluster", clusterName)
-				clusterNotFound = true
-			} else {
-				return err
-			}
-		}
-		if !clusterNotFound {
-			// get cluster info
-			ciArns, err := e.ListContainerInstances(clusterName)
+		for _, cpuArchitecture := range []string{"x86_64", "arm64"} {
+			var clusterNotFound bool
+			autoScalingGroupName, err := autoscaling.GetAutoScalingGroupByTags(clusterName, cpuArchitecture)
 			if err != nil {
-				return err
+				if strings.HasPrefix(err.Error(), "ClusterNotFound:") {
+					controllerLogger.Infof("Cluster %v not running - skipping resume for this cluster", clusterName)
+					clusterNotFound = true
+				} else {
+					return err
+				}
 			}
-			cis, err := e.DescribeContainerInstances(clusterName, ciArns)
-			if err != nil {
-				return err
-			}
-			// check for lifecycle hook
-			var lifecycleHookNotFound bool
-			hn, err := autoscaling.GetLifecycleHookNames(autoScalingGroupName, "autoscaling:EC2_INSTANCE_TERMINATING")
-			if err != nil || len(hn) == 0 {
-				controllerLogger.Errorf("Cluster %v doesn't have a lifecycle hook", clusterName)
-				lifecycleHookNotFound = true
-			}
-			if !lifecycleHookNotFound {
-				dc, err := s.GetClusterInfo()
+			if !clusterNotFound {
+				// get cluster info
+				ciArns, err := e.ListContainerInstances(clusterName)
 				if err != nil {
 					return err
 				}
-				for _, ci := range cis {
-					if ci.Status == "DRAINING" {
-						// write new record to switch container instance to draining (in case there's a record left with DRAINING)
-						var writeRecord bool
-						var arch string
-						if dc != nil {
-							for i, dcci := range dc.ContainerInstances {
-								if clusterName == dcci.ClusterName && ci.Ec2InstanceId == dcci.ContainerInstanceId && dcci.Status != "DRAINING" {
-									dc.ContainerInstances[i].Status = "DRAINING"
-									writeRecord = true
-									arch = dc.ContainerInstances[i].CPUArchitecture
-								}
-							}
-						}
-						if writeRecord {
-							s.PutClusterInfo(*dc, clusterName, "no", "", arch)
-						}
-						// launch wait for drained
-						controllerLogger.Infof("Launching waitForDrainedNode for cluster=%v, instance=%v, autoscalingGroupName=%v", clusterName, ci.Ec2InstanceId, autoScalingGroupName)
-						go e.LaunchWaitForDrainedNode(clusterName, ci.ContainerInstanceArn, ci.Ec2InstanceId, autoScalingGroupName, hn[0], "")
+				cis, err := e.DescribeContainerInstances(clusterName, ciArns)
+				if err != nil {
+					return err
+				}
+
+				instancesPerArch := make(map[string][]ecs.ContainerInstance)
+				for _, v := range cis {
+					if v.CPUArchitecture == cpuArchitecture {
+						instancesPerArch[cpuArchitecture] = append(instancesPerArch[cpuArchitecture], v)
 					}
 				}
-			}
-			// TODO: check for pending autoscaling actions
-			if len(cis) == 0 {
-				return errors.New("Couldn't retrieve any EC2 Container instances")
-			}
-			f, err := e.ConvertResourceToRir(cis[0].RegisteredResources)
-			if err != nil {
-				return err
-			}
-			asc := AutoscalingController{}
-			registeredInstanceCpu := f.RegisteredCpu
-			registeredInstanceMemory := f.RegisteredMemory
-			for _, scalingOp := range []string{"up", "down"} {
-				period, interval := asc.getAutoscalingPeriodInterval(scalingOp)
-				startTime := time.Now().Add(-1 * time.Duration(period) * time.Duration(interval) * time.Second)
-				_, pendingAction, err := s.GetScalingActivity(clusterName, startTime)
+
+				// check for lifecycle hook
+				var lifecycleHookNotFound bool
+				hn, err := autoscaling.GetLifecycleHookNames(autoScalingGroupName, "autoscaling:EC2_INSTANCE_TERMINATING")
+				if err != nil || len(hn) == 0 {
+					controllerLogger.Errorf("Cluster %v doesn't have a lifecycle hook", clusterName)
+					lifecycleHookNotFound = true
+				}
+				if !lifecycleHookNotFound {
+					dc, err := s.GetClusterInfo()
+					if err != nil {
+						return err
+					}
+					for _, ci := range instancesPerArch[cpuArchitecture] {
+						if ci.Status == "DRAINING" {
+							// write new record to switch container instance to draining (in case there's a record left with DRAINING)
+							var writeRecord bool
+							var arch string
+							if dc != nil {
+								for i, dcci := range dc.ContainerInstances {
+									if clusterName == dcci.ClusterName && ci.Ec2InstanceId == dcci.ContainerInstanceId && dcci.Status != "DRAINING" {
+										dc.ContainerInstances[i].Status = "DRAINING"
+										writeRecord = true
+										arch = dc.ContainerInstances[i].CPUArchitecture
+									}
+								}
+							}
+							if writeRecord {
+								s.PutClusterInfo(*dc, clusterName, "no", "", arch)
+							}
+							// launch wait for drained
+							controllerLogger.Infof("Launching waitForDrainedNode for cluster=%v, instance=%v, autoscalingGroupName=%v", clusterName, ci.Ec2InstanceId, autoScalingGroupName)
+							go e.LaunchWaitForDrainedNode(clusterName, ci.ContainerInstanceArn, ci.Ec2InstanceId, autoScalingGroupName, hn[0], "")
+						}
+					}
+				}
+				// TODO: check for pending autoscaling actions
+				if len(instancesPerArch[cpuArchitecture]) == 0 {
+					return errors.New("Couldn't retrieve any EC2 Container instances")
+				}
+				f, err := e.ConvertResourceToRir(instancesPerArch[cpuArchitecture][0].RegisteredResources)
 				if err != nil {
 					return err
 				}
-				if pendingAction == scalingOp {
-					cc := &Controller{}
-					autoscaling := &ecs.AutoScaling{}
-					controllerLogger.Infof("Launching process for pending scaling operation: %s ", pendingAction)
-					go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling, "x86_64")
+				asc := AutoscalingController{}
+				registeredInstanceCpu := f.RegisteredCpu
+				registeredInstanceMemory := f.RegisteredMemory
+				for _, scalingOp := range []string{"up", "down"} {
+					period, interval := asc.getAutoscalingPeriodInterval(scalingOp)
+					startTime := time.Now().Add(-1 * time.Duration(period) * time.Duration(interval) * time.Second)
+					_, pendingAction, err := s.GetScalingActivity(clusterName, startTime)
+					if err != nil {
+						return err
+					}
+					if pendingAction == scalingOp {
+						cc := &Controller{}
+						autoscaling := &ecs.AutoScaling{}
+						controllerLogger.Infof("Launching process for pending scaling operation: %s ", pendingAction)
+						go asc.launchProcessPendingScalingOp(clusterName, pendingAction, registeredInstanceCpu, registeredInstanceMemory, s, cc, autoscaling, cpuArchitecture)
+					}
 				}
 			}
 		}
