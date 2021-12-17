@@ -19,11 +19,12 @@ import (
 var serviceLogger = loggo.GetLogger("service")
 
 type Service struct {
-	db          *dynamo.DB
-	table       dynamo.Table
-	ServiceName string
-	ClusterName string
-	Listeners   []string
+	db              *dynamo.DB
+	table           dynamo.Table
+	ServiceName     string
+	ClusterName     string
+	CPUArchitecture string
+	Listeners       []string
 }
 
 // Service interface (for tests)
