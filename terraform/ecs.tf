@@ -63,7 +63,7 @@ resource "aws_launch_template" "cluster" {
   user_data = base64encode(templatefile(var.ecs_init_script == "" ? "${path.module}/templates/ecs-init.sh" : var.ecs_init_script, {
     CLUSTER_NAME  = var.cluster_name
     YUM_PROXY_URL = var.yum_proxy_url
-  })
+  }))
 
   credit_specification {
     cpu_credits = var.cpu_credits
