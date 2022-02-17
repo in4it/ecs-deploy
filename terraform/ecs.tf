@@ -40,17 +40,6 @@ resource "aws_ecs_cluster" "cluster" {
   }
 }
 
-data "template_file" "ecs_init" {
-  template = file(
-    var.ecs_init_script == "" ? "${path.module}/templates/ecs-init.sh" : var.ecs_init_script,
-  )
-
-  vars = {
-    CLUSTER_NAME  = var.cluster_name
-    YUM_PROXY_URL = var.yum_proxy_url
-  }
-}
-
 #
 # launch template
 #
@@ -71,7 +60,10 @@ resource "aws_launch_template" "cluster" {
       format("%s,%s", aws_security_group.cluster.id, var.ecs_ec2_extra_sg),
     ),
   )
-  user_data = base64encode(data.template_file.ecs_init.rendered)
+  user_data = base64encode(templatefile(var.ecs_init_script == "" ? "${path.module}/templates/ecs-init.sh" : var.ecs_init_script, {
+    CLUSTER_NAME  = var.cluster_name
+    YUM_PROXY_URL = var.yum_proxy_url
+  })
 
   credit_specification {
     cpu_credits = var.cpu_credits
