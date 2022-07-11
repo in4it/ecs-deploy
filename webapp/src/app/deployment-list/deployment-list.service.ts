@@ -1,7 +1,7 @@
 
 
 
-import { BehaviorSubject } from 'rxjs';
+import { AsyncSubject } from 'rxjs';
 import {HttpClient, HttpHeaders } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../environments/environment';
@@ -16,7 +16,7 @@ import { Injectable } from '@angular/core';
 @Injectable()
 export class DeploymentListService {
 
-  private dl$: BehaviorSubject<DeploymentList>
+  private dl$: AsyncSubject<DeploymentList>
   private dl: DeploymentList = new DeploymentList([], [])
 
   constructor(private http: HttpClient, private auth: AuthService) { } 
@@ -24,7 +24,7 @@ export class DeploymentListService {
   dateOptions = { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short"} as const;
 
   getDeploymentList(serviceName: string) {
-    this.dl$ = new BehaviorSubject<DeploymentList>(new DeploymentList([], []))
+    this.dl$ = new AsyncSubject<DeploymentList>()
     this.dl.deployments = []
     this.getDeployments(serviceName)
     this.getServices()
@@ -42,11 +42,14 @@ export class DeploymentListService {
       .subscribe(data => {
       // Read the result field from the JSON response.
       this.dl.deployments = data["deployments"]
-      for (let deployment of this.dl.deployments) {
-        deployment["Date"] = new Date(deployment["Time"]).toLocaleString("en-US", this.dateOptions)
-        var s = deployment["TaskDefinitionArn"].split('/')
+      if(this.dl.deployments == null) {
+        return
+      }
+      for(let i=0; i<this.dl.deployments.length; i++){
+        this.dl.deployments[i]["Date"] = new Date(this.dl.deployments[i]["Time"]).toLocaleString("en-US", this.dateOptions)
+        var s = this.dl.deployments[i]["TaskDefinitionArn"].split('/')
         if(s.length > 1){
-          deployment["TaskDefinitionVersion"] = s[1]
+          this.dl.deployments[i]["TaskDefinitionVersion"] = s[1]
         }
       }
       this.dl.deployments.sort(function(a,b) {return (a["Time"] > b["Time"]) ? -1 : ((b["Time"] > a["Time"]) ? 1 : 0);} ); 
@@ -63,6 +66,9 @@ export class DeploymentListService {
     this.http.get('/ecs-deploy/api/v1/service/list', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())}).subscribe(data => {
       // Read the result field from the JSON response.
       this.dl.services = data['services'];
+      if(this.dl.deployments == null) {
+        return
+      }
       if(this.dl.deployments.length > 0) {
         this.dl$.next(this.dl)
         this.dl$.complete()

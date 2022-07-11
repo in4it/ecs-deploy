@@ -1,7 +1,7 @@
 
 
 
-import { BehaviorSubject } from 'rxjs';
+import { AsyncSubject } from 'rxjs';
 import {HttpClient, HttpHeaders } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
 
@@ -17,13 +17,13 @@ import { Injectable } from '@angular/core';
 @Injectable()
 export class ServiceDetailService {
 
-  private sl$: BehaviorSubject<ServiceDetail>
+  private sl$: AsyncSubject<ServiceDetail>
   private sl: ServiceDetail = new ServiceDetail({})
 
   constructor(private http: HttpClient, private auth: AuthService) { } 
 
   getServiceDetail(serviceName: string) {
-    this.sl$ = new BehaviorSubject<ServiceDetail>(new ServiceDetail({}))
+    this.sl$ = new AsyncSubject<ServiceDetail>()
     this.sl.serviceName = serviceName
     this.getService(serviceName).subscribe(data => {
       // Read the result field from the JSON response.

@@ -15,10 +15,10 @@ import { ServiceList, ServiceListService }  from './service-list.service';
 @Injectable()
 export class ServiceListResolver implements Resolve<ServiceList> {
 
-  constructor(private ds: ServiceListService, private router: Router) {}
+  constructor(private ds: ServiceListService) {}
 
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Observable<ServiceList> {
-    return this.ds.getServiceList()
+    return this.ds.getServiceList().asObservable()
   }
   
 }
