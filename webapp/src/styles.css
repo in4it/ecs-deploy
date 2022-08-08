@@ -46,3 +46,7 @@ h1 {
     margin: 30px auto;
   }
 }
+
+ngb-modal-backdrop {
+  z-index: 1050 !important;
+}
