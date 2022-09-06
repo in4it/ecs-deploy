@@ -29,6 +29,12 @@ data "aws_ami" "ecs" {
 
 resource "aws_ecs_cluster" "cluster" {
   name = var.cluster_name
+}
+
+resource "aws_ecs_cluster_capacity_providers" "cluster" {
+  count = var.ecs_capacity_provider_enabled ? 1 : 0
+  cluster_name = aws_ecs_cluster.cluster.name
+
   capacity_providers = var.ecs_capacity_provider_enabled ? [aws_ecs_capacity_provider.deploy[0].name] : []
   dynamic "default_capacity_provider_strategy" {
     for_each = aws_ecs_capacity_provider.deploy
@@ -39,6 +45,7 @@ resource "aws_ecs_cluster" "cluster" {
     }
   }
 }
+
 
 #
 # launch template
