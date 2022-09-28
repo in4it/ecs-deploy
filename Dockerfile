@@ -21,7 +21,7 @@ RUN cd /webapp && $(npm bin)/ng build --configuration production --base-href ${P
 #
 # Build go project
 #
-FROM golang:1.15-alpine as go-builder
+FROM golang:1.19-alpine as go-builder
 
 WORKDIR /ecs-deploy/
 
@@ -35,7 +35,7 @@ RUN apk add -u -t build-tools curl git && \
 #
 # Runtime container
 #
-FROM alpine:latest  
+FROM alpine:3.16
 
 ARG SOURCE_COMMIT=unknown
 
