@@ -46,3 +46,6 @@ Thumbs.db
 
 # proxy
 proxy.conf.json
+
+# angular cache
+.angular/
