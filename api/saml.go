@@ -168,7 +168,7 @@ func (s *SAML) samlInitHandler(c *gin.Context) {
 		bindingLocation = s.sp.GetSSOBindingLocation(binding)
 	}
 
-	req, err := s.sp.MakeAuthenticationRequest(bindingLocation, binding)
+	req, err := s.sp.MakeAuthenticationRequest(bindingLocation, binding, saml.HTTPPostBinding)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
