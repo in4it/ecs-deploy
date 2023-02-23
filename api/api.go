@@ -14,8 +14,8 @@ import (
 	"github.com/in4it/ecs-deploy/util"
 	"github.com/juju/loggo"
 	sns "github.com/robbiet480/go.sns"
-	ginSwagger "github.com/swaggo/gin-swagger"   // gin-swagger middleware
-	"github.com/swaggo/gin-swagger/swaggerFiles" // swagger embed files
+	swaggerfiles "github.com/swaggo/files"     // swagger embed files
+	ginSwagger "github.com/swaggo/gin-swagger" // gin-swagger middleware
 
 	"encoding/json"
 	"errors"
@@ -112,7 +112,7 @@ func (a *API) createRoutes() {
 		r.GET(prefix+"/saml/enabled", a.samlHelper.samlEnabledHandler)
 
 		// swagger
-		r.GET(prefix+"/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		r.GET(prefix+"/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 		// webhook
 		r.POST(prefix+"/webhook", a.webhookHandler)
