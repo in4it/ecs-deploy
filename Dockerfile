@@ -16,7 +16,8 @@ WORKDIR /webapp
 
 COPY webapp /webapp
 
-RUN cd /webapp && $(npm bin)/ng build --configuration production --base-href ${PREFIX}/webapp/
+WORKDIR /webapp 
+RUN  $(npm bin)/ng build --configuration production --base-href ${PREFIX}/webapp/
 
 #
 # Build go project
