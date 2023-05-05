@@ -432,7 +432,7 @@ export class ServiceDetailComponent implements OnInit {
     this.sds.getServiceLog(params).subscribe(data => {
       this.loadingLogs = false
       if("error" in data) {
-        let errorMsg: string = data["error"]
+        let errorMsg: string = data["error"] as string
         if(errorMsg == "") {
           this.alertService.error("Error, but error message was empty");
         } else {
