@@ -7,7 +7,7 @@ replace github.com/ugorji/go v1.1.4 => github.com/ugorji/go/codec v0.0.0-2019020
 require (
 	github.com/appleboy/gin-jwt/v2 v2.7.0
 	github.com/aws/aws-sdk-go v1.41.11
-	github.com/crewjam/saml v0.4.13
+	github.com/crewjam/saml v0.4.14
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-contrib/location v0.0.2
 	github.com/gin-gonic/gin v1.9.1
@@ -60,7 +60,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/russellhaering/goxmldsig v1.2.0 // indirect
+	github.com/russellhaering/goxmldsig v1.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	golang.org/x/arch v0.3.0 // indirect
