@@ -5,15 +5,14 @@ import { AuthService } from '../services/auth.service';
 
 import { Injectable }             from '@angular/core';
 import { Observable }             from 'rxjs';
-import { Router, Resolve, RouterStateSnapshot,
-         ActivatedRouteSnapshot } from '@angular/router';
+import { Router, RouterStateSnapshot, ActivatedRouteSnapshot } from '@angular/router';
 
 
 import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 
 
 @Injectable()
-export class ServiceDetailResolver implements Resolve<ServiceDetail> {
+export class ServiceDetailResolver  {
 
   constructor(private ds: ServiceDetailService, private router: Router) {}
 
