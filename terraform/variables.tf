@@ -279,7 +279,13 @@ variable "metadata_options_http_tokens" {
   default     = ""
 }
 
+# cloudwatch variables
 variable "cloudwatch_log_group_kms_arn" {
   description = "cloudwatch log group kms arn"
   default     = ""
+}
+
+variable "cloudwatch_log_retention_period" {
+  description = "cloudwatch retention period in days"
+  default     = "0"
 }
