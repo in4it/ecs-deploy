@@ -31,7 +31,6 @@
     "awesome-bootstrap-checkbox": "^1.0.1",
     "bootstrap": "^4.4.1",
     "core-js": "^2.6.11",
-    "fibers": "^4.0.2",
     "font-awesome": "^4.7.0",
     "html-webpack-plugin": "^4.5.2",
     "jquery": "^3.5.0",
