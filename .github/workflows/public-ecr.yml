@@ -5,7 +5,7 @@ on:
     branches:
       - master
     tags:
-      - v*
+      - 'v*'
 
 permissions:
       id-token: write
@@ -39,7 +39,7 @@ jobs:
           docker push public.ecr.aws/y9x3p3i6/ecs-deploy:latest
           docker push in4it/ecs-deploy:latest
       - name: Tag and push specific version
-        if: startsWith(github.ref, '/refs/tags/*')
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           docker tag ecs-deploy:latest public.ecr.aws/y9x3p3i6/ecs-deploy:${GITHUB_REF/refs\/tags\//}
           docker tag ecs-deploy:latest in4it/ecs-deploy:${GITHUB_REF/refs\/tags\//}
