@@ -166,6 +166,11 @@ variable "fixed_response_body" {
   default     = "No service configured at this address"
 }
 
+variable "ssl_policy" {
+  description = "TLS policy for https listener"
+  default     = "ELBSecurityPolicy-2016-08"
+}
+
 variable "paramstore_assume_role" {
   description = "assume role when using paramstore"
   default     = ""
