@@ -57,6 +57,14 @@ resource "aws_launch_template" "cluster" {
   key_name                             = var.ssh_key_name
   instance_initiated_shutdown_behavior = "terminate"
 
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_type = var.volume_type
+    }
+  }
+
   iam_instance_profile {
     name = aws_iam_instance_profile.cluster-ec2-role.id
   }
