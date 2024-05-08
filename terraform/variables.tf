@@ -102,6 +102,11 @@ variable "instance_type" {
   description = "instance type"
 }
 
+variable "volume_type" {
+  description = "volume type"
+  default     = "gp2"
+}
+
 variable "ssh_key_name" {
   description = "ssh key name"
 }
