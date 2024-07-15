@@ -1,6 +1,6 @@
-@import "~bootstrap/dist/css/bootstrap.css";
-@import "~font-awesome/css/font-awesome.css";
-@import "~awesome-bootstrap-checkbox/awesome-bootstrap-checkbox.css";
+@import "bootstrap/dist/css/bootstrap.css";
+@import "font-awesome/css/font-awesome.css";
+@import "awesome-bootstrap-checkbox/awesome-bootstrap-checkbox.css";
 
 body {
   padding-top: 3.5rem;
