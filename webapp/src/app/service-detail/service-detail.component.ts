@@ -9,7 +9,7 @@ import { ConfirmChildComponent }  from './confirm.component';
 
 import { AlertService } from '../services/index';
 
-import * as moment from 'moment';
+import moment from 'moment';
 
 @Component({
   selector: 'app-service-detail',

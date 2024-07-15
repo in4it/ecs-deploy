@@ -3,7 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 
 import { ServiceList, ServiceListService }  from './service-list.service';
 
-import * as moment from 'moment';
+import moment from 'moment';
 
 @Component({
   selector: 'app-service-list',
