@@ -1064,6 +1064,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		},
 	}
 	e := ecs.ECS{}
+	ec2 := ecs.EC2{}
 	iam := ecs.IAM{}
 	paramstore := ecs.Paramstore{}
 	s := service.NewService()
@@ -1166,8 +1167,23 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	fmt.Printf("Created ECS Cluster with ARN: %v\n", *clusterArn)
-	if b.AlbSecurityGroups == "" || b.EcsSubnets == "" {
-		return errors.New("Incorrect test arguments supplied")
+	if b.AlbSecurityGroups == "" {
+		if b.EcsVpcId == "" {
+			return fmt.Errorf("vpc id is empty")
+		}
+		b.AlbSecurityGroups, err = ec2.CreateSecurityGroup("ecs-deploy-alb-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
+		if err != nil {
+			return fmt.Errorf("Create ALB Security Group error: %s", err)
+		}
+	}
+	if b.EcsSubnets == "" {
+		if b.EcsVpcId == "" {
+			return fmt.Errorf("vpc id is empty")
+		}
+		b.EcsSubnets, err = ec2.CreateSecurityGroup("ecs-deploy-alb-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
+		if err != nil {
+			return fmt.Errorf("Create ECS Security Group error: %s", err)
+		}
 	}
 	if len(b.LoadBalancers) == 0 {
 		b.LoadBalancers = []service.LoadBalancer{

@@ -29,19 +29,18 @@ You can bootstrap a new ECS cluster using ecs-deploy. It'll setup a autoscaling 
 
 ```
 ./ecs-deploy --bootstrap \
-  --alb-security-groups sg-123456 \
+  --ecs-subnets subnet-123456 \
+  --ecs-vpc-id vpc-123456 \
   --cloudwatch-logs-enabled \
   --cloudwatch-logs-prefix mycompany \
   --cluster-name mycluster \
   --ecs-desired-size 1 \
   --ecs-max-size 1 \
   --ecs-min-size 1 \
-  --ecs-security-groups sg-123456 \
-  --ecs-subnets subnet-123456 \
   --environment staging \
   --instance-type t2.micro \
   --key-name mykey \
-  --loadbalancer-domain cluster.in4it.io \
+  --loadbalancer-domain ecs-deploy.in4it.io \
   --paramstore-enabled \
   --paramstore-kms-arn aws:arn:kms:region:accountid:key/1234 \
   --paramstore-prefix mycompany \

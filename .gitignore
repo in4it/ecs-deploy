@@ -1,8 +1,8 @@
 *.swp
 .env
-./ecs-deploy
-ecs-client-linux-amd64
-ecs-deploy-linux-amd64
+/ecs-deploy
+/ecs-client-*
+/ecs-deploy-*
 *.crt
 *.key
 webapp/node_modules/
@@ -10,3 +10,4 @@ webapp/dist/
 vendor/
 bin/
 .vscode/
+/test-scripts/
