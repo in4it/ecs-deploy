@@ -4,12 +4,12 @@
 
 variable "ecs_deploy_image" {
   description = "image location of ecs-deploy"
-  default     = "in4it/ecs-deploy"
+  default     = "709825985650.dkr.ecr.us-east-1.amazonaws.com/in4it/ecs-deploy"
 }
 
 variable "ecs_deploy_version" {
   description = "ecs deploy version"
-  default     = "latest"
+  default     = "v1.0.42"
 }
 
 variable "ecs_deploy_debug" {
