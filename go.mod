@@ -1,6 +1,6 @@
 module github.com/in4it/ecs-deploy
 
-go 1.19
+go 1.22
 
 replace github.com/ugorji/go v1.1.4 => github.com/ugorji/go/codec v0.0.0-20190204201341-e444a5086c43
 

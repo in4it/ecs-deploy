@@ -3,7 +3,6 @@ package ecs
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -18,7 +17,7 @@ func initDeployment() (service.DeployServices, error) {
 	var (
 		d service.DeployServices
 	)
-	dat, err := ioutil.ReadFile("testdata/ecs.yaml")
+	dat, err := os.ReadFile("testdata/ecs.yaml")
 	if err != nil {
 		return d, err
 	}

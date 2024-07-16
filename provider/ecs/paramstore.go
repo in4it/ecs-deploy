@@ -166,10 +166,7 @@ func (p *Paramstore) GetParamstoreIAMPolicy(path string) string {
 	if err != nil {
 		accountId = ""
 	}
-	policy := `{
-    "Version": "2012-10-17",
-    "Statement": [
-      {
+	paramstorePolicy := `{
         "Action": [
           "ssm:GetParameterHistory",
           "ssm:GetParameter",
@@ -180,16 +177,24 @@ func (p *Paramstore) GetParamstoreIAMPolicy(path string) string {
           "arn:aws:ssm:` + util.GetEnv("AWS_REGION", "") + `:` + accountId + `:parameter/` + util.GetEnv("PARAMSTORE_PREFIX", "") + `-` + util.GetEnv("AWS_ACCOUNT_ENV", "") + `/` + path + `/*"
         ],
         "Effect": "Allow"
-      },
-      {
-        "Action": [
-          "kms:Decrypt"
-        ],
-        "Resource": [
-          "` + util.GetEnv("PARAMSTORE_KMS_ARN", "") + `"
-        ],
-        "Effect": "Allow"
-      }
+      }`
+	kmsPolicy := ""
+	if kmsArn := util.GetEnv("PARAMSTORE_KMS_ARN", ""); kmsArn != "" {
+		kmsPolicy = `,
+		  {
+			"Action": [
+			  "kms:Decrypt"
+			],
+			"Resource": [
+			  "` + kmsArn + `"
+			],
+			"Effect": "Allow"
+		  }`
+	}
+	policy := `{
+    "Version": "2012-10-17",
+    "Statement": [
+      ` + paramstorePolicy + `` + kmsPolicy + `
     ]
   }`
 	return policy

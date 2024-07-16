@@ -1,6 +1,8 @@
 package api
 
 import (
+	"embed"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/in4it/ecs-deploy/integrations"
 	"github.com/in4it/ecs-deploy/provider/ecs"
@@ -10,13 +12,17 @@ import (
 
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// embeddings (default templates)
+//
+//go:embed default-templates/*
+var defaultTemplates embed.FS
 
 // Controller struct
 type Controller struct {
@@ -1091,15 +1097,21 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	}
 	var ec2RolePolicy string
 	if b.CloudwatchLogsEnabled {
-		r, err := ioutil.ReadFile("templates/iam/ecs-ec2-policy-logs.json")
+		r, err := os.ReadFile("templates/iam/ecs-ec2-policy-logs.json")
 		if err != nil {
-			return err
+			r, err = defaultTemplates.ReadFile("default-templates/ecs-ec2-policy-logs.json")
+			if err != nil {
+				return fmt.Errorf("could not read default template ecs-ec2-policy-logs.json: %s", err)
+			}
 		}
 		ec2RolePolicy = strings.Replace(string(r), "${LOGS_RESOURCE}", "arn:aws:logs:"+b.Region+":"+iam.AccountId+":log-group:"+b.CloudwatchLogsPrefix+"-"+b.Environment+":*", -1)
 	} else {
-		r, err := ioutil.ReadFile("templates/iam/ecs-ec2-policy.json")
+		r, err := os.ReadFile("templates/iam/ecs-ec2-policy.json")
 		if err != nil {
-			return err
+			r, err = defaultTemplates.ReadFile("default-templates/ecs-ec2-policy.json")
+			if err != nil {
+				return fmt.Errorf("could not read default template ecs-ec2-policy: %s", err)
+			}
 		}
 		ec2RolePolicy = string(r)
 	}
@@ -1122,7 +1134,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	// import key
-	r, err := ioutil.ReadFile(util.GetEnv("HOME", "") + "/.ssh/" + b.KeyName)
+	r, err := os.ReadFile(util.GetEnv("HOME", "") + "/.ssh/" + b.KeyName)
 	if err != nil {
 		return err
 	}
@@ -1158,7 +1170,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		if err != nil {
 			return fmt.Errorf("create ECS Security Group error: %s", err)
 		}
-		err = ec2.CreateSecurityGroupIngressRule(b.EcsSecurityGroups, 0, 0, "tcp", b.AlbSecurityGroups, "")
+		err = ec2.CreateSecurityGroupIngressRule(b.EcsSecurityGroups, 0, 65535, "tcp", b.AlbSecurityGroups, "")
 		if err != nil {
 			return fmt.Errorf("create ECS Security Group rule error: %s", err)
 		}
@@ -1236,6 +1248,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 			{Name: "JWT_SECRET", Value: util.RandStringBytesMaskImprSrc(32)},
 			{Name: "DEPLOY_PASSWORD", Value: deployPassword},
 			{Name: "URL_PREFIX", Value: "/ecs-deploy"},
+			{Name: "AWS_ACCOUNT_ENV", Value: b.Environment},
 		}
 		if b.ParamstoreKmsArn != "" {
 			parameters = append(parameters, service.DeployServiceParameter{Name: "PARAMSTORE_KMS_ARN", Value: b.ParamstoreKmsArn})
@@ -1267,12 +1280,17 @@ func (c *Controller) Bootstrap(b *Flags) error {
 				return err
 			}
 		}
-		r, err := ioutil.ReadFile("templates/iam/ecs-deploy-task.json")
+		r, err := os.ReadFile("templates/iam/ecs-deploy-task.json")
 		if err != nil {
-			return err
+			r, err = defaultTemplates.ReadFile("default-templates/ecs-deploy-task.json")
+			if err != nil {
+				return fmt.Errorf("could not read default template ecs-deploy-task.json: %s", err)
+			}
 		}
 		ecsDeployRolePolicy := strings.Replace(string(r), "${ACCOUNT_ID}", iam.AccountId, -1)
 		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${AWS_REGION}", b.Region, -1)
+		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${PARAMSTORE_PREFIX}", b.ParamstorePrefix, -1)
+		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${ENV}", b.Environment, -1)
 		err = iam.PutRolePolicy("ecs-ecs-deploy", "ecs-deploy", ecsDeployRolePolicy)
 		if err != nil {
 			return err
