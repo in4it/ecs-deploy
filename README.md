@@ -25,14 +25,14 @@ You can download ecs-deploy and ecs-client from the [releases page](https://gith
 
 ### Bootstrap ECS cluster
 
-You can bootstrap a new ECS cluster using ecs-deploy. It'll setup a autoscaling group, ALB, IAM roles, and the ECS cluster.
+You can bootstrap a new ECS cluster using ecs-deploy. It'll create an autoscaling group, an Application Load Balancer, an IAM role for the ECS EC2 instances, and the ECS cluster itself.
 
 ```
 ./ecs-deploy --bootstrap \
   --ecs-subnets subnet-123456 \
   --ecs-vpc-id vpc-123456 \
   --cloudwatch-logs-enabled \
-  --cloudwatch-logs-prefix mycompany \
+  --cloudwatch-logs-prefix mycluster \
   --cluster-name mycluster \
   --ecs-desired-size 1 \
   --ecs-max-size 1 \
@@ -42,15 +42,18 @@ You can bootstrap a new ECS cluster using ecs-deploy. It'll setup a autoscaling 
   --key-name mykey \
   --loadbalancer-domain ecs-deploy.in4it.io \
   --paramstore-enabled \
-  --paramstore-kms-arn aws:arn:kms:region:accountid:key/1234 \
-  --paramstore-prefix mycompany \
+  --paramstore-prefix mycluster \
   --profile your-aws-profile \
   --region your-aws-region
 ```
 
-You'll need to setup the security groups and VPC/subnets first. The ALB security group should allow port 80 and 443 incoming, the ECS security group should allow 32768:61000 from the ALB.
+If you no longer need the cluster, you can remove it by specifying --delete-cluster:
+```
+./ecs-deploy --delete-cluster mycluster \
+  --profile your-aws-profile \
+  --region your-aws-region
 
-If you no longer need the cluster, you can remove it by specifying --delete-cluster instead of --bootstrap
+```
 
 ### Bootstrap with terraform
 Alternatively you can use terraform to deploy the ecs cluster. See [terraform/README.md](https://github.com/in4it/ecs-deploy/blob/master/terraform/README.md) for a terraform module that spins up an ecs cluster.

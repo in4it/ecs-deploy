@@ -1130,6 +1130,42 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	}
 	e.ImportKeyPair(b.ClusterName, pubKey)
 
+	// create security groups if not supplied
+	if b.AlbSecurityGroups == "" {
+		if b.EcsVpcId == "" {
+			return fmt.Errorf("vpc id is empty")
+		}
+		b.AlbSecurityGroups, err = ec2.CreateSecurityGroup("ecs-deploy-alb-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupIngressRule(b.AlbSecurityGroups, 80, 80, "tcp", "", "0.0.0.0/0")
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group rule error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupIngressRule(b.AlbSecurityGroups, 443, 443, "tcp", "", "0.0.0.0/0")
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group rule error: %s", err)
+		}
+	}
+	if b.EcsSecurityGroups == "" {
+		if b.EcsVpcId == "" {
+			return fmt.Errorf("vpc id is empty")
+		}
+		b.EcsSecurityGroups, err = ec2.CreateSecurityGroup("ecs-deploy-cluster-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
+		if err != nil {
+			return fmt.Errorf("create ECS Security Group error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupIngressRule(b.EcsSecurityGroups, 0, 0, "tcp", b.AlbSecurityGroups, "")
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group rule error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupEgressRule(b.AlbSecurityGroups, 0, 0, "-1", "", "0.0.0.0/0")
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group egress rule error: %s", err)
+		}
+	}
+
 	// create launch configuration
 	err = autoscaling.CreateLaunchConfiguration(b.ClusterName, b.KeyName, b.InstanceType, instanceProfile, strings.Split(b.EcsSecurityGroups, ","))
 	if err != nil {
@@ -1167,24 +1203,6 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	fmt.Printf("Created ECS Cluster with ARN: %v\n", *clusterArn)
-	if b.AlbSecurityGroups == "" {
-		if b.EcsVpcId == "" {
-			return fmt.Errorf("vpc id is empty")
-		}
-		b.AlbSecurityGroups, err = ec2.CreateSecurityGroup("ecs-deploy-alb-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
-		if err != nil {
-			return fmt.Errorf("Create ALB Security Group error: %s", err)
-		}
-	}
-	if b.EcsSubnets == "" {
-		if b.EcsVpcId == "" {
-			return fmt.Errorf("vpc id is empty")
-		}
-		b.EcsSubnets, err = ec2.CreateSecurityGroup("ecs-deploy-alb-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
-		if err != nil {
-			return fmt.Errorf("Create ECS Security Group error: %s", err)
-		}
-	}
 	if len(b.LoadBalancers) == 0 {
 		b.LoadBalancers = []service.LoadBalancer{
 			{
@@ -1396,6 +1414,17 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		return err
 	}
 	err = cloudwatch.DeleteLogGroup(b.CloudwatchLogsPrefix + "-" + b.Environment)
+	if err != nil {
+		return err
+	}
+
+	// delete security groups
+	ec2 := ecs.EC2{}
+	err = ec2.DeleteSecurityGroup("ecs-deploy-alb-sg")
+	if err != nil {
+		return err
+	}
+	err = ec2.DeleteSecurityGroup("ecs-deploy-cluster-sg")
 	if err != nil {
 		return err
 	}

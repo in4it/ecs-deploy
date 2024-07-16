@@ -64,7 +64,25 @@ func (e *EC2) CreateSecurityGroup(name, description, vpcID string) (string, erro
 }
 
 /*
- * CreateSecurityGroup creates a security group
+ * DeleteSecurityGroup deletes a security group
+ */
+func (e *EC2) DeleteSecurityGroup(name string) error {
+	svc := ec2.New(session.New())
+
+	input := &ec2.DeleteSecurityGroupInput{
+		GroupName: aws.String(name),
+	}
+
+	_, err := svc.DeleteSecurityGroup(input)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+/*
+ * CreateSecurityGroupIngressRule creates a security group ingress rule
  */
 func (e *EC2) CreateSecurityGroupIngressRule(groupId string, FromPort int64, toPort int64, protocol string, sourceSecurityGroupName string, ipRange string) error {
 	svc := ec2.New(session.New())
@@ -87,6 +105,35 @@ func (e *EC2) CreateSecurityGroupIngressRule(groupId string, FromPort int64, toP
 	_, err := svc.AuthorizeSecurityGroupIngress(input)
 	if err != nil {
 		return fmt.Errorf("authorize security group ingress error: %s", err)
+	}
+
+	return nil
+}
+
+/*
+ * CreateSecurityGroupEgressRule creates a security group egress rule
+ */
+func (e *EC2) CreateSecurityGroupEgressRule(groupId string, FromPort int64, toPort int64, protocol string, sourceSecurityGroupName string, ipRange string) error {
+	svc := ec2.New(session.New())
+
+	input := &ec2.AuthorizeSecurityGroupEgressInput{
+		GroupId:    aws.String(groupId),
+		FromPort:   aws.Int64(FromPort),
+		ToPort:     aws.Int64(toPort),
+		IpProtocol: aws.String(protocol),
+	}
+
+	if sourceSecurityGroupName != "" {
+		input.SourceSecurityGroupName = aws.String(sourceSecurityGroupName)
+	}
+
+	if ipRange != "" {
+		input.CidrIp = aws.String(ipRange)
+	}
+
+	_, err := svc.AuthorizeSecurityGroupEgress(input)
+	if err != nil {
+		return fmt.Errorf("authorize security group egress error: %s", err)
 	}
 
 	return nil
