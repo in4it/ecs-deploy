@@ -3,6 +3,7 @@ package ecs
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -30,6 +31,10 @@ func (a *Marketplace) RegisterMarketplace() error {
 	})
 
 	if err != nil {
+		if strings.Contains(err.Error(), "CustomerNotEntitledException") {
+			fmt.Printf("Exited: no valid subscription found. Subscribe for ecs-deploy on the AWS Marketplace.")
+			os.Exit(1)
+		}
 		return fmt.Errorf("RegisterUsage error: %s", err)
 	}
 

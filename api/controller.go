@@ -1051,7 +1051,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 				ContainerName:     "ecs-deploy",
 				ContainerPort:     8080,
 				ContainerImage:    "ecs-deploy",
-				ContainerURI:      "index.docker.io/in4it/ecs-deploy:latest",
+				ContainerURI:      "public.ecr.aws/y9x3p3i6/ecs-deploy:latest",
 				Essential:         true,
 				MemoryReservation: 128,
 				CPUReservation:    64,

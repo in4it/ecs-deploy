@@ -47,7 +47,7 @@ WORKDIR /app
 
 COPY . .
 COPY --from=go-builder /ecs-deploy/ecs-deploy .
-COPY --from=webapp-builder /webapp/dist webapp/dist
+COPY --from=webapp-builder /webapp/dist/browser webapp/dist
 
 RUN echo ${SOURCE_COMMIT} > source_commit
 
