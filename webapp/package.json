@@ -65,12 +65,11 @@
     "karma-coverage-istanbul-reporter": "^2.1.1",
     "karma-jasmine": "~2.0.1",
     "karma-jasmine-html-reporter": "^1.5.2",
-    "protractor": "^7.0.0",
+    "selenium-webdriver": "^4.18.1",
     "terser": ">=5.14.2",
     "ts-node": "~7.0.1",
     "tslint": "^6.1.3",
     "typescript": "^5.5.3",
-    "selenium-webdriver": "^4.18.1",
     "webpack-subresource-integrity": "^1.5.2"
   }
 }
