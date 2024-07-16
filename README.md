@@ -17,7 +17,7 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
   </a>
 </p>
 
-## Usage
+## Installation
 
 ### Download
 
@@ -25,8 +25,16 @@ You can download ecs-deploy and ecs-client from the [releases page](https://gith
 
 ### Bootstrap ECS cluster
 
-You can bootstrap a new ECS cluster using ecs-deploy. It'll create an autoscaling group, an Application Load Balancer, an IAM role for the ECS EC2 instances, and the ECS cluster itself.
+You can bootstrap a new ECS cluster using the ecs-deploy binary. Make sure to have downloaded the ecs-deploy and ecs-client binary for your operating system at the [releases page](https://github.com/in4it/ecs-deploy/releases).
 
+The bootstrap command will create an autoscaling group, an Application Load Balancer, an IAM role for the ECS EC2 instances, and the ECS cluster itself.
+
+Create an SSH key for the EC2 instance using for example the following command:
+```
+ssh-keygen -f ~/.ssh/mykey
+```
+
+Then run ecs-deploy with the bootstrap option. To see all the flags, use ./ecs-deploy -h
 ```
 ./ecs-deploy --bootstrap \
   --ecs-subnets subnet-123456 \
@@ -47,7 +55,7 @@ You can bootstrap a new ECS cluster using ecs-deploy. It'll create an autoscalin
   --region your-aws-region
 ```
 
-If you no longer need the cluster, you can remove it by specifying --delete-cluster:
+If you want to delete the cluster, you can run the same command with specifying --delete-cluster:
 ```
 ./ecs-deploy --delete-cluster mycluster \
   --profile your-aws-profile \
@@ -58,7 +66,7 @@ If you no longer need the cluster, you can remove it by specifying --delete-clus
 ### Bootstrap with terraform
 Alternatively you can use terraform to deploy the ecs cluster. See [terraform/README.md](https://github.com/in4it/ecs-deploy/blob/master/terraform/README.md) for a terraform module that spins up an ecs cluster.
 
-### Deploy to ECS Cluster
+### Deploy a service with ECS Cluster
 
 To deploy the examples (an nginx server and a echoserver), use ecs-client:
 
@@ -79,6 +87,8 @@ Deploy:
 
 
 ## Configuration (Environment variables)
+
+The environment variables are read from the parameter store. It is enabled with the `--paramstore-enabled` flag during the bootstrap.
 
 ### AWS Specific variables:
 
