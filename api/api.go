@@ -2,6 +2,8 @@ package api
 
 import (
 	//"github.com/RobotsAndPencils/go-saml"
+	"fmt"
+
 	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/gin-contrib/location"
 	"github.com/gin-gonic/gin"
@@ -53,6 +55,12 @@ func (a *API) Launch() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	marketplace := ecs.Marketplace{}
+	err := marketplace.RegisterMarketplace()
+	if err != nil {
+		return fmt.Errorf("register marketplace error: %s", err)
 	}
 
 	a.asController = AutoscalingController{}

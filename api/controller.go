@@ -1242,6 +1242,9 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	}
 	// create env vars
 	if b.ParamstoreEnabled {
+		if b.ProdCode == "" {
+			b.ProdCode = "3x0v7m3npdgzaiw2f8lwsgju5" // default prod code
+		}
 		parameters := []service.DeployServiceParameter{
 			{Name: "PARAMSTORE_ENABLED", Value: "yes"},
 			{Name: "PARAMSTORE_PREFIX", Value: b.ParamstorePrefix},
@@ -1249,6 +1252,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 			{Name: "DEPLOY_PASSWORD", Value: deployPassword},
 			{Name: "URL_PREFIX", Value: "/ecs-deploy"},
 			{Name: "AWS_ACCOUNT_ENV", Value: b.Environment},
+			{Name: "PROD_CODE", Value: b.ProdCode},
 		}
 		if b.ParamstoreKmsArn != "" {
 			parameters = append(parameters, service.DeployServiceParameter{Name: "PARAMSTORE_KMS_ARN", Value: b.ParamstoreKmsArn})

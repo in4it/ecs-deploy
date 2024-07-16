@@ -6,7 +6,7 @@ replace github.com/ugorji/go v1.1.4 => github.com/ugorji/go/codec v0.0.0-2019020
 
 require (
 	github.com/appleboy/gin-jwt/v2 v2.7.0
-	github.com/aws/aws-sdk-go v1.51.6
+	github.com/aws/aws-sdk-go v1.54.19
 	github.com/crewjam/saml v0.4.14
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-contrib/location v0.0.2

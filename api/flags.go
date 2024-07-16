@@ -27,6 +27,7 @@ type Flags struct {
 	Server                bool
 	DeleteCluster         string
 	LoadBalancers         []service.LoadBalancer
+	ProdCode              string
 }
 
 func NewFlags() *Flags {

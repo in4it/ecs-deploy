@@ -62,6 +62,7 @@ func addFlags(f *api.Flags, fs *pflag.FlagSet) {
 	fs.BoolVar(&f.Server, "server", f.Server, "start server")
 	fs.StringVar(&f.DeleteCluster, "delete-cluster", f.DeleteCluster, "delete-cluster <cluster name>")
 	fs.BoolVar(&f.DisableEcsDeploy, "disable-ecs-deploy", f.DisableEcsDeploy, "disable ecs deploy during bootstrap")
+	fs.StringVar(&f.ProdCode, "aws-prod-code", f.ProdCode, "aws marketplace product code")
 	fs.MarkHidden("disable-ecs-deploy")
 }
 
