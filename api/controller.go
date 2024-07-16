@@ -1086,7 +1086,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	_, err = iam.CreateRole(roleName, iam.GetEC2IAMTrust())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "EntityAlreadyExists") {
 		return err
 	}
 	var ec2RolePolicy string
@@ -1107,12 +1107,14 @@ func (c *Controller) Bootstrap(b *Flags) error {
 
 	// wait for role instance profile to exist
 	err = iam.CreateInstanceProfile(roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "EntityAlreadyExists") {
 		return err
 	}
-	err = iam.AddRoleToInstanceProfile(roleName, roleName)
-	if err != nil {
-		return err
+	if err == nil {
+		err = iam.AddRoleToInstanceProfile(roleName, roleName)
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Println("Waiting until instance profile exists...")
 	err = iam.WaitUntilInstanceProfileExists(roleName)
@@ -1128,7 +1130,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	if err != nil {
 		return err
 	}
-	e.ImportKeyPair(b.ClusterName, pubKey)
+	e.ImportKeyPair(b.KeyName, pubKey)
 
 	// create security groups if not supplied
 	if b.AlbSecurityGroups == "" {
@@ -1158,11 +1160,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		}
 		err = ec2.CreateSecurityGroupIngressRule(b.EcsSecurityGroups, 0, 0, "tcp", b.AlbSecurityGroups, "")
 		if err != nil {
-			return fmt.Errorf("create ALB Security Group rule error: %s", err)
-		}
-		err = ec2.CreateSecurityGroupEgressRule(b.AlbSecurityGroups, 0, 0, "-1", "", "0.0.0.0/0")
-		if err != nil {
-			return fmt.Errorf("create ALB Security Group egress rule error: %s", err)
+			return fmt.Errorf("create ECS Security Group rule error: %s", err)
 		}
 	}
 
@@ -1193,7 +1191,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	// create log group
 	if b.CloudwatchLogsEnabled {
 		err = cloudwatch.CreateLogGroup(b.ClusterName, b.CloudwatchLogsPrefix+"-"+b.Environment)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
 			return err
 		}
 	}
@@ -1319,11 +1317,11 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 	roleName := "ecs-" + clusterName
 	cloudwatch := ecs.CloudWatch{}
 	err := autoscaling.DeleteAutoScalingGroup(clusterName, true)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "AutoScalingGroup name not found") {
 		return err
 	}
 	err = autoscaling.DeleteLaunchConfiguration(clusterName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "Launch configuration name not found") {
 		return err
 	}
 	err = e.DeleteKeyPair(clusterName)
@@ -1331,19 +1329,19 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		return err
 	}
 	err = iam.DeleteRolePolicy(roleName, "ecs-ec2-policy")
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	err = iam.RemoveRoleFromInstanceProfile(roleName, roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	err = iam.DeleteInstanceProfile(roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	err = iam.DeleteRole(roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	if len(b.LoadBalancers) == 0 {
@@ -1359,6 +1357,9 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 	for _, v := range b.LoadBalancers {
 		alb, err := ecs.NewALB(v.Name)
 		if err != nil {
+			if strings.Contains(err.Error(), "Could not describe loadbalancer") {
+				continue
+			}
 			return err
 		}
 		for _, v := range alb.Listeners {
@@ -1371,7 +1372,7 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		if err != nil {
 			return err
 		}
-		services, err := e.DescribeServices(clusterName, serviceArns, false, false, false)
+		services, _ := e.DescribeServices(clusterName, serviceArns, false, false, false)
 		for _, v := range services {
 			targetGroup, _ := alb.GetTargetGroupArn(v.ServiceName)
 			if targetGroup != nil {
@@ -1391,7 +1392,7 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 			return err
 		}
 	}
-	fmt.Println("Wait for autoscaling group to not exist")
+	fmt.Println("Wait for autoscaling group deletion")
 	err = autoscaling.WaitForAutoScalingGroupNotExists(clusterName)
 	if err != nil {
 		return err
@@ -1414,20 +1415,31 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		return err
 	}
 	err = cloudwatch.DeleteLogGroup(b.CloudwatchLogsPrefix + "-" + b.Environment)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "ResourceNotFoundException") {
 		return err
 	}
 
 	// delete security groups
 	ec2 := ecs.EC2{}
-	err = ec2.DeleteSecurityGroup("ecs-deploy-alb-sg")
-	if err != nil {
-		return err
+
+	clusterSecGroupId, err := ec2.GetSecurityGroupID("ecs-deploy-cluster-sg")
+	if err == nil && clusterSecGroupId != "" {
+		err = ec2.DeleteSecurityGroup(clusterSecGroupId)
+		if err != nil {
+			return err
+		}
 	}
-	err = ec2.DeleteSecurityGroup("ecs-deploy-cluster-sg")
-	if err != nil {
-		return err
+
+	albSecGroupId, err := ec2.GetSecurityGroupID("ecs-deploy-alb-sg")
+	if err == nil && albSecGroupId != "" {
+		err = ec2.DeleteSecurityGroup(albSecGroupId)
+		if err != nil {
+			return err
+		}
 	}
+
+	fmt.Printf("Cluster deleted\n")
+
 	return nil
 }
 

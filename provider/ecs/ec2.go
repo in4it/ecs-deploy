@@ -66,11 +66,11 @@ func (e *EC2) CreateSecurityGroup(name, description, vpcID string) (string, erro
 /*
  * DeleteSecurityGroup deletes a security group
  */
-func (e *EC2) DeleteSecurityGroup(name string) error {
+func (e *EC2) DeleteSecurityGroup(id string) error {
 	svc := ec2.New(session.New())
 
 	input := &ec2.DeleteSecurityGroupInput{
-		GroupName: aws.String(name),
+		GroupId: aws.String(id),
 	}
 
 	_, err := svc.DeleteSecurityGroup(input)
@@ -88,18 +88,31 @@ func (e *EC2) CreateSecurityGroupIngressRule(groupId string, FromPort int64, toP
 	svc := ec2.New(session.New())
 
 	input := &ec2.AuthorizeSecurityGroupIngressInput{
-		GroupId:    aws.String(groupId),
-		FromPort:   aws.Int64(FromPort),
-		ToPort:     aws.Int64(toPort),
-		IpProtocol: aws.String(protocol),
+		GroupId: aws.String(groupId),
+	}
+
+	input.IpPermissions = []*ec2.IpPermission{
+		{
+			FromPort:   aws.Int64(FromPort),
+			ToPort:     aws.Int64(toPort),
+			IpProtocol: aws.String(protocol),
+		},
 	}
 
 	if sourceSecurityGroupName != "" {
-		input.SourceSecurityGroupName = aws.String(sourceSecurityGroupName)
+		input.IpPermissions[0].UserIdGroupPairs = []*ec2.UserIdGroupPair{
+			{
+				GroupId: aws.String(sourceSecurityGroupName),
+			},
+		}
 	}
 
 	if ipRange != "" {
-		input.CidrIp = aws.String(ipRange)
+		input.IpPermissions[0].IpRanges = []*ec2.IpRange{
+			{
+				CidrIp: aws.String(ipRange),
+			},
+		}
 	}
 
 	_, err := svc.AuthorizeSecurityGroupIngress(input)
@@ -113,11 +126,11 @@ func (e *EC2) CreateSecurityGroupIngressRule(groupId string, FromPort int64, toP
 /*
  * CreateSecurityGroupEgressRule creates a security group egress rule
  */
-func (e *EC2) CreateSecurityGroupEgressRule(groupId string, FromPort int64, toPort int64, protocol string, sourceSecurityGroupName string, ipRange string) error {
+func (e *EC2) CreateSecurityGroupEgressRule(groupName string, FromPort int64, toPort int64, protocol string, sourceSecurityGroupName string, ipRange string) error {
 	svc := ec2.New(session.New())
 
 	input := &ec2.AuthorizeSecurityGroupEgressInput{
-		GroupId:    aws.String(groupId),
+		GroupId:    aws.String(groupName),
 		FromPort:   aws.Int64(FromPort),
 		ToPort:     aws.Int64(toPort),
 		IpProtocol: aws.String(protocol),
