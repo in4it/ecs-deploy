@@ -72,12 +72,12 @@ To deploy the examples (an nginx server and a echoserver), use ecs-client:
 
 Login interactively:
 ```
-./ecs-client login --url http://yourdomain/ecs-cluster
+./ecs-client login --url http://yourdomain/ecs-deploy
 ```
 
 Login with environment variables:
 ```
-ECS_DEPLOY_LOGIN=deploy ECS_DEPLOY_PASSWORD=password ./ecs-client login --url http://yourdomain/ecs-cluster
+ECS_DEPLOY_LOGIN=deploy ECS_DEPLOY_PASSWORD=password ./ecs-client login --url http://yourdomain/ecs-deploy
 ```
 
 Deploy:
