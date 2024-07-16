@@ -11,6 +11,7 @@ type Flags struct {
 	Environment           string
 	AlbSecurityGroups     string
 	EcsSubnets            string
+	EcsVpcId              string
 	CloudwatchLogsPrefix  string
 	CloudwatchLogsEnabled bool
 	KeyName               string

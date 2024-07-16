@@ -1,6 +1,8 @@
 package ecs
 
 import (
+	"crypto"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -16,13 +18,14 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // logging
@@ -205,23 +208,31 @@ func (e *ECS) ImportKeyPair(keyName string, publicKey []byte) error {
 }
 func (e *ECS) GetPubKeyFromPrivateKey(privateKey string) ([]byte, error) {
 	var pubASN1 []byte
-	var key *rsa.PrivateKey
-	block, _ := pem.Decode([]byte(privateKey))
-	if block == nil {
-		return pubASN1, errors.New("No private key found")
-	}
-	if block.Type != "RSA PRIVATE KEY" {
-		return pubASN1, errors.New("Key not a RSA PRIVATE KEY")
-	}
-	key, err := x509.ParsePKCS1PrivateKey([]byte(block.Bytes))
+	privateKeyParsed, err := ssh.ParseRawPrivateKey([]byte(privateKey))
 	if err != nil {
 		return pubASN1, err
 	}
-	pubASN1, err = x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return pubASN1, err
+
+	switch key := privateKeyParsed.(type) {
+	case *rsa.PrivateKey:
+		pubASN1, err = x509.MarshalPKIXPublicKey(&key.PublicKey)
+		if err != nil {
+			return pubASN1, err
+		}
+		return []byte(base64.StdEncoding.EncodeToString(pubASN1)), nil
+	case crypto.PrivateKey:
+		type PrivateKeyType interface {
+			Public() crypto.PublicKey
+		}
+		pub := key.(PrivateKeyType).Public().(*rsa.PublicKey)
+		pubASN1, err = x509.MarshalPKIXPublicKey(&pub)
+		if err != nil {
+			return pubASN1, err
+		}
+		return []byte(base64.StdEncoding.EncodeToString(pubASN1)), nil
+	default:
+		return nil, fmt.Errorf("key not recognized")
 	}
-	return []byte(base64.StdEncoding.EncodeToString(pubASN1)), nil
 }
 func (e *ECS) DeleteKeyPair(keyName string) error {
 	svc := ec2.New(session.New())

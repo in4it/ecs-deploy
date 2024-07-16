@@ -17,7 +17,7 @@ ECS Deploy is a REST API server written in Go that can be used to deploy service
   </a>
 </p>
 
-## Usage
+## Installation
 
 ### Download
 
@@ -25,38 +25,48 @@ You can download ecs-deploy and ecs-client from the [releases page](https://gith
 
 ### Bootstrap ECS cluster
 
-You can bootstrap a new ECS cluster using ecs-deploy. It'll setup a autoscaling group, ALB, IAM roles, and the ECS cluster.
+You can bootstrap a new ECS cluster using the ecs-deploy binary. Make sure to have downloaded the ecs-deploy and ecs-client binary for your operating system at the [releases page](https://github.com/in4it/ecs-deploy/releases).
 
+The bootstrap command will create an autoscaling group, an Application Load Balancer, an IAM role for the ECS EC2 instances, and the ECS cluster itself.
+
+Create an SSH key for the EC2 instance using for example the following command:
+```
+ssh-keygen -f ~/.ssh/mykey
+```
+
+Then run ecs-deploy with the bootstrap option. To see all the flags, use ./ecs-deploy -h
 ```
 ./ecs-deploy --bootstrap \
-  --alb-security-groups sg-123456 \
+  --ecs-subnets subnet-123456 \
+  --ecs-vpc-id vpc-123456 \
   --cloudwatch-logs-enabled \
-  --cloudwatch-logs-prefix mycompany \
+  --cloudwatch-logs-prefix mycluster \
   --cluster-name mycluster \
   --ecs-desired-size 1 \
   --ecs-max-size 1 \
   --ecs-min-size 1 \
-  --ecs-security-groups sg-123456 \
-  --ecs-subnets subnet-123456 \
   --environment staging \
   --instance-type t2.micro \
   --key-name mykey \
-  --loadbalancer-domain cluster.in4it.io \
+  --loadbalancer-domain ecs-deploy.in4it.io \
   --paramstore-enabled \
-  --paramstore-kms-arn aws:arn:kms:region:accountid:key/1234 \
-  --paramstore-prefix mycompany \
+  --paramstore-prefix mycluster \
   --profile your-aws-profile \
   --region your-aws-region
 ```
 
-You'll need to setup the security groups and VPC/subnets first. The ALB security group should allow port 80 and 443 incoming, the ECS security group should allow 32768:61000 from the ALB.
+If you want to delete the cluster, you can run the same command with specifying --delete-cluster:
+```
+./ecs-deploy --delete-cluster mycluster \
+  --profile your-aws-profile \
+  --region your-aws-region
 
-If you no longer need the cluster, you can remove it by specifying --delete-cluster instead of --bootstrap
+```
 
 ### Bootstrap with terraform
 Alternatively you can use terraform to deploy the ecs cluster. See [terraform/README.md](https://github.com/in4it/ecs-deploy/blob/master/terraform/README.md) for a terraform module that spins up an ecs cluster.
 
-### Deploy to ECS Cluster
+### Deploy a service with ECS Cluster
 
 To deploy the examples (an nginx server and a echoserver), use ecs-client:
 
@@ -77,6 +87,8 @@ Deploy:
 
 
 ## Configuration (Environment variables)
+
+The environment variables are read from the parameter store. It is enabled with the `--paramstore-enabled` flag during the bootstrap.
 
 ### AWS Specific variables:
 

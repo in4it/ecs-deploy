@@ -107,7 +107,7 @@ func (e *IAM) CreateRoleWithPermissionBoundary(roleName, assumePolicyDocument, p
 	result, err := svc.CreateRole(input)
 	if err != nil {
 		iamLogger.Errorf(err.Error())
-		return nil, errors.New(fmt.Sprintf("Could not create role: %v", roleName))
+		return nil, fmt.Errorf("could not create role: %v: %s", roleName, err)
 	} else {
 		return result.Role.Arn, nil
 	}

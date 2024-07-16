@@ -3,7 +3,7 @@ package api
 import (
 	"encoding/base64"
 	"errors"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -133,7 +133,7 @@ func (e *Export) getTemplateMap(serviceName, clusterName string) error {
 	e.templateMap["${PARAMSTORE_KMS_ARN}"] = util.GetEnv("PARAMSTORE_KMS_ARN", "")
 	e.templateMap["${VPC_ID}"] = e.alb[loadBalancer].VpcId
 	if e.deployData.HealthCheck.HealthyThreshold != 0 {
-		b, err := ioutil.ReadFile("templates/export/alb_targetgroup_healthcheck.tf")
+		b, err := os.ReadFile("templates/export/alb_targetgroup_healthcheck.tf")
 		if err != nil {
 			exportLogger.Errorf("Can't read template templates/export/alb_targetgroup_healthcheck.tf")
 			return err
@@ -185,7 +185,7 @@ func (e *Export) getTemplate(template string) (*string, error) {
 	parameter, ok := e.p.Parameters["TEMPLATES_EXPORT_"+strings.Replace(strings.ToUpper(template), ".", "_", -1)]
 	str := parameter.Value
 	if !ok {
-		b, err := ioutil.ReadFile("templates/export/" + template)
+		b, err := os.ReadFile("templates/export/" + template)
 		if err != nil {
 			exportLogger.Errorf("Can't read template templates/export/" + template)
 			return nil, err

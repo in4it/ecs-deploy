@@ -1,10 +1,11 @@
 SERVER_BINARY = ecs-deploy
 CLIENT_BINARY = ecs-client
 GOARCH = amd64
+GOARCH2 = arm64
 
 all: build
 
-build: build-server build-client
+build: build-server build-server-darwin build-client build-client-darwin
 
 build-static: build-server-static build-client-static
 
@@ -14,12 +15,14 @@ build-server:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 
 
 build-server-darwin:
-	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${SERVER_BINARY}-darwin-${GOARCH} cmd/ecs-deploy/main.go 
+	GOOS=darwin GOARCH=${GOARCH2} go build ${LDFLAGS} -o ${SERVER_BINARY}-darwin-${GOARCH2} cmd/ecs-deploy/main.go 
 
 build-client:
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
 build-client-darwin:
-	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${CLIENT_BINARY}-linux-${GOARCH} cmd/ecs-client/main.go 
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${CLIENT_BINARY}-darwin-${GOARCH} cmd/ecs-client/main.go 
+	GOOS=darwin GOARCH=${GOARCH2} go build ${LDFLAGS} -o ${CLIENT_BINARY}-darwin-${GOARCH2} cmd/ecs-client/main.go 
 
 build-server-static:
 	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -a -installsuffix cgo ${LDFLAGS} -o ${SERVER_BINARY}-linux-${GOARCH} cmd/ecs-deploy/main.go 

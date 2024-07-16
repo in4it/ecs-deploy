@@ -12,7 +12,7 @@ import { DeploymentListComponent } from './deployment-list/deployment-list.compo
 import { DeploymentListResolver }   from './deployment-list/deployment-list-resolver.service';
 import { DeploymentListService }   from './deployment-list/deployment-list.service';
 
-import {HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 
 import { RouterModule, Routes } from '@angular/router';
 import { LoginComponent } from './login/login.component';
@@ -67,47 +67,39 @@ const appRoutes: Routes = [
 ];
 
 
-@NgModule({
-  declarations: [
-    AppComponent,
-    AlertComponent,
-    AppNavbarComponent,
-    DeploymentListComponent,
-    LoginComponent,
-    LoginSAMLComponent,
-    ErrorComponent,
-    ServiceListComponent,
-    ServiceDetailComponent,
-    InspectChildComponent,
-    DeployChildComponent,
-    ConfirmChildComponent,
-  ],
-  imports: [
-    BrowserModule,
-    ReactiveFormsModule,
-    HttpClientModule,
-    FormsModule,
-    RouterModule.forRoot(
-      appRoutes,
-      { enableTracing: false } // <-- debugging purposes only
- // <-- debugging purposes only
- // <-- debugging purposes only
-    ),
-    NgbModule
-  ],
-  providers: [
-    AuthGuard,
-    AlertService,
-    AuthService,
-    DeploymentListService,
-    DeploymentListResolver,
-    ServiceListResolver,
-    ServiceListService,
-    ServiceDetailResolver,
-    ServiceDetailService,
-    { provide: HTTP_INTERCEPTORS, useClass: AppHttpInterceptor, multi: true },
-  ],
-  bootstrap: [AppComponent]
-})
+@NgModule({ declarations: [
+        AppComponent,
+        AlertComponent,
+        AppNavbarComponent,
+        DeploymentListComponent,
+        LoginComponent,
+        LoginSAMLComponent,
+        ErrorComponent,
+        ServiceListComponent,
+        ServiceDetailComponent,
+        InspectChildComponent,
+        DeployChildComponent,
+        ConfirmChildComponent,
+    ],
+    bootstrap: [AppComponent], imports: [BrowserModule,
+        ReactiveFormsModule,
+        FormsModule,
+        RouterModule.forRoot(appRoutes, { enableTracing: false } // <-- debugging purposes only
+        // <-- debugging purposes only
+        // <-- debugging purposes only
+        ),
+        NgbModule], providers: [
+        AuthGuard,
+        AlertService,
+        AuthService,
+        DeploymentListService,
+        DeploymentListResolver,
+        ServiceListResolver,
+        ServiceListService,
+        ServiceDetailResolver,
+        ServiceDetailService,
+        { provide: HTTP_INTERCEPTORS, useClass: AppHttpInterceptor, multi: true },
+        provideHttpClient(withInterceptorsFromDi()),
+    ] })
 
 export class AppModule { }

@@ -2,7 +2,7 @@
 
 
 import { AsyncSubject } from 'rxjs';
-import {HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { AuthService } from '../services/auth.service';
 
 

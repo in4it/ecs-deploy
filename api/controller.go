@@ -1,6 +1,8 @@
 package api
 
 import (
+	"embed"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/in4it/ecs-deploy/integrations"
 	"github.com/in4it/ecs-deploy/provider/ecs"
@@ -10,13 +12,17 @@ import (
 
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// embeddings (default templates)
+//
+//go:embed default-templates/*
+var defaultTemplates embed.FS
 
 // Controller struct
 type Controller struct {
@@ -1064,6 +1070,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		},
 	}
 	e := ecs.ECS{}
+	ec2 := ecs.EC2{}
 	iam := ecs.IAM{}
 	paramstore := ecs.Paramstore{}
 	s := service.NewService()
@@ -1085,20 +1092,26 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	_, err = iam.CreateRole(roleName, iam.GetEC2IAMTrust())
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "EntityAlreadyExists") {
 		return err
 	}
 	var ec2RolePolicy string
 	if b.CloudwatchLogsEnabled {
-		r, err := ioutil.ReadFile("templates/iam/ecs-ec2-policy-logs.json")
+		r, err := os.ReadFile("templates/iam/ecs-ec2-policy-logs.json")
 		if err != nil {
-			return err
+			r, err = defaultTemplates.ReadFile("default-templates/ecs-ec2-policy-logs.json")
+			if err != nil {
+				return fmt.Errorf("could not read default template ecs-ec2-policy-logs.json: %s", err)
+			}
 		}
 		ec2RolePolicy = strings.Replace(string(r), "${LOGS_RESOURCE}", "arn:aws:logs:"+b.Region+":"+iam.AccountId+":log-group:"+b.CloudwatchLogsPrefix+"-"+b.Environment+":*", -1)
 	} else {
-		r, err := ioutil.ReadFile("templates/iam/ecs-ec2-policy.json")
+		r, err := os.ReadFile("templates/iam/ecs-ec2-policy.json")
 		if err != nil {
-			return err
+			r, err = defaultTemplates.ReadFile("default-templates/ecs-ec2-policy.json")
+			if err != nil {
+				return fmt.Errorf("could not read default template ecs-ec2-policy: %s", err)
+			}
 		}
 		ec2RolePolicy = string(r)
 	}
@@ -1106,12 +1119,14 @@ func (c *Controller) Bootstrap(b *Flags) error {
 
 	// wait for role instance profile to exist
 	err = iam.CreateInstanceProfile(roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "EntityAlreadyExists") {
 		return err
 	}
-	err = iam.AddRoleToInstanceProfile(roleName, roleName)
-	if err != nil {
-		return err
+	if err == nil {
+		err = iam.AddRoleToInstanceProfile(roleName, roleName)
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Println("Waiting until instance profile exists...")
 	err = iam.WaitUntilInstanceProfileExists(roleName)
@@ -1119,7 +1134,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	// import key
-	r, err := ioutil.ReadFile(util.GetEnv("HOME", "") + "/.ssh/" + b.KeyName)
+	r, err := os.ReadFile(util.GetEnv("HOME", "") + "/.ssh/" + b.KeyName)
 	if err != nil {
 		return err
 	}
@@ -1127,7 +1142,39 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	if err != nil {
 		return err
 	}
-	e.ImportKeyPair(b.ClusterName, pubKey)
+	e.ImportKeyPair(b.KeyName, pubKey)
+
+	// create security groups if not supplied
+	if b.AlbSecurityGroups == "" {
+		if b.EcsVpcId == "" {
+			return fmt.Errorf("vpc id is empty")
+		}
+		b.AlbSecurityGroups, err = ec2.CreateSecurityGroup("ecs-deploy-alb-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupIngressRule(b.AlbSecurityGroups, 80, 80, "tcp", "", "0.0.0.0/0")
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group rule error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupIngressRule(b.AlbSecurityGroups, 443, 443, "tcp", "", "0.0.0.0/0")
+		if err != nil {
+			return fmt.Errorf("create ALB Security Group rule error: %s", err)
+		}
+	}
+	if b.EcsSecurityGroups == "" {
+		if b.EcsVpcId == "" {
+			return fmt.Errorf("vpc id is empty")
+		}
+		b.EcsSecurityGroups, err = ec2.CreateSecurityGroup("ecs-deploy-cluster-sg", "ALB Security group for ecs-deploy", b.EcsVpcId)
+		if err != nil {
+			return fmt.Errorf("create ECS Security Group error: %s", err)
+		}
+		err = ec2.CreateSecurityGroupIngressRule(b.EcsSecurityGroups, 0, 65535, "tcp", b.AlbSecurityGroups, "")
+		if err != nil {
+			return fmt.Errorf("create ECS Security Group rule error: %s", err)
+		}
+	}
 
 	// create launch configuration
 	err = autoscaling.CreateLaunchConfiguration(b.ClusterName, b.KeyName, b.InstanceType, instanceProfile, strings.Split(b.EcsSecurityGroups, ","))
@@ -1156,7 +1203,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 	// create log group
 	if b.CloudwatchLogsEnabled {
 		err = cloudwatch.CreateLogGroup(b.ClusterName, b.CloudwatchLogsPrefix+"-"+b.Environment)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "ResourceAlreadyExistsException") {
 			return err
 		}
 	}
@@ -1166,9 +1213,6 @@ func (c *Controller) Bootstrap(b *Flags) error {
 		return err
 	}
 	fmt.Printf("Created ECS Cluster with ARN: %v\n", *clusterArn)
-	if b.AlbSecurityGroups == "" || b.EcsSubnets == "" {
-		return errors.New("Incorrect test arguments supplied")
-	}
 	if len(b.LoadBalancers) == 0 {
 		b.LoadBalancers = []service.LoadBalancer{
 			{
@@ -1204,6 +1248,7 @@ func (c *Controller) Bootstrap(b *Flags) error {
 			{Name: "JWT_SECRET", Value: util.RandStringBytesMaskImprSrc(32)},
 			{Name: "DEPLOY_PASSWORD", Value: deployPassword},
 			{Name: "URL_PREFIX", Value: "/ecs-deploy"},
+			{Name: "AWS_ACCOUNT_ENV", Value: b.Environment},
 		}
 		if b.ParamstoreKmsArn != "" {
 			parameters = append(parameters, service.DeployServiceParameter{Name: "PARAMSTORE_KMS_ARN", Value: b.ParamstoreKmsArn})
@@ -1235,12 +1280,17 @@ func (c *Controller) Bootstrap(b *Flags) error {
 				return err
 			}
 		}
-		r, err := ioutil.ReadFile("templates/iam/ecs-deploy-task.json")
+		r, err := os.ReadFile("templates/iam/ecs-deploy-task.json")
 		if err != nil {
-			return err
+			r, err = defaultTemplates.ReadFile("default-templates/ecs-deploy-task.json")
+			if err != nil {
+				return fmt.Errorf("could not read default template ecs-deploy-task.json: %s", err)
+			}
 		}
 		ecsDeployRolePolicy := strings.Replace(string(r), "${ACCOUNT_ID}", iam.AccountId, -1)
 		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${AWS_REGION}", b.Region, -1)
+		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${PARAMSTORE_PREFIX}", b.ParamstorePrefix, -1)
+		ecsDeployRolePolicy = strings.Replace(ecsDeployRolePolicy, "${ENV}", b.Environment, -1)
 		err = iam.PutRolePolicy("ecs-ecs-deploy", "ecs-deploy", ecsDeployRolePolicy)
 		if err != nil {
 			return err
@@ -1285,11 +1335,11 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 	roleName := "ecs-" + clusterName
 	cloudwatch := ecs.CloudWatch{}
 	err := autoscaling.DeleteAutoScalingGroup(clusterName, true)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "AutoScalingGroup name not found") {
 		return err
 	}
 	err = autoscaling.DeleteLaunchConfiguration(clusterName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "Launch configuration name not found") {
 		return err
 	}
 	err = e.DeleteKeyPair(clusterName)
@@ -1297,19 +1347,19 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		return err
 	}
 	err = iam.DeleteRolePolicy(roleName, "ecs-ec2-policy")
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	err = iam.RemoveRoleFromInstanceProfile(roleName, roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	err = iam.DeleteInstanceProfile(roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	err = iam.DeleteRole(roleName)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "NoSuchEntity") {
 		return err
 	}
 	if len(b.LoadBalancers) == 0 {
@@ -1325,6 +1375,9 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 	for _, v := range b.LoadBalancers {
 		alb, err := ecs.NewALB(v.Name)
 		if err != nil {
+			if strings.Contains(err.Error(), "Could not describe loadbalancer") {
+				continue
+			}
 			return err
 		}
 		for _, v := range alb.Listeners {
@@ -1337,7 +1390,7 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		if err != nil {
 			return err
 		}
-		services, err := e.DescribeServices(clusterName, serviceArns, false, false, false)
+		services, _ := e.DescribeServices(clusterName, serviceArns, false, false, false)
 		for _, v := range services {
 			targetGroup, _ := alb.GetTargetGroupArn(v.ServiceName)
 			if targetGroup != nil {
@@ -1357,7 +1410,7 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 			return err
 		}
 	}
-	fmt.Println("Wait for autoscaling group to not exist")
+	fmt.Println("Wait for autoscaling group deletion")
 	err = autoscaling.WaitForAutoScalingGroupNotExists(clusterName)
 	if err != nil {
 		return err
@@ -1380,9 +1433,31 @@ func (c *Controller) DeleteCluster(b *Flags) error {
 		return err
 	}
 	err = cloudwatch.DeleteLogGroup(b.CloudwatchLogsPrefix + "-" + b.Environment)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "ResourceNotFoundException") {
 		return err
 	}
+
+	// delete security groups
+	ec2 := ecs.EC2{}
+
+	clusterSecGroupId, err := ec2.GetSecurityGroupID("ecs-deploy-cluster-sg")
+	if err == nil && clusterSecGroupId != "" {
+		err = ec2.DeleteSecurityGroup(clusterSecGroupId)
+		if err != nil {
+			return err
+		}
+	}
+
+	albSecGroupId, err := ec2.GetSecurityGroupID("ecs-deploy-alb-sg")
+	if err == nil && albSecGroupId != "" {
+		err = ec2.DeleteSecurityGroup(albSecGroupId)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("Cluster deleted\n")
+
 	return nil
 }
 

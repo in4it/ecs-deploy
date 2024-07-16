@@ -46,6 +46,7 @@ func addFlags(f *api.Flags, fs *pflag.FlagSet) {
 	fs.StringVar(&f.Environment, "environment", f.Environment, "environment (dev/test/staging/uat/prod)")
 	fs.StringVar(&f.AlbSecurityGroups, "alb-security-groups", f.AlbSecurityGroups, "security groups to attach to the Application Load Balancer")
 	fs.StringVar(&f.EcsSubnets, "ecs-subnets", f.EcsSubnets, "subnets to use for AWS ECS")
+	fs.StringVar(&f.EcsVpcId, "ecs-vpc-id", f.EcsVpcId, "ecs vpc id to deploy in")
 	fs.StringVar(&f.CloudwatchLogsPrefix, "cloudwatch-logs-prefix", f.CloudwatchLogsPrefix, "prefix for cloudwatch logs (e.g. mycompany)")
 	fs.BoolVar(&f.CloudwatchLogsEnabled, "cloudwatch-logs-enabled", f.CloudwatchLogsEnabled, "enable cloudwatch logs")
 	fs.StringVar(&f.KeyName, "key-name", f.KeyName, "ssh key name")

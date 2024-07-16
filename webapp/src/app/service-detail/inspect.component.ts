@@ -2,7 +2,7 @@ import { Component, OnInit, ViewChild } from '@angular/core';
 import { NgbModal, ModalDismissReasons } from '@ng-bootstrap/ng-bootstrap';
 import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 
-import * as moment from 'moment';
+import moment from 'moment';
 
 @Component({
   selector: 'app-service-detail-inspect',

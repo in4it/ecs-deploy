@@ -152,7 +152,7 @@ func runtask(session Session, deployFlags *DeployFlags) (bool, error) {
 	if fi, err := os.Stat(deployFlags.Filename); err != nil || fi.IsDir() {
 		return true, errors.New("runtask expects a single json file")
 	}
-	content, err := ioutil.ReadFile(deployFlags.Filename)
+	content, err := os.ReadFile(deployFlags.Filename)
 	if err != nil {
 		return true, err
 	}
@@ -448,7 +448,7 @@ func parseFile(filename, fType, serviceName string) ([]service.Deploy, error) {
 	// set defaults for singledeploy
 	service.SetDeployDefaults(&singleDeploy)
 
-	content, err := ioutil.ReadFile(filename)
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		return deploy.Services, fmt.Errorf("Could not read file: %v\n", filename)
 	}
@@ -541,7 +541,7 @@ func createRepository(session Session, repository string) (string, error) {
 
 func readSession() (Session, error) {
 	var session Session
-	content, err := ioutil.ReadFile(filepath.Join(os.Getenv("HOME"), ".ecsdeploy", "session.json"))
+	content, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".ecsdeploy", "session.json"))
 	if err != nil {
 		// no file present, return empty session
 		return session, nil
