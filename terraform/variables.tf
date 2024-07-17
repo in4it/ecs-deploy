@@ -9,7 +9,7 @@ variable "ecs_deploy_image" {
 
 variable "ecs_deploy_version" {
   description = "ecs deploy version"
-  default     = "v1.0.42"
+  default     = "v1.0.43"
 }
 
 variable "ecs_deploy_debug" {
