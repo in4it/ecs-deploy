@@ -15,6 +15,7 @@ import (
 	"github.com/juju/loggo"
 
 	"context"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -224,12 +225,19 @@ func (e *ECS) GetPubKeyFromPrivateKey(privateKey string) ([]byte, error) {
 		type PrivateKeyType interface {
 			Public() crypto.PublicKey
 		}
-		pub := key.(PrivateKeyType).Public().(*rsa.PublicKey)
-		pubASN1, err = x509.MarshalPKIXPublicKey(&pub)
-		if err != nil {
-			return pubASN1, err
+		switch pub := key.(PrivateKeyType).Public().(type) {
+		case *rsa.PublicKey:
+			pubASN1, err = x509.MarshalPKIXPublicKey(&pub)
+			if err != nil {
+				return pubASN1, err
+			}
+			return []byte(base64.StdEncoding.EncodeToString(pubASN1)), nil
+		case ed25519.PublicKey:
+			pubPublicKey, _ := ssh.NewPublicKey(pub)
+			return []byte("ssh-ed25519 " + base64.StdEncoding.EncodeToString(pubPublicKey.Marshal())), nil
+		default:
+			return nil, fmt.Errorf("public key not recognized")
 		}
-		return []byte(base64.StdEncoding.EncodeToString(pubASN1)), nil
 	default:
 		return nil, fmt.Errorf("key not recognized")
 	}

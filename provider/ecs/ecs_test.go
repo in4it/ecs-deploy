@@ -280,9 +280,25 @@ y0TLMJm24TAuczkuk6L6n5RoPdpgRp86KYAB39RdagUIIVCq/MnbcC4rwQFL4noS66WAEm
 vFqtibLgLBJnKFAAAAJmVkd2FyZHZpYWVuZUBFZHdhcmRzLU1hY0Jvb2stUHJvLmxvY2Fs
 AQIDBA==
 -----END OPENSSH PRIVATE KEY-----`
+	testPrivateKey2 := `-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACBsw+G3/9NE22bEdRbk+M94d/t5+TKptF7wcoiB2DLduAAAALBREWvsURFr
+7AAAAAtzc2gtZWQyNTUxOQAAACBsw+G3/9NE22bEdRbk+M94d/t5+TKptF7wcoiB2DLduA
+AAAEA2BZRVJZsR7h3pVd8030+vuvV0sB63muBHwNtCqe49s2zD4bf/00TbZsR1FuT4z3h3
++3n5Mqm0XvByiIHYMt24AAAAJmVkd2FyZHZpYWVuZUBFZHdhcmRzLU1hY0Jvb2stUHJvLm
+xvY2FsAQIDBAUGBw==
+-----END OPENSSH PRIVATE KEY-----`
 	e := ECS{}
 	_, err := e.GetPubKeyFromPrivateKey(testPrivateKey)
 	if err != nil {
 		t.Errorf("cannot parse private key: %s", err)
+	}
+	out, err := e.GetPubKeyFromPrivateKey(testPrivateKey2)
+	if err != nil {
+		t.Errorf("cannot parse private key: %s", err)
+	}
+	expected := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGzD4bf/00TbZsR1FuT4z3h3+3n5Mqm0XvByiIHYMt24"
+	if string(out) != expected {
+		t.Errorf("mismatch in public key output: %s vs %s", string(out), expected)
 	}
 }
