@@ -227,6 +227,10 @@ variable "ecs_whitelist" {
   default = "0.0.0.0/0"
 }
 
+variable "prod_code" {
+  default = "3x0v7m3npdgzaiw2f8lwsgju5"
+}
+
 variable "ecs_ecr_scan_on_push" {
   default = "false"
 }

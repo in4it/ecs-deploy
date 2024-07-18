@@ -39,6 +39,10 @@
       {
         "name": "ECS_WHITELIST",
         "value": "${ECS_WHITELIST}"
+      },
+      {
+        "name": "PROD_CODE",
+        "value": "${PROD_CODE}"
       }
     ]
   }
