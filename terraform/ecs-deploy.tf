@@ -56,6 +56,7 @@ locals {
     APPMESH_NAME          = var.ecs_deploy_appmesh_name
     APPMESH_ENVOY_RELEASE = var.ecs_deploy_appmesh_release
     ECS_WHITELIST         = var.ecs_whitelist
+    PROD_CODE             = var.prod_code
 
     ECS_DEPLOY_CPU                = var.ecs_deploy_cpu
     ECS_DEPLOY_MEMORY_RESERVATION = var.ecs_deploy_memory_reservation
@@ -245,6 +246,13 @@ resource "aws_iam_role_policy" "ecs-deploy-policy" {
         "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/ecs-deploy",
         "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/ecs-deploy/*"
       ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "aws-marketplace:RegisterUsage"
+      ],
+      "Resource": "*"
     }
   ]
 }
