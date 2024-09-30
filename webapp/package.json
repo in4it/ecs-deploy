@@ -29,7 +29,7 @@
     "@ng-bootstrap/ng-bootstrap": "^17.0.0",
     "@schematics/angular": "^8.3.29",
     "awesome-bootstrap-checkbox": "^1.0.1",
-    "bootstrap": "^4.4.1",
+    "bootstrap": "^5.0.0",
     "core-js": "^2.6.11",
     "font-awesome": "^4.7.0",
     "html-webpack-plugin": "^4.5.2",
