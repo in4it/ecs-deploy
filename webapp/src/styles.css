@@ -78,3 +78,15 @@ ngb-modal-backdrop {
 label {
   margin-bottom: 0.5rem;
 }
+
+/* navbar fixes */
+nav.navbar {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.nav-link {
+  cursor: pointer
+}
+.top-link {
+  color:#FFFFFF;
+}

@@ -24,9 +24,9 @@
           <tr *ngFor="let deployment of deployments">
             <td>{{deployment.Date}}</td>
             <td>{{deployment.ServiceName}}</td>
-            <td *ngIf="deployment.Status == 'success'"><span class="badge badge-success">{{deployment.Status}}</span></td>
-            <td *ngIf="deployment.Status == 'failed'"><span class="badge badge-danger">{{deployment.Status}}</span></td>
-            <td *ngIf="deployment.Status == 'aborted'"><span class="badge badge-info">{{deployment.Status}}</span></td>
+            <td *ngIf="deployment.Status == 'success'"><span class="badge rounded-pill bg-success">{{deployment.Status}}</span></td>
+            <td *ngIf="deployment.Status == 'failed'"><span class="badge rounded-pill bg-danger">{{deployment.Status}}</span></td>
+            <td *ngIf="deployment.Status == 'aborted'"><span class="badge rounded-pill bg-info">{{deployment.Status}}</span></td>
             <td *ngIf="deployment.Status == ''"></td>
             <td>{{deployment.TaskDefinitionVersion}}</td>
           </tr>
