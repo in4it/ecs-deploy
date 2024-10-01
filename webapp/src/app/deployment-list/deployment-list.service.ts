@@ -32,13 +32,7 @@ export class DeploymentListService {
   }
 
   getDeployments(serviceName: string) {
-    var url
-    if(serviceName == "") {
-      url = "/ecs-deploy/api/v1/deploy/list"
-    } else {
-      url = "/ecs-deploy/api/v1/deploy/list/" + serviceName
-    }
-    this.http.get(url, {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
+    this.http.get("/ecs-deploy/api/v1/deploy/list", {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())})
       .subscribe(data => {
       // Read the result field from the JSON response.
       this.dl.deployments = data["deployments"]
@@ -52,7 +46,7 @@ export class DeploymentListService {
           this.dl.deployments[i]["TaskDefinitionVersion"] = s[1]
         }
       }
-      this.dl.deployments.sort(function(a,b) {return (a["Time"] > b["Time"]) ? -1 : ((b["Time"] > a["Time"]) ? 1 : 0);} ); 
+      this.dl.deployments.sort(function(a,b) {return (a["Time"] > b["Time"]) ? -1 : ((b["Time"] > a["Time"]) ? 1 : 0);} );
       if(this.dl.services.length > 0) {
         this.dl$.next(this.dl)
         this.dl$.complete()
@@ -66,6 +60,7 @@ export class DeploymentListService {
     this.http.get('/ecs-deploy/api/v1/service/list', {headers: new HttpHeaders().set('Authorization', "Bearer " + this.auth.getToken())}).subscribe(data => {
       // Read the result field from the JSON response.
       this.dl.services = data['services'];
+      this.dl.services.sort(function(a,b) {return (a["S"] < b["S"]) ? -1 : ((b["S"] < a["S"]) ? 1 : 0);} );
       if(this.dl.deployments == null) {
         return
       }

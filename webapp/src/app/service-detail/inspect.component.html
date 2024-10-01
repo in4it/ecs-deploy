@@ -1,9 +1,7 @@
 <ng-template #inspect let-c="close" let-d="dismiss">
   <div class="modal-header">
     <h4 class="modal-title">{{serviceName}}</h4>
-    <button type="button" class="close" aria-label="Close" (click)="d('Cross click')">
-      <span aria-hidden="true">&times;</span>
-    </button>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" (click)="d('Cross click')"></button>
   </div>
   <div class="modal-body">
     <span *ngIf="loading" class="sr-only">Loading...</span>
@@ -70,6 +68,6 @@
     </div>
   </div>
   <div class="modal-footer">
-    <button type="button" class="btn btn-outline-dark" (click)="c('Close click')">Close</button>
+    <button type="button" class="btn btn-dark" (click)="c('Close click')">Close</button>
   </div>
 </ng-template>

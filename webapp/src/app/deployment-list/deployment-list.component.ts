@@ -14,7 +14,7 @@ import { DeploymentList, DeploymentListService }  from './deployment-list.servic
 export class DeploymentListComponent implements OnInit {
   services: string[] = [];
   deployments: string[] = [];
-  filterActive: boolean = false
+  filterList: string[] = [];
 
   constructor(
     private route: ActivatedRoute,
@@ -27,43 +27,29 @@ export class DeploymentListComponent implements OnInit {
       .subscribe((data: { dl: DeploymentList }) => {
         this.deployments = data.dl.deployments;
         this.services = data.dl.services;
+        this.filterList = []
      });
   }
 
   filter(event: any, serviceName: string) {
-    console.log("Filter: " + serviceName + ": " + event.target.checked)
     if(event.target.checked) {
-      this.ds.getDeploymentList(serviceName).subscribe((data: DeploymentList ) => {
-        if(data.deployments.length != 0) {
-          if(this.filterActive) {
-            // merge if filter is active
-            this.deployments = [ ...this.deployments, ...data.deployments];
-          } else {
-            this.deployments = data.deployments
-          }
-          this.deployments.sort(function(a,b) {return (a["Time"] > b["Time"]) ? -1 : ((b["Time"] > a["Time"]) ? 1 : 0);} ); 
-          this.filterActive = true
-        }
-      });
+      this.filterList.push(serviceName)
     } else {
-      var newDeployments = [];
-      for (let deployment of this.deployments) {
-        if(deployment["ServiceName"] != serviceName) {
-          newDeployments.push(deployment)
-        }
-      }
-      if(newDeployments.length != this.deployments.length) {
-        this.deployments = newDeployments
-      }
-      if(newDeployments.length == 0) {
-        this.filterActive = false
-        this.ds.getDeploymentList("").subscribe((data: DeploymentList ) => {
-          if(data.deployments.length != 0) {
-            this.deployments = data.deployments
-          }
-        });
-      }
+      this.filterList = this.filterList.filter(a => a !== serviceName)
     }
-  }
 
+    this.ds.getDeploymentList(serviceName).subscribe((data: DeploymentList ) => {
+      if(data.deployments.length != 0) {
+        this.deployments = data.deployments.filter((deployment) => {
+          if (this.filterList.length === 0) { return true }
+          for (var i = 0; i < this.filterList.length; i++) {
+            if(this.filterList[i] == deployment["ServiceName"]) {
+              return true
+            }
+          }
+          return false
+        })
+      }
+    });
+  }
 }

@@ -17,6 +17,7 @@
             "index": "src/index.html",
             "tsConfig": "src/tsconfig.app.json",
             "polyfills": [
+              "@angular/localize/init",
               "src/polyfills.ts"
             ],
             "assets": [
