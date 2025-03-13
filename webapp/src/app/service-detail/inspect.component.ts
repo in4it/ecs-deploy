@@ -5,8 +5,9 @@ import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 import moment from 'moment';
 
 @Component({
-  selector: 'app-service-detail-inspect',
-  templateUrl: './inspect.component.html',
+    selector: 'app-service-detail-inspect',
+    templateUrl: './inspect.component.html',
+    standalone: false
 })
 export class InspectChildComponent implements OnInit {
 

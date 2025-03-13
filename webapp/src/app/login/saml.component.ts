@@ -9,8 +9,9 @@ import { AuthService } from '../services/index';
 
 
 @Component({
-  selector: 'app-saml',
-  template: `<i class="fa fa-refresh fa-spin fa-3x fa-fw"></i><span class="sr-only">Loading...</span>`
+    selector: 'app-saml',
+    template: `<i class="fa fa-refresh fa-spin fa-3x fa-fw"></i><span class="sr-only">Loading...</span>`,
+    standalone: false
 })
 export class LoginSAMLComponent implements OnInit {
 

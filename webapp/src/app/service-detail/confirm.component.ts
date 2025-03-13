@@ -5,8 +5,9 @@ import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 import * as moment from 'moment';
 
 @Component({
-  selector: 'app-service-detail-confirm',
-  templateUrl: './confirm.component.html',
+    selector: 'app-service-detail-confirm',
+    templateUrl: './confirm.component.html',
+    standalone: false
 })
 export class ConfirmChildComponent implements OnInit {
 

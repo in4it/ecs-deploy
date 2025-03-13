@@ -6,9 +6,10 @@ import { ServiceList, ServiceListService }  from './service-list.service';
 import moment from 'moment';
 
 @Component({
-  selector: 'app-service-list',
-  templateUrl: './service-list.component.html',
-  styleUrls: ['./service-list.component.css']
+    selector: 'app-service-list',
+    templateUrl: './service-list.component.html',
+    styleUrls: ['./service-list.component.css'],
+    standalone: false
 })
 export class ServiceListComponent implements OnInit {
 

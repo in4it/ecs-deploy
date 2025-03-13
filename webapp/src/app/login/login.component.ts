@@ -5,9 +5,10 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { AlertService, AuthService } from '../services/index';
 
 @Component({
-  selector: 'app-login',
-  templateUrl: './login.component.html',
-  styleUrls: ['./login.component.css']
+    selector: 'app-login',
+    templateUrl: './login.component.html',
+    styleUrls: ['./login.component.css'],
+    standalone: false
 })
 export class LoginComponent implements OnInit {
 
