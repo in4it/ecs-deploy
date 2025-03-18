@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Router, NavigationStart } from '@angular/router';
-import { Observable ,  Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 
 @Injectable()
 export class AlertService {
@@ -16,7 +16,7 @@ export class AlertService {
                     this.keepAfterNavigationChange = false;
                 } else {
                     // clear alert
-                    this.subject.next();
+                    this.subject.next(null);
                 }
             }
         });
@@ -26,7 +26,7 @@ export class AlertService {
         this.keepAfterNavigationChange = keepAfterNavigationChange;
         this.subject.next({ type: 'success', text: message });
         if(removeAfterDelay > 0 ) {
-          setTimeout(()=>{ this.subject.next() }, removeAfterDelay * 1000)
+          setTimeout(()=>{ this.subject.next(null) }, removeAfterDelay * 1000)
         }
     }
 
@@ -34,7 +34,7 @@ export class AlertService {
         this.keepAfterNavigationChange = keepAfterNavigationChange;
         this.subject.next({ type: 'error', text: message });
         if(removeAfterDelay > 0 ) {
-          setTimeout(()=>{ this.subject.next() }, removeAfterDelay * 1000)
+          setTimeout(()=>{ this.subject.next(null) }, removeAfterDelay * 1000)
         }
     }
 
