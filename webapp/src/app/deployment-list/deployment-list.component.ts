@@ -6,9 +6,10 @@ import { DeploymentList, DeploymentListService }  from './deployment-list.servic
 
 
 @Component({
-  selector: 'app-deployment-list',
-  templateUrl: './deployment-list.component.html',
-  styleUrls: ['./deployment-list.component.css']
+    selector: 'app-deployment-list',
+    templateUrl: './deployment-list.component.html',
+    styleUrls: ['./deployment-list.component.css'],
+    standalone: false
 })
 
 export class DeploymentListComponent implements OnInit {

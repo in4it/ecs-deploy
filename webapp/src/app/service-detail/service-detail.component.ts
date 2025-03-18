@@ -12,9 +12,10 @@ import { AlertService } from '../services/index';
 import moment from 'moment';
 
 @Component({
-  selector: 'app-service-detail',
-  templateUrl: './service-detail.component.html',
-  styleUrls: ['./service-detail.component.css']
+    selector: 'app-service-detail',
+    templateUrl: './service-detail.component.html',
+    styleUrls: ['./service-detail.component.css'],
+    standalone: false
 })
 export class ServiceDetailComponent implements OnInit {
 
