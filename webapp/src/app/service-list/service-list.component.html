@@ -2,12 +2,15 @@
   <div class="container">
     <h1>Services</h1>
     <div class="row">
-      <div class="card" *ngFor="let service of services">
-        <ul class="list-group">
-          <li class="list-group-item title"><h2>{{service.serviceName}}</h2></li>
-          <li class="list-group-item justify-content-between">
-            {{service.deploymentMap["PRIMARY"].runningCount}} / {{service.deploymentMap["PRIMARY"].desiredCount}} tasks running
-            &nbsp;<span class="badge badge-warning" *ngIf="service.deploymentMap['PRIMARY'].runningCount &lt; service.deploymentMap['PRIMARY'].desiredCount">&nbsp;Warning&nbsp;</span>
+      @for (service of services; track service) {
+        <div class="card">
+          <ul class="list-group">
+            <li class="list-group-item title"><h2>{{service.serviceName}}</h2></li>
+            <li class="list-group-item justify-content-between">
+              {{service.deploymentMap["PRIMARY"].runningCount}} / {{service.deploymentMap["PRIMARY"].desiredCount}} tasks running
+              &nbsp;@if (service.deploymentMap['PRIMARY'].runningCount < service.deploymentMap['PRIMARY'].desiredCount) {
+              <span class="badge badge-warning">&nbsp;Warning&nbsp;</span>
+            }
           </li>
           <li class="list-group-item justify-content-between">
             Last successful deploy: {{service.deploymentMap["PRIMARY"].lastDeploy}}
@@ -17,5 +20,6 @@
           </li>
         </ul>
       </div>
+    }
   </div>
 </div>

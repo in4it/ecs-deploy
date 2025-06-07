@@ -25,537 +25,679 @@
       </li>
     </ul>
   </div>
-  <div class="offset-md-2 col-md-8" *ngIf="tab == 'service'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      <div class="row">
-        <div class="col-md-4 cluster-info">
-          <ul class="list-group list-group-horizontal">
-            <li class="list-group-item list-group-item-success" *ngIf="service.status == 'ACTIVE'">Service Status: {{service.status}}</li>
-            <li class="list-group-item list-group-item-warning" *ngIf="service.status != 'ACTIVE'">Service Status: {{service.status}}</li>
-          </ul>
-        </div>
-        <div class="col-md-8 cluster-info right-buttons">
-            <ul class="list-inline">
-              <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
-            </ul>
-        </div>
-      </div>
-      <div *ngIf="service['deploymentMap']['ACTIVE']">
-        <div class="alert alert-primary" role="alert" >
-          Deployment in progress...
-        </div>
-        <table class="table center-table">
-          <thead class="thead-default">
-            <tr>
-              <th class="w-40">Deployed at</th>
-              <th class="w-20">Services</th>
-              <th class="w-15"></th>
-              <th class="w-25"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{{service["deploymentMap"]["ACTIVE"]["lastDeploy"]}}</td>
-              <td>
-                <strong>{{service["deploymentMap"]["ACTIVE"]["desiredCount"]}} / {{service["deploymentMap"]["ACTIVE"]["runningCount"]}}</strong> running
-                <span *ngIf="service['deploymentMap']['ACTIVE']['pendingCount'] &gt; 0"> ({{service['deploymentMap']['ACTIVE']['pendingCount']}} pending)</span>
-              </td>
-            </tr>
-        </table>
-        <p class="deploy-arrow text-center"><i class="fa fa-arrow-down fa-3x" aria-hidden="true"></i></p>
-      </div>
-      <table class="table center-table">
-        <thead class="thead-default">
-          <tr>
-            <th>Deployed at</th>
-            <th>Services</th>
-            <th>Tasks</th>
-            <th>Containers</th>
-          </tr>
-        </thead>
-        <tbody>
-        <tr>
-          <td>{{service["deploymentMap"]["PRIMARY"]["lastDeploy"]}}</td>
-          <td>
-            <strong>{{service["deploymentMap"]["PRIMARY"]["desiredCount"]}} / {{service["deploymentMap"]["PRIMARY"]["runningCount"]}}</strong> running
-            <span *ngIf="service['deploymentMap']['PRIMARY']['pendingCount'] &gt; 0"> ({{service['deploymentMap']['PRIMARY']['pendingCount']}} pending)</span>
-          </td>
-          <td>
-            <strong>{{service["taskStatus"]["RUNNING"] || 0 }} / {{service["taskTotal"]}}</strong> running
-            <span *ngIf="service['taskStatus']['STOPPED'] &gt; 0"> ({{service['taskStatus']['STOPPED']}} stopped)</span>
-            <span *ngIf="service['taskStatus']['PENDING'] &gt; 0"> ({{service['taskStatus']['PENDING']}} stopped)</span>
-          </td>
-          <td>
-            <strong>{{service["containerStatus"]["RUNNING"] || 0 }} / {{service["containerTotal"]}}</strong> running
-            <span *ngIf="service['containerStatus']['STOPPED'] &gt; 0"> ({{service['containerStatus']['STOPPED']}} stopped)</span>
-            <span *ngIf="service['containerStatus']['PENDING'] &gt; 0"> ({{service['containerStatus']['PENDING']}} stopped)</span>
-          </td>
-        </tr>
-      </table>
-    </div>
-  </div>
-  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'versions'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div class="right-buttons" *ngIf="!loading">
-      <ul class="list-inline">
-        <li class="list-inline-item"><a class="btn btn-primary" (click)="inspectChild.open(service.serviceName, selectedVersion)">Inspect</a></li>
-        <li class="list-inline-item"><a class="btn btn-primary" (click)="deployChild.open(service.serviceName, selectedVersion)">Deploy</a></li>
-      </ul>
-    </div>
-    <table class="table center-table" *ngIf="!loading">
-      <thead class="thead-default">
-        <tr>
-          <th>&nbsp;</th>
-          <th>image</th>
-          <th>tag</th>
-          <th>Last Deployed</th>
-        </tr>
-      </thead>
-      <tbody>
-      <tr *ngFor="let version of versions">
-        <td class="text-center"><input type="radio" class="form-check-input" name="selectedVersion" [(ngModel)]="selectedVersion" [value]="version.lastDeploy" class="text-center" /></td>
-        <td>{{version.imageName}}</td>
-        <td>{{version.tag}}</td>
-        <td>{{version.lastDeployMoment}}</td>
-      </tr>
-    </table>
-  </div>
-  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'events'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      <div class="right-buttons">
-        <ul class="list-inline">
-          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
-        </ul>
-      </div>
-      <table class="table center-table">
-        <thead class="thead-default">
-          <tr>
-            <th class="w-25">Timestamp</th>
-            <th class="w-75">Message</th>
-          </tr>
-        </thead>
-        <tbody>
-        <tr *ngFor="let event of service.events">
-          <td>{{event.createdAtFormatted}}</td>
-          <td>{{event.message}}</td>
-        </tr>
-      </table>
-    </div>
-  </div>
-  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'parameters'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      <div class="right-buttons">
-        <ul class="list-inline">
-          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="showNewParameter()"><i class="fa fa-file-text-o" aria-hidden="true"></i> New Parameter</button></li>
-        </ul>
-      </div>
-      <table class="table center-table">
-        <thead class="thead-default">
-          <tr>
-            <th class="w-25">Parameter Name</th>
-            <th class="w-75">Parameter Value</th>
-          </tr>
-        </thead>
-        <tbody>
-        <tr *ngIf="newParameter">
-          <td class="align-middle">
-            <input type="text" class="form-control" placeholder="Name..." name="parameterName" [(ngModel)]="newParameterInput.name" />
-          </td>
-          <td class="align-middle">
-            <div class="row align-middle">
-              <div class="col-md-7 mx-auto h-100">
-                <input type="text" class="form-control" placeholder="Value..." name="parameterValue" [(ngModel)]="newParameterInput.value" />
-              </div>
-              <div class="col-md-2">
-                <label class="checkbox-label">
-                  <input type="checkbox" [(ngModel)]="newParameterInput.encrypted" value="true" >&nbsp;Encrypt
-                </label>
-              </div>
-              <div class="col-md-2">
-                <button [disabled]="saving" class="btn btn-primary" (click)="saveNewParameter()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
-                <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
-              </div>
-            </div>
-          </td>
-        </tr>
-        <tr *ngFor="let parameter of parameters.keys">
-          <td class="align-middle">{{parameter}}</td>
-          <td class="align-middle" *ngIf="selectedParameter == parameter">
-            <div class="row align-middle">
-              <div class="col-9">
-                <input type="text" class="form-control" *ngIf="parameters.map[parameter]['value'] != '***'" name="parameterValue" [(ngModel)]="parameterInput.value" />
-                <input type="text" class="form-control" placeholder="new value..." *ngIf="parameters.map[parameter]['value'] == '***'" name="parameterValue" [(ngModel)]="parameterInput.value" />
-              </div>
-              <div class="col-2">
-                <button [disabled]="saving" class="btn btn-primary" (click)="saveParameter(parameter)"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
-                <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
-              </div>
-            </div>
-          </td>
-          <td *ngIf="selectedParameter != parameter">
-            {{parameters.map[parameter]["value"]}}&nbsp;<button class="btn" (click)="editParameter(parameter)"><i class="fa fa-pencil align-baseline" aria-hidden="true"></i></button>
-            <button class="btn float-right" (click)="confirmChild.open('deleteParameter', 'parameter', service.serviceName, parameter)"><i class="fa fa-trash" aria-hidden="true"></i></button>
-          </td>
-        </tr>
-      </table>
-    </div>
-  </div>
-  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'scaling'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      <div class="row">
-        <div class="col-md-4">
-          <h2>Manual Scaling</h2>
-        </div>
-        <div class="col-md-8 right-buttons">
-          <ul class="list-inline">
-            <li class="list-inline-item" *ngIf="scalingInput.autoscaling"><button [disabled]="loading" class="btn btn-primary" (click)="confirmChild.open('disableAutoscaling', 'autoscaling', service.serviceName, 'for '+service.serviceName)"><i class="fa fa-unlink" aria-hidden="true"></i> Disable Auto Scaling</button></li>
-            <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
-          </ul>
-        </div>
-      </div>
-      <table class="table center-table">
-        <thead class="thead-default">
-          <tr>
-            <th class="w-25"><strong>Manual Scaling</strong></th>
-            <th class="w-25">Running Count</th>
-            <th class="w-25">Desired Count</th>
-            <th class="w-25">&nbsp;</th>
-          </tr>
-        </thead>
-        <tbody>
-            <td>{{service["serviceName"]}}</td>
-            <td>{{service["runningCount"]}} ({{service["pendingCount"]}} pending)</td>
-            <td *ngIf="editManualScaling">
-              <div class="row align-middle">
-                <div class="col-6">
-                  <input type="text" class="form-control" name="desiredCount" [(ngModel)]="scalingInput.desiredCount" />
-                </div>
-                <div class="col-2">
-                  <button [disabled]="saving" class="btn btn-primary" (click)="saveDesiredCount()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
-                  <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
-                </div>
-              </div>
-            </td>
-            <td *ngIf="!editManualScaling">
-              {{service["desiredCount"]}}&nbsp;<button class="btn" (click)="editDesiredCount()"><i class="fa fa-pencil align-baseline" aria-hidden="true"></i></button>
-            </td>
-        <tbody>
-      </table>
-      <h2>Auto Scaling</h2>
-      <div class="row" *ngIf="!scalingInput.autoscaling">
-        <div class="col-6">
-          <button [disabled]="saving" class="btn btn-primary" (click)="enableAutoscaling()"><i class="fa fa-balance-scale" aria-hidden="true"></i>&nbsp;&nbsp;Enable Auto Scaling</button>
-        </div>
-      </div>
-      <div *ngIf="scalingInput.autoscaling">
-        <table class="table center-table">
-          <tbody>
-            <tr>
-              <td class="w-25">Minimum number of tasks</td>
-              <td>
-                <div class="row">
-                  <div class="col-6">
-                    <input type="text" class="form-control" name="minimumCount" [(ngModel)]="scalingInput.minimumCount" />
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td>Desired number of tasks</td>
-              <td>
-                <div class="row">
-                  <div class="col-6">
-                    <input type="text" class="form-control" name="desiredCount" [(ngModel)]="scalingInput.desiredCount" />
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td>Maximum number of tasks</td>
-              <td>
-                <div class="row">
-                  <div class="col-6">
-                    <input type="text" class="form-control" name="maximumCount" [(ngModel)]="scalingInput.maximumCount" />
-                  </div>
-                </div>
-              </td>
-            </tr>
-              <td>&nbsp;</td>
-              <td>
-                <button [disabled]="saving" class="btn btn-primary" (click)="saveAutoscalingPolicy()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
-              </td>
-            <tr>
-            </tr>
-          </tbody>
-        </table>
-        <h2>Auto Scaling Policies</h2>
-        <table class="table center-table" *ngIf="scalingInput.policyCount &gt; 0">
-          <thead class="thead-default">
-            <tr>
-              <th>Name</th>
-              <th>Policy</th>
-              <th>Action</th>
-              <th>&nbsp;</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let policy of scalingInput.policies">
-              <td>{{policy.policyName}}</td>
-              <td>{{policy.metric}} {{policy.comparisonOperator}} {{policy.threshold}}% for {{policy.evaluationPeriods}} times in {{policy.period/60}} minute(s) ({{policy.thresholdStatistic}})</td>
-              <td>{{policy.scalingAdjustment}}</td>
-              <td class="button">
-                <button class="btn btn-middle" (click)="confirmChild.open('deleteAutoscalingPolicy', 'autoscaling policy', service.serviceName, policy.policyName)"><i class="fa fa-trash" aria-hidden="true"></i></button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div *ngIf="!scalingInput.newAutoscalingPolicy">
+  @if (tab == 'service') {
+    <div class="offset-md-2 col-md-8">
+      @if (loading) {
+        <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+      }
+      @if (loading) {
+        <span class="sr-only">Loading...</span>
+      }
+      @if (!loading) {
+        <div>
           <div class="row">
-            <div class="col-6">
-              <button [disabled]="saving" class="btn btn-primary" (click)="newAutoscalingPolicy()"><i class="fa fa-balance-scale" aria-hidden="true"></i>&nbsp;&nbsp;New Scaling policy</button>
+            <div class="col-md-4 cluster-info">
+              <ul class="list-group list-group-horizontal">
+                @if (service.status == 'ACTIVE') {
+                  <li class="list-group-item list-group-item-success">Service Status: {{service.status}}</li>
+                }
+                @if (service.status != 'ACTIVE') {
+                  <li class="list-group-item list-group-item-warning">Service Status: {{service.status}}</li>
+                }
+              </ul>
+            </div>
+            <div class="col-md-8 cluster-info right-buttons">
+              <ul class="list-inline">
+                <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+              </ul>
             </div>
           </div>
-        </div>
-        <div *ngIf="scalingInput.newAutoscalingPolicy">
-          <h3>New Auto Scaling policy</h3>
-          <table class="table center-table">
-            <tbody>
-              <tr>
-                <td class="w-25">Metric</td>
-                <td>
-                  <div class="row">
-                    <div class="col-8">
-                      <select class="form-control" [(ngModel)]="scalingInputPolicy.metric">
-                        <option value="cpu">CPU in use (percentage)</option>
-                        <option value="memory">Memory in use (percentage)</option>
-                      </select>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>Threshold</td>
-                <td>
-                  <div class="row">
-                    <div class="col-4">
-                      <select class="form-control" [(ngModel)]="scalingInputPolicy.thresholdStatistic">
-                        <option value="average">Average</option>
-                        <option value="minimum">Minimum</option>
-                        <option value="maximum">Maximum</option>
-                        <option value="sum">Sum</option>
-                        <option value="sampleCount">Data samples</option>
-                      </select>
-                    </div>
-                    <div class="col-2">
-                      <select class="form-control" [(ngModel)]="scalingInputPolicy.comparisonOperator">
-                        <option value="greaterThanOrEqualToThreshold">&gt;=</option>
-                        <option value="lessThanOrEqualToThreshold">&lt;=</option>
-                        <option value="greaterThanThreshold">&gt;</option>
-                        <option value="lessThanThreshold">&lt;</option>
-                      </select>
-                    </div>
-                    <div class="col-2">
-                      <input type="text" class="form-control" name="threshold" [(ngModel)]="scalingInputPolicy.threshold" />
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>Threshold period</td>
-                <td>
-                  <div class="row">
-                    <div class="col-1">
-                      <span class="middle">for</span>
-                    </div>
-                    <div class="col-2">
-                      <input type="text" class="form-control" name="datapointsToAlarm" [(ngModel)]="scalingInputPolicy.datapointsToAlarm" />
-                    </div>
-                    <div class="col-2">
-                      <span class="middle">periods of</span>
-                    </div>
-                    <div class="col-3">
-                      <select class="form-control" [(ngModel)]="scalingInputPolicy.period">
-                        <option value="60">1 minute</option>
-                        <option value="300">5 minutes</option>
-                        <option value="900">15 minutes</option>
-                        <option value="1800">30 minutes</option>
-                        <option value="3600">60 minutes</option>
-                      </select>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td>Scaling adjustment</td>
-                <td>
-                  <div class="row">
-                    <div class="col-2">
-                      <select class="form-control" [(ngModel)]="scalingInputPolicy.scalingAdjustment">
-                        <option value="1">Up (+1)</option>
-                        <option value="2">Up (+2)</option>
-                        <option value="3">Up (+3)</option>
-                        <option value="-1">Down (-1)</option>
-                        <option value="-2">Down (-2)</option>
-                        <option value="-3">Down (-3)</option>
-                      </select>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="row">
-            <div class="col-6">
-              <button [disabled]="saving" class="btn btn-primary" (click)="addAutoscalingPolicy()"><i class="fa fa-balance-scale" aria-hidden="true"></i>&nbsp;&nbsp;Add policy</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'runTask'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      <h3>General configuration</h3>
-      <table class="table center-table run-task">
-        <thead class="thead-default">
-          <tr>
-            <th class="w-25">Property</th>
-            <th class="w-75">Value</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Max. execution time (sec.)</td>
-            <td>
-              <div class="row">
-                <div class="col-2">
-                  <input type="text" class="form-control" name="maxExecutionTime" [(ngModel)]="runTaskConfig.maxExecutionTime" />
-                </div>
+          @if (service['deploymentMap']['ACTIVE']) {
+            <div>
+              <div class="alert alert-primary" role="alert" >
+                Deployment in progress...
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div *ngFor="let container of service['taskDefinition']['containerDefinitions']">
-        <h3>{{container.name}}</h3>
-        <table class="table center-table run-task" *ngIf="runTaskInput[container.name].enabled">
-          <thead class="thead-default">
-            <tr>
-              <th class="w-25">Property</th>
-              <th class="w-75">Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Configuration</td>
-              <td>
-                <div class="row">
-                  <div class="col-6">
-                    <label class="checkbox-label">
-                      <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enabled
-                    </label>
-                  </div>
-                </div>
-                <div class="row">
-                  <div class="col-6">
-                    <label class="checkbox-label">
-                      <input type="checkbox" [(ngModel)]="runTaskInput[container.name].environmentVariables" value="true" checked="true"/>&nbsp;Load environment variables
-                    </label>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr>
-              <td>Command</td>
-              <td>
-                <div class="row">
-                  <div class="col-12">
-                    <input type="text" class="form-control" name="containerCommand" [(ngModel)]="runTaskInput[container.name].containerCommand" placeHolder="echo &quot;this is a command&quot;" />
-                  </div>
-                </div>
-              </td>
-            </tr>
-          <tbody>
-        </table>
-        <label class="checkbox-label" *ngIf="!runTaskInput[container.name].enabled">
-          <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enable <br />
-        </label>
-      </div>
-      <div class="bottom-buttons">
-        <button [disabled]="saving" class="btn btn-primary" (click)="runTask()"><i class="fa fa-play" aria-hidden="true"></i>&nbsp;&nbsp;Run Task</button>
-        <i *ngIf="saving" class="fa fa-spinner" aria-hidden="true"></i>
-      </div>
-    </div>
-  </div>
-  <div class="offset-md-2 col-md-8 cluster-info" *ngIf="tab == 'logs'">
-    <i *ngIf="loading" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      <div class="form-group row">
-        <div class="col-md-8">
-          <select class="form-control" [(ngModel)]="logsInput.selectedTaskArn" (ngModelChange)="updateLogs()" [compareWith]="compareByID">
-            <option *ngFor="let t of logsInput['taskArns']" [ngValue]="t">{{t.name}}</option>
-          </select>
+              <table class="table center-table">
+                <thead class="thead-default">
+                  <tr>
+                    <th class="w-40">Deployed at</th>
+                    <th class="w-20">Services</th>
+                    <th class="w-15"></th>
+                    <th class="w-25"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{{service["deploymentMap"]["ACTIVE"]["lastDeploy"]}}</td>
+                    <td>
+                      <strong>{{service["deploymentMap"]["ACTIVE"]["desiredCount"]}} / {{service["deploymentMap"]["ACTIVE"]["runningCount"]}}</strong> running
+                      @if (service['deploymentMap']['ACTIVE']['pendingCount'] > 0) {
+                        <span> ({{service['deploymentMap']['ACTIVE']['pendingCount']}} pending)</span>
+                      }
+                    </td>
+                  </tr>
+                </table>
+                <p class="deploy-arrow text-center"><i class="fa fa-arrow-down fa-3x" aria-hidden="true"></i></p>
+              </div>
+            }
+            <table class="table center-table">
+              <thead class="thead-default">
+                <tr>
+                  <th>Deployed at</th>
+                  <th>Services</th>
+                  <th>Tasks</th>
+                  <th>Containers</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{{service["deploymentMap"]["PRIMARY"]["lastDeploy"]}}</td>
+                  <td>
+                    <strong>{{service["deploymentMap"]["PRIMARY"]["desiredCount"]}} / {{service["deploymentMap"]["PRIMARY"]["runningCount"]}}</strong> running
+                    @if (service['deploymentMap']['PRIMARY']['pendingCount'] > 0) {
+                      <span> ({{service['deploymentMap']['PRIMARY']['pendingCount']}} pending)</span>
+                    }
+                  </td>
+                  <td>
+                    <strong>{{service["taskStatus"]["RUNNING"] || 0 }} / {{service["taskTotal"]}}</strong> running
+                    @if (service['taskStatus']['STOPPED'] > 0) {
+                      <span> ({{service['taskStatus']['STOPPED']}} stopped)</span>
+                    }
+                    @if (service['taskStatus']['PENDING'] > 0) {
+                      <span> ({{service['taskStatus']['PENDING']}} stopped)</span>
+                    }
+                  </td>
+                  <td>
+                    <strong>{{service["containerStatus"]["RUNNING"] || 0 }} / {{service["containerTotal"]}}</strong> running
+                    @if (service['containerStatus']['STOPPED'] > 0) {
+                      <span> ({{service['containerStatus']['STOPPED']}} stopped)</span>
+                    }
+                    @if (service['containerStatus']['PENDING'] > 0) {
+                      <span> ({{service['containerStatus']['PENDING']}} stopped)</span>
+                    }
+                  </td>
+                </tr>
+              </table>
+            </div>
+          }
         </div>
-        <div class="col-md-4">
-          <select class="form-control" [(ngModel)]="logsInput.selectedContainer" (ngModelChange)="updateLogs()" [compareWith]="compareByID">
-            <option *ngFor="let c of logsInput['containers']" [ngValue]="c">{{c.name}}</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group row">
-        <div class="offset-md-8 col-md-4">
-          <select class="form-control" [(ngModel)]="logsInput.selectedTimerange" (ngModelChange)="updateLogs()">
-            <option *ngFor="let t of logsInput['timerange']" [ngValue]="t">{{t.name}}</option>
-          </select>
-        </div>
-      </div>
-      <div class="right-buttons">
-        <ul class="list-inline">
-          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
-        </ul>
-      </div>
-      <i *ngIf="loadingLogs" class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
-      <span *ngIf="loadingLogs" class="sr-only">Loading...</span>
-      <div class="table-responsive logs">
-        <table class="table center-table" *ngIf="service['logs']">
-          <thead class="thead-default">
-            <tr>
-              <th class="w-30">Timestamp</th>
-              <th class="w-70">Message</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let e of service.logs.logEvents">
-              <td>{{e.timestamp}}</td>
-              <td>{{e.message}}</td>
-            </tr>
-            <tr *ngIf="service.logs.count == 0">
-              <td>&nbsp;</td>
-              <td>No messages to show</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="right-buttons" *ngIf="service['logs'] &amp;&amp; service.logs.count > 10">
-        <ul class="list-inline">
-          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</div>
-<app-service-detail-confirm (deletedItem)="deletedItem($event)" (deletingItem)="deletingItem($event)"></app-service-detail-confirm>
-<app-service-detail-inspect></app-service-detail-inspect>
-<app-service-detail-deploy (deployed)="deployed($event)" (deploying)="deploying($event)"></app-service-detail-deploy>
+      }
+      @if (tab == 'versions') {
+        <div class="offset-md-2 col-md-8 cluster-info">
+          @if (loading) {
+            <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+          }
+          @if (loading) {
+            <span class="sr-only">Loading...</span>
+          }
+          @if (!loading) {
+            <div class="right-buttons">
+              <ul class="list-inline">
+                <li class="list-inline-item"><a class="btn btn-primary" (click)="inspectChild.open(service.serviceName, selectedVersion)">Inspect</a></li>
+                <li class="list-inline-item"><a class="btn btn-primary" (click)="deployChild.open(service.serviceName, selectedVersion)">Deploy</a></li>
+              </ul>
+            </div>
+          }
+          @if (!loading) {
+            <table class="table center-table">
+              <thead class="thead-default">
+                <tr>
+                  <th>&nbsp;</th>
+                  <th>image</th>
+                  <th>tag</th>
+                  <th>Last Deployed</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (version of versions; track version) {
+                  <tr>
+                    <td class="text-center"><input type="radio" class="form-check-input" name="selectedVersion" [(ngModel)]="selectedVersion" [value]="version.lastDeploy" class="text-center" /></td>
+                    <td>{{version.imageName}}</td>
+                    <td>{{version.tag}}</td>
+                    <td>{{version.lastDeployMoment}}</td>
+                  </tr>
+                }
+              </table>
+            }
+          </div>
+        }
+        @if (tab == 'events') {
+          <div class="offset-md-2 col-md-8 cluster-info">
+            @if (loading) {
+              <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+            }
+            @if (loading) {
+              <span class="sr-only">Loading...</span>
+            }
+            @if (!loading) {
+              <div>
+                <div class="right-buttons">
+                  <ul class="list-inline">
+                    <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+                  </ul>
+                </div>
+                <table class="table center-table">
+                  <thead class="thead-default">
+                    <tr>
+                      <th class="w-25">Timestamp</th>
+                      <th class="w-75">Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (event of service.events; track event) {
+                      <tr>
+                        <td>{{event.createdAtFormatted}}</td>
+                        <td>{{event.message}}</td>
+                      </tr>
+                    }
+                  </table>
+                </div>
+              }
+            </div>
+          }
+          @if (tab == 'parameters') {
+            <div class="offset-md-2 col-md-8 cluster-info">
+              @if (loading) {
+                <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+              }
+              @if (loading) {
+                <span class="sr-only">Loading...</span>
+              }
+              @if (!loading) {
+                <div>
+                  <div class="right-buttons">
+                    <ul class="list-inline">
+                      <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="showNewParameter()"><i class="fa fa-file-text-o" aria-hidden="true"></i> New Parameter</button></li>
+                    </ul>
+                  </div>
+                  <table class="table center-table">
+                    <thead class="thead-default">
+                      <tr>
+                        <th class="w-25">Parameter Name</th>
+                        <th class="w-75">Parameter Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @if (newParameter) {
+                        <tr>
+                          <td class="align-middle">
+                            <input type="text" class="form-control" placeholder="Name..." name="parameterName" [(ngModel)]="newParameterInput.name" />
+                          </td>
+                          <td class="align-middle">
+                            <div class="row align-middle">
+                              <div class="col-md-7 mx-auto h-100">
+                                <input type="text" class="form-control" placeholder="Value..." name="parameterValue" [(ngModel)]="newParameterInput.value" />
+                              </div>
+                              <div class="col-md-2">
+                                <label class="checkbox-label">
+                                  <input type="checkbox" [(ngModel)]="newParameterInput.encrypted" value="true" >&nbsp;Encrypt
+                                </label>
+                              </div>
+                              <div class="col-md-2">
+                                <button [disabled]="saving" class="btn btn-primary" (click)="saveNewParameter()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                                @if (saving) {
+                                  <i class="fa fa-spinner" aria-hidden="true"></i>
+                                }
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      }
+                      @for (parameter of parameters.keys; track parameter) {
+                        <tr>
+                          <td class="align-middle">{{parameter}}</td>
+                          @if (selectedParameter == parameter) {
+                            <td class="align-middle">
+                              <div class="row align-middle">
+                                <div class="col-9">
+                                  @if (parameters.map[parameter]['value'] != '***') {
+                                    <input type="text" class="form-control" name="parameterValue" [(ngModel)]="parameterInput.value" />
+                                  }
+                                  @if (parameters.map[parameter]['value'] == '***') {
+                                    <input type="text" class="form-control" placeholder="new value..." name="parameterValue" [(ngModel)]="parameterInput.value" />
+                                  }
+                                </div>
+                                <div class="col-2">
+                                  <button [disabled]="saving" class="btn btn-primary" (click)="saveParameter(parameter)"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                                  @if (saving) {
+                                    <i class="fa fa-spinner" aria-hidden="true"></i>
+                                  }
+                                </div>
+                              </div>
+                            </td>
+                          }
+                          @if (selectedParameter != parameter) {
+                            <td>
+                              {{parameters.map[parameter]["value"]}}&nbsp;<button class="btn" (click)="editParameter(parameter)"><i class="fa fa-pencil align-baseline" aria-hidden="true"></i></button>
+                              <button class="btn float-right" (click)="confirmChild.open('deleteParameter', 'parameter', service.serviceName, parameter)"><i class="fa fa-trash" aria-hidden="true"></i></button>
+                            </td>
+                          }
+                        </tr>
+                      }
+                    </table>
+                  </div>
+                }
+              </div>
+            }
+            @if (tab == 'scaling') {
+              <div class="offset-md-2 col-md-8 cluster-info">
+                @if (loading) {
+                  <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+                }
+                @if (loading) {
+                  <span class="sr-only">Loading...</span>
+                }
+                @if (!loading) {
+                  <div>
+                    <div class="row">
+                      <div class="col-md-4">
+                        <h2>Manual Scaling</h2>
+                      </div>
+                      <div class="col-md-8 right-buttons">
+                        <ul class="list-inline">
+                          @if (scalingInput.autoscaling) {
+                            <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="confirmChild.open('disableAutoscaling', 'autoscaling', service.serviceName, 'for '+service.serviceName)"><i class="fa fa-unlink" aria-hidden="true"></i> Disable Auto Scaling</button></li>
+                          }
+                          <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refresh()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+                        </ul>
+                      </div>
+                    </div>
+                    <table class="table center-table">
+                      <thead class="thead-default">
+                        <tr>
+                          <th class="w-25"><strong>Manual Scaling</strong></th>
+                          <th class="w-25">Running Count</th>
+                          <th class="w-25">Desired Count</th>
+                          <th class="w-25">&nbsp;</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <td>{{service["serviceName"]}}</td>
+                        <td>{{service["runningCount"]}} ({{service["pendingCount"]}} pending)</td>
+                        @if (editManualScaling) {
+                          <td>
+                            <div class="row align-middle">
+                              <div class="col-6">
+                                <input type="text" class="form-control" name="desiredCount" [(ngModel)]="scalingInput.desiredCount" />
+                              </div>
+                              <div class="col-2">
+                                <button [disabled]="saving" class="btn btn-primary" (click)="saveDesiredCount()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                                @if (saving) {
+                                  <i class="fa fa-spinner" aria-hidden="true"></i>
+                                }
+                              </div>
+                            </div>
+                          </td>
+                        }
+                        @if (!editManualScaling) {
+                          <td>
+                            {{service["desiredCount"]}}&nbsp;<button class="btn" (click)="editDesiredCount()"><i class="fa fa-pencil align-baseline" aria-hidden="true"></i></button>
+                          </td>
+                        }
+                        <tbody>
+                        </table>
+                        <h2>Auto Scaling</h2>
+                        @if (!scalingInput.autoscaling) {
+                          <div class="row">
+                            <div class="col-6">
+                              <button [disabled]="saving" class="btn btn-primary" (click)="enableAutoscaling()"><i class="fa fa-balance-scale" aria-hidden="true"></i>&nbsp;&nbsp;Enable Auto Scaling</button>
+                            </div>
+                          </div>
+                        }
+                        @if (scalingInput.autoscaling) {
+                          <div>
+                            <table class="table center-table">
+                              <tbody>
+                                <tr>
+                                  <td class="w-25">Minimum number of tasks</td>
+                                  <td>
+                                    <div class="row">
+                                      <div class="col-6">
+                                        <input type="text" class="form-control" name="minimumCount" [(ngModel)]="scalingInput.minimumCount" />
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td>Desired number of tasks</td>
+                                  <td>
+                                    <div class="row">
+                                      <div class="col-6">
+                                        <input type="text" class="form-control" name="desiredCount" [(ngModel)]="scalingInput.desiredCount" />
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td>Maximum number of tasks</td>
+                                  <td>
+                                    <div class="row">
+                                      <div class="col-6">
+                                        <input type="text" class="form-control" name="maximumCount" [(ngModel)]="scalingInput.maximumCount" />
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                                <td>&nbsp;</td>
+                                <td>
+                                  <button [disabled]="saving" class="btn btn-primary" (click)="saveAutoscalingPolicy()"><i class="fa fa-file-text-o" aria-hidden="true"></i>&nbsp;&nbsp;Save</button>
+                                </td>
+                                <tr>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <h2>Auto Scaling Policies</h2>
+                            @if (scalingInput.policyCount > 0) {
+                              <table class="table center-table">
+                                <thead class="thead-default">
+                                  <tr>
+                                    <th>Name</th>
+                                    <th>Policy</th>
+                                    <th>Action</th>
+                                    <th>&nbsp;</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  @for (policy of scalingInput.policies; track policy) {
+                                    <tr>
+                                      <td>{{policy.policyName}}</td>
+                                      <td>{{policy.metric}} {{policy.comparisonOperator}} {{policy.threshold}}% for {{policy.evaluationPeriods}} times in {{policy.period/60}} minute(s) ({{policy.thresholdStatistic}})</td>
+                                      <td>{{policy.scalingAdjustment}}</td>
+                                      <td class="button">
+                                        <button class="btn btn-middle" (click)="confirmChild.open('deleteAutoscalingPolicy', 'autoscaling policy', service.serviceName, policy.policyName)"><i class="fa fa-trash" aria-hidden="true"></i></button>
+                                      </td>
+                                    </tr>
+                                  }
+                                </tbody>
+                              </table>
+                            }
+                            @if (!scalingInput.newAutoscalingPolicy) {
+                              <div>
+                                <div class="row">
+                                  <div class="col-6">
+                                    <button [disabled]="saving" class="btn btn-primary" (click)="newAutoscalingPolicy()"><i class="fa fa-balance-scale" aria-hidden="true"></i>&nbsp;&nbsp;New Scaling policy</button>
+                                  </div>
+                                </div>
+                              </div>
+                            }
+                            @if (scalingInput.newAutoscalingPolicy) {
+                              <div>
+                                <h3>New Auto Scaling policy</h3>
+                                <table class="table center-table">
+                                  <tbody>
+                                    <tr>
+                                      <td class="w-25">Metric</td>
+                                      <td>
+                                        <div class="row">
+                                          <div class="col-8">
+                                            <select class="form-control" [(ngModel)]="scalingInputPolicy.metric">
+                                              <option value="cpu">CPU in use (percentage)</option>
+                                              <option value="memory">Memory in use (percentage)</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td>Threshold</td>
+                                      <td>
+                                        <div class="row">
+                                          <div class="col-4">
+                                            <select class="form-control" [(ngModel)]="scalingInputPolicy.thresholdStatistic">
+                                              <option value="average">Average</option>
+                                              <option value="minimum">Minimum</option>
+                                              <option value="maximum">Maximum</option>
+                                              <option value="sum">Sum</option>
+                                              <option value="sampleCount">Data samples</option>
+                                            </select>
+                                          </div>
+                                          <div class="col-2">
+                                            <select class="form-control" [(ngModel)]="scalingInputPolicy.comparisonOperator">
+                                              <option value="greaterThanOrEqualToThreshold">&gt;=</option>
+                                              <option value="lessThanOrEqualToThreshold">&lt;=</option>
+                                              <option value="greaterThanThreshold">&gt;</option>
+                                              <option value="lessThanThreshold">&lt;</option>
+                                            </select>
+                                          </div>
+                                          <div class="col-2">
+                                            <input type="text" class="form-control" name="threshold" [(ngModel)]="scalingInputPolicy.threshold" />
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td>Threshold period</td>
+                                      <td>
+                                        <div class="row">
+                                          <div class="col-1">
+                                            <span class="middle">for</span>
+                                          </div>
+                                          <div class="col-2">
+                                            <input type="text" class="form-control" name="datapointsToAlarm" [(ngModel)]="scalingInputPolicy.datapointsToAlarm" />
+                                          </div>
+                                          <div class="col-2">
+                                            <span class="middle">periods of</span>
+                                          </div>
+                                          <div class="col-3">
+                                            <select class="form-control" [(ngModel)]="scalingInputPolicy.period">
+                                              <option value="60">1 minute</option>
+                                              <option value="300">5 minutes</option>
+                                              <option value="900">15 minutes</option>
+                                              <option value="1800">30 minutes</option>
+                                              <option value="3600">60 minutes</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td>Scaling adjustment</td>
+                                      <td>
+                                        <div class="row">
+                                          <div class="col-2">
+                                            <select class="form-control" [(ngModel)]="scalingInputPolicy.scalingAdjustment">
+                                              <option value="1">Up (+1)</option>
+                                              <option value="2">Up (+2)</option>
+                                              <option value="3">Up (+3)</option>
+                                              <option value="-1">Down (-1)</option>
+                                              <option value="-2">Down (-2)</option>
+                                              <option value="-3">Down (-3)</option>
+                                            </select>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                                <div class="row">
+                                  <div class="col-6">
+                                    <button [disabled]="saving" class="btn btn-primary" (click)="addAutoscalingPolicy()"><i class="fa fa-balance-scale" aria-hidden="true"></i>&nbsp;&nbsp;Add policy</button>
+                                  </div>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @if (tab == 'runTask') {
+                  <div class="offset-md-2 col-md-8 cluster-info">
+                    @if (loading) {
+                      <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+                    }
+                    @if (loading) {
+                      <span class="sr-only">Loading...</span>
+                    }
+                    @if (!loading) {
+                      <div>
+                        <h3>General configuration</h3>
+                        <table class="table center-table run-task">
+                          <thead class="thead-default">
+                            <tr>
+                              <th class="w-25">Property</th>
+                              <th class="w-75">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>Max. execution time (sec.)</td>
+                              <td>
+                                <div class="row">
+                                  <div class="col-2">
+                                    <input type="text" class="form-control" name="maxExecutionTime" [(ngModel)]="runTaskConfig.maxExecutionTime" />
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        @for (container of service['taskDefinition']['containerDefinitions']; track container) {
+                          <div>
+                            <h3>{{container.name}}</h3>
+                            @if (runTaskInput[container.name].enabled) {
+                              <table class="table center-table run-task">
+                                <thead class="thead-default">
+                                  <tr>
+                                    <th class="w-25">Property</th>
+                                    <th class="w-75">Value</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr>
+                                    <td>Configuration</td>
+                                    <td>
+                                      <div class="row">
+                                        <div class="col-6">
+                                          <label class="checkbox-label">
+                                            <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enabled
+                                          </label>
+                                        </div>
+                                      </div>
+                                      <div class="row">
+                                        <div class="col-6">
+                                          <label class="checkbox-label">
+                                            <input type="checkbox" [(ngModel)]="runTaskInput[container.name].environmentVariables" value="true" checked="true"/>&nbsp;Load environment variables
+                                          </label>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td>Command</td>
+                                    <td>
+                                      <div class="row">
+                                        <div class="col-12">
+                                          <input type="text" class="form-control" name="containerCommand" [(ngModel)]="runTaskInput[container.name].containerCommand" placeHolder="echo &quot;this is a command&quot;" />
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  <tbody>
+                                  </table>
+                                }
+                                @if (!runTaskInput[container.name].enabled) {
+                                  <label class="checkbox-label">
+                                    <input type="checkbox" [(ngModel)]="runTaskInput[container.name].enabled" value="true"/>&nbsp;Enable <br />
+                                  </label>
+                                }
+                              </div>
+                            }
+                            <div class="bottom-buttons">
+                              <button [disabled]="saving" class="btn btn-primary" (click)="runTask()"><i class="fa fa-play" aria-hidden="true"></i>&nbsp;&nbsp;Run Task</button>
+                              @if (saving) {
+                                <i class="fa fa-spinner" aria-hidden="true"></i>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                    @if (tab == 'logs') {
+                      <div class="offset-md-2 col-md-8 cluster-info">
+                        @if (loading) {
+                          <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+                        }
+                        @if (loading) {
+                          <span class="sr-only">Loading...</span>
+                        }
+                        @if (!loading) {
+                          <div>
+                            <div class="form-group row">
+                              <div class="col-md-8">
+                                <select class="form-control" [(ngModel)]="logsInput.selectedTaskArn" (ngModelChange)="updateLogs()" [compareWith]="compareByID">
+                                  @for (t of logsInput['taskArns']; track t) {
+                                    <option [ngValue]="t">{{t.name}}</option>
+                                  }
+                                </select>
+                              </div>
+                              <div class="col-md-4">
+                                <select class="form-control" [(ngModel)]="logsInput.selectedContainer" (ngModelChange)="updateLogs()" [compareWith]="compareByID">
+                                  @for (c of logsInput['containers']; track c) {
+                                    <option [ngValue]="c">{{c.name}}</option>
+                                  }
+                                </select>
+                              </div>
+                            </div>
+                            <div class="form-group row">
+                              <div class="offset-md-8 col-md-4">
+                                <select class="form-control" [(ngModel)]="logsInput.selectedTimerange" (ngModelChange)="updateLogs()">
+                                  @for (t of logsInput['timerange']; track t) {
+                                    <option [ngValue]="t">{{t.name}}</option>
+                                  }
+                                </select>
+                              </div>
+                            </div>
+                            <div class="right-buttons">
+                              <ul class="list-inline">
+                                <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+                              </ul>
+                            </div>
+                            @if (loadingLogs) {
+                              <i class="fa fa-refresh fa-spin fa-3x fa-fw"></i>
+                            }
+                            @if (loadingLogs) {
+                              <span class="sr-only">Loading...</span>
+                            }
+                            <div class="table-responsive logs">
+                              @if (service['logs']) {
+                                <table class="table center-table">
+                                  <thead class="thead-default">
+                                    <tr>
+                                      <th class="w-30">Timestamp</th>
+                                      <th class="w-70">Message</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    @for (e of service.logs.logEvents; track e) {
+                                      <tr>
+                                        <td>{{e.timestamp}}</td>
+                                        <td>{{e.message}}</td>
+                                      </tr>
+                                    }
+                                    @if (service.logs.count == 0) {
+                                      <tr>
+                                        <td>&nbsp;</td>
+                                        <td>No messages to show</td>
+                                      </tr>
+                                    }
+                                  </tbody>
+                                </table>
+                              }
+                            </div>
+                            @if (service['logs'] && service.logs.count > 10) {
+                              <div class="right-buttons">
+                                <ul class="list-inline">
+                                  <li class="list-inline-item"><button [disabled]="loading" class="btn btn-primary" (click)="refreshLogs()"><i class="fa fa-refresh" aria-hidden="true"></i> Refresh</button></li>
+                                </ul>
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                  <app-service-detail-confirm (deletedItem)="deletedItem($event)" (deletingItem)="deletingItem($event)"></app-service-detail-confirm>
+                  <app-service-detail-inspect></app-service-detail-inspect>
+                  <app-service-detail-deploy (deployed)="deployed($event)" (deploying)="deploying($event)"></app-service-detail-deploy>
