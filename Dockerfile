@@ -1,10 +1,10 @@
 #
 # build angular project
 #
-FROM node:18 as webapp-builder
+FROM node:22 AS webapp-builder
 
 # change PREFIX if you need another url prefix for the webapp
-ENV PREFIX /ecs-deploy
+ENV PREFIX=/ecs-deploy
 
 COPY webapp/package.json webapp/package-lock.json ./
 
@@ -21,7 +21,7 @@ RUN node_modules/.bin/ng build --configuration production --base-href ${PREFIX}/
 #
 # Build go project
 #
-FROM golang:1.23-alpine as go-builder
+FROM golang:1.24-alpine AS go-builder
 
 WORKDIR /ecs-deploy/
 
@@ -35,11 +35,11 @@ RUN apk add -u -t build-tools curl git && \
 #
 # Runtime container
 #
-FROM alpine:3.20.2
+FROM alpine:3.20.6
 
 ARG SOURCE_COMMIT=unknown
 
-ENV GIN_MODE release
+ENV GIN_MODE=release
 
 RUN apk --no-cache add ca-certificates bash curl && mkdir -p /app/webapp
 
