@@ -6,10 +6,14 @@
     </button>
   </div>
   <div class="modal-body">
-    <span *ngIf="loading" class="sr-only">Loading...</span>
-    <div *ngIf="!loading">
-      Are you sure you want to deploy <strong>{{versionMap[selectedVersion].tag}}</strong>, which corresponds with the <strong>{{serviceName}}</strong> deployment of <strong>{{selectedVersion}}</strong>?
-    </div>
+    @if (loading) {
+      <span class="sr-only">Loading...</span>
+    }
+    @if (!loading) {
+      <div>
+        Are you sure you want to deploy <strong>{{versionMap[selectedVersion].tag}}</strong>, which corresponds with the <strong>{{serviceName}}</strong> deployment of <strong>{{selectedVersion}}</strong>?
+      </div>
+    }
   </div>
   <div class="modal-footer">
     <button type="button" class="btn btn-outline-dark" (click)="c('Close click')">Cancel</button>
