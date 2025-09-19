@@ -1,7 +1,7 @@
 #
 # build angular project
 #
-FROM node:22 AS webapp-builder
+FROM node:22.19.0-slim AS webapp-builder
 
 # change PREFIX if you need another url prefix for the webapp
 ENV PREFIX=/ecs-deploy
@@ -21,7 +21,7 @@ RUN node_modules/.bin/ng build --configuration production --base-href ${PREFIX}/
 #
 # Build go project
 #
-FROM golang:1.24-alpine AS go-builder
+FROM golang:1.24.7-alpine AS go-builder
 
 WORKDIR /ecs-deploy/
 
@@ -35,7 +35,7 @@ RUN apk add -u -t build-tools curl git && \
 #
 # Runtime container
 #
-FROM alpine:3.20.6
+FROM alpine:3.22.1
 
 ARG SOURCE_COMMIT=unknown
 
@@ -54,4 +54,12 @@ RUN echo ${SOURCE_COMMIT} > source_commit
 # remove unnecessary source files
 RUN rm -rf *.go webapp/src
 
-CMD ["./ecs-deploy", "--server"]  
+# create a non-root user to run the application
+RUN apk add --no-cache shadow \
+    && useradd -u 1000 -U -m appuser \
+    && chown -R appuser:appuser /app
+
+# Switch to the non-root user
+USER appuser
+
+CMD ["./ecs-deploy", "--server"]

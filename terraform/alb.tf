@@ -23,6 +23,7 @@ resource "aws_alb" "alb" {
     enabled = var.enable_lb_logs
   }
 
+  drop_invalid_header_fields = var.drop_invalid_header_fields
   enable_deletion_protection = true
 }
 

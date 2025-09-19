@@ -61,6 +61,7 @@ variable "extra_domains" {
   default     = []
 }
 
+# ALB variables
 variable "alb_internal" {
   description = "true if ALB needs to be internal"
   default     = "false"
@@ -68,6 +69,11 @@ variable "alb_internal" {
 
 variable "enable_lb_logs" {
   description = "true if needs logs for ALB"
+  default     = "false"
+}
+
+variable "drop_invalid_header_fields" {
+  description = "true if needs to drop invalid header fields"
   default     = "false"
 }
 
@@ -173,7 +179,7 @@ variable "fixed_response_body" {
 
 variable "ssl_policy" {
   description = "TLS policy for https listener"
-  default     = "ELBSecurityPolicy-2016-08"
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 }
 
 variable "paramstore_assume_role" {
@@ -202,15 +208,21 @@ variable "ecs_ec2_vpc_cidr_sg" {
   default = "0.0.0.0/0"
 }
 
+# sns variables
 variable "sns_endpoint" {
   default = ""
 }
 
+variable "sns_kms_master_key_id" {
+  description = "KMS key arn to encrypt SNS topic"
+  default     = ""
+}
 variable "saml_acs_url" {
   description = "saml acs url, if the default acs url needs to be overwritten"
   default     = ""
 }
 
+# DynamoDB variables
 variable "enable_dynamodb_encryption" {
   default = false
 }
@@ -221,6 +233,15 @@ variable "dynamodb_read_capacity" {
 
 variable "dynamodb_write_capacity" {
   default = 2
+}
+
+variable "enable_dynamodb_pitr" {
+  description = "enable point in time recovery"
+  default     = false
+}
+variable "dynamodb_pitr_recovery_period" {
+  description = "number of days to retain recovery points for"
+  default     = 35
 }
 
 variable "ecs_whitelist" {
@@ -290,7 +311,7 @@ variable "ecs_deploy_max_wait_seconds" {
 
 variable "metadata_options_http_tokens" {
   description = "metadata options IMDSv1 or IMDSv2"
-  default     = ""
+  default     = "required"
 }
 
 # cloudwatch variables
