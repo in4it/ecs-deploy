@@ -269,6 +269,14 @@ resource "aws_dynamodb_table" "ecs-deploy" {
   write_capacity = var.dynamodb_write_capacity
   hash_key       = "ServiceName"
   range_key      = "Time"
+
+  dynamic "point_in_time_recovery" {
+    for_each = var.enable_dynamodb_pitr ? ["enabled"] : []
+    content {
+      enabled = var.enable_dynamodb_pitr
+      recovery_period_in_days = var.dynamodb_pitr_recovery_period
+    }
+  }
   server_side_encryption {
     enabled = var.enable_dynamodb_encryption
   }
@@ -329,9 +337,9 @@ resource "aws_cloudwatch_log_group" "ecs-deploy" {
 #
 # sns topic for ecs events
 resource "aws_sns_topic" "ecs-deploy" {
-  count = var.ecs_capacity_provider_enabled ? 0 : 1
-  name = "ecs-deploy-events"
-
+  count             = var.ecs_capacity_provider_enabled ? 0 : 1
+  name              = "ecs-deploy-events"
+  kms_master_key_id = var.sns_kms_master_key_id
   policy = <<EOF
 {
   "Version": "2008-10-17",
