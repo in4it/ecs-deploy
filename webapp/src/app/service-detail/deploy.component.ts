@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, ViewChild, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import { NgbModal, ModalDismissReasons } from '@ng-bootstrap/ng-bootstrap';
 import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 
@@ -7,6 +7,7 @@ import * as moment from 'moment';
 @Component({
     selector: 'app-service-detail-deploy',
     templateUrl: './deploy.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class DeployChildComponent implements OnInit {

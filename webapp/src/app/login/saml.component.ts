@@ -1,6 +1,6 @@
 
 import {filter} from 'rxjs/operators';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 
 import { Router, ActivatedRoute } from '@angular/router';
 
@@ -11,6 +11,7 @@ import { AuthService } from '../services/index';
 @Component({
     selector: 'app-saml',
     template: `<i class="fa fa-refresh fa-spin fa-3x fa-fw"></i><span class="sr-only">Loading...</span>`,
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class LoginSAMLComponent implements OnInit {

@@ -12,7 +12,7 @@ import { DeploymentListComponent } from './deployment-list/deployment-list.compo
 import { DeploymentListResolver }   from './deployment-list/deployment-list-resolver.service';
 import { DeploymentListService }   from './deployment-list/deployment-list.service';
 
-import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi, withXhr } from '@angular/common/http';
 
 import { RouterModule, Routes } from '@angular/router';
 import { LoginComponent } from './login/login.component';
@@ -99,7 +99,7 @@ const appRoutes: Routes = [
         ServiceDetailResolver,
         ServiceDetailService,
         { provide: HTTP_INTERCEPTORS, useClass: AppHttpInterceptor, multi: true },
-        provideHttpClient(withInterceptorsFromDi()),
+        provideHttpClient(withXhr(), withInterceptorsFromDi()),
     ] })
 
 export class AppModule { }
