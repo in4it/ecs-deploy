@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { NgbModal, ModalDismissReasons } from '@ng-bootstrap/ng-bootstrap';
 import { ServiceDetail, ServiceDetailService }  from './service-detail.service';
 
@@ -7,6 +7,7 @@ import moment from 'moment';
 @Component({
     selector: 'app-service-detail-inspect',
     templateUrl: './inspect.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class InspectChildComponent implements OnInit {

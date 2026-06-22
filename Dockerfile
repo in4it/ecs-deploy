@@ -1,7 +1,7 @@
 #
 # build angular project
 #
-FROM node:22.19.0-slim AS webapp-builder
+FROM node:24.17.0-slim AS webapp-builder
 
 # change PREFIX if you need another url prefix for the webapp
 ENV PREFIX=/ecs-deploy

@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Observable } from 'rxjs';
 
@@ -15,6 +15,7 @@ import moment from 'moment';
     selector: 'app-service-detail',
     templateUrl: './service-detail.component.html',
     styleUrls: ['./service-detail.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ServiceDetailComponent implements OnInit {

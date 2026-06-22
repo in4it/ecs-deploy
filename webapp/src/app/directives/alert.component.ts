@@ -1,10 +1,11 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 
 import { AlertService } from '../services/index';
 
 @Component({
     selector: 'alert',
     templateUrl: 'alert.component.html',
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 

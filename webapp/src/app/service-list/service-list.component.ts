@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
 import { ServiceList, ServiceListService }  from './service-list.service';
@@ -9,6 +9,7 @@ import moment from 'moment';
     selector: 'app-service-list',
     templateUrl: './service-list.component.html',
     styleUrls: ['./service-list.component.css'],
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: false
 })
 export class ServiceListComponent implements OnInit {
