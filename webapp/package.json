@@ -26,7 +26,7 @@
     "@angular/platform-browser-dynamic": "^22.0.2",
     "@angular/platform-server": "^22.0.2",
     "@angular/router": "^22.0.2",
-    "@ng-bootstrap/ng-bootstrap": "^20.0.0",
+    "@ng-bootstrap/ng-bootstrap": "21.0.0-rc.0",
     "@schematics/angular": "^21.2.2",
     "awesome-bootstrap-checkbox": "^1.0.1",
     "bootstrap": "^5.0.0",
