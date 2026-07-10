@@ -1,7 +1,7 @@
 #
 # build angular project
 #
-FROM node:24.17.0-slim AS webapp-builder
+FROM node:24.18.0-slim AS webapp-builder
 
 # change PREFIX if you need another url prefix for the webapp
 ENV PREFIX=/ecs-deploy
@@ -21,7 +21,7 @@ RUN node_modules/.bin/ng build --configuration production --base-href ${PREFIX}/
 #
 # Build go project
 #
-FROM golang:1.24.7-alpine AS go-builder
+FROM golang:1.25-alpine AS go-builder
 
 WORKDIR /ecs-deploy/
 
@@ -35,7 +35,7 @@ RUN apk add -u -t build-tools curl git && \
 #
 # Runtime container
 #
-FROM alpine:3.22.1
+FROM alpine:3.22.5
 
 ARG SOURCE_COMMIT=unknown
 
