@@ -75,6 +75,8 @@
   "overrides": {
     "@angular-devkit/build-angular": {
       "http-proxy-middleware": "^3.0.5"
-    }
+    },
+    "qs": "^6.16.0",
+    "uuid": "^11.1.1"
   }
 }
