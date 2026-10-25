@@ -21,7 +21,7 @@ RUN node_modules/.bin/ng build --configuration production --base-href ${PREFIX}/
 #
 # Build go project
 #
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /ecs-deploy/
 
