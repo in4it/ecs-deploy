@@ -11,6 +11,20 @@ import (
 
 var whitelistLogger = loggo.GetLogger("whitelist")
 
+// SetTrustedProxies configures which proxies (comma separated IPs or CIDRs) are trusted
+// to set X-Forwarded-For. When empty, all proxies stay trusted (gin's default)
+func SetTrustedProxies(r *gin.Engine, trustedProxies string) error {
+	if strings.TrimSpace(trustedProxies) == "" {
+		whitelistLogger.Warningf("ECS_TRUSTED_PROXIES not set: trusting X-Forwarded-For from all clients")
+		return nil
+	}
+	proxies := strings.Split(trustedProxies, ",")
+	for i := range proxies {
+		proxies[i] = strings.TrimSpace(proxies[i])
+	}
+	return r.SetTrustedProxies(proxies)
+}
+
 // IP filtering handlerfunc
 func IPWhiteList(whitelist string) gin.HandlerFunc {
 	return func(c *gin.Context) {

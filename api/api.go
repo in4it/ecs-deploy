@@ -97,6 +97,9 @@ func (a *API) createRoutes() {
 	apiPrefix := prefix + util.GetEnv("URL_PREFIX_API", "/api/v1")
 
 	// ip whitelisting
+	if err := ipfilter.SetTrustedProxies(r, util.GetEnv("ECS_TRUSTED_PROXIES", "")); err != nil {
+		panic(fmt.Errorf("invalid ECS_TRUSTED_PROXIES: %w", err))
+	}
 	r.Use(ipfilter.IPWhiteList(util.GetEnv("ECS_WHITELIST", "0.0.0.0/0")))
 
 	// webapp
